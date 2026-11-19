@@ -186,8 +186,9 @@ export function buildStreet(scene: THREE.Scene) {
 	});
 
 	function frontage(x: number, zFront: number, w: number, floors: number, wall: RGB, trim: RGB, awning: RGB) {
-		const floor = 2.1;
-		const h = floor * floors + 0.8;
+		// Leave the shopfronts at eye level, with more breathing room above each story.
+		const floor = 2.8;
+		const h = 2.9 + floor * (floors - 1);
 		const d = 6.0;
 		block(x, h / 2, zFront - d / 2, w, h, d, wall);
 		block(x, h - 0.10, zFront - d / 2, w + 0.32, 0.25, d + 0.3, trim);

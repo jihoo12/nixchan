@@ -13,6 +13,7 @@ const KETTLE = new THREE.Vector3(2.70, 0, -6.05);
 const WINDOW = new THREE.Vector3(2.72, 0, -1.50);
 const SPAWN = new THREE.Vector3(0, 0, 8);
 const SEAT_HEADING = 0;
+const STREET_CAMERA_DISTANCE = 8.2;
 const indoors = (x: number, z: number) => Math.abs(x) < 4.6 && z < -0.32 && z > -8.05;
 const damp = (a: number, b: number, k: number, dt: number) => a + (b - a) * (1 - Math.exp(-k * dt));
 type Bounds = readonly [number, number, number, number];
@@ -124,7 +125,7 @@ export default function start({ createGame, store }: GameContext) {
 	if (!game) return;
 
 	const { scene, player, orbit } = game;
-	orbit.distance = 7.0;
+	orbit.distance = STREET_CAMERA_DISTANCE;
 	orbit.pitch = 0.23;
 	const fog = new THREE.FogExp2('#192139', 0.046);
 	const sky = new THREE.Color('#1e2542');
@@ -158,7 +159,7 @@ export default function start({ createGame, store }: GameContext) {
 	let elapsed = 0;
 	let seatBlend = false;
 	const seatPrev = new THREE.Vector3();
-	let wantedZoom = 7.0;
+	let wantedZoom = STREET_CAMERA_DISTANCE;
 	let lastZoom = orbit.distance;
 
 	function target() {
