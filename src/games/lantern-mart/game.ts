@@ -5,7 +5,7 @@ import type { World } from '../../lib/nixkit/world';
 import { buildShop, shopSolids } from './art';
 import { buildStreet } from './street';
 import { createRamen } from './ramen';
-import { createLanternHud } from './ui';
+import { createLanternHud, lanternKorean } from './ui';
 import { createErrand, STEEP_SECONDS, EAT_SECONDS } from './errand';
 
 const SHELF = new THREE.Vector3(-2.72, 0, -4.54);
@@ -107,6 +107,11 @@ export default function start({ createGame, store }: GameContext) {
 	const game = createGame({
 		spawn: { pos: SPAWN.clone(), heading: Math.PI },
 		world: map,
+		firstPerson: {
+			label: lanternKorean() ? '1인칭' : 'First person',
+			lockedLabel: lanternKorean() ? '식사 중에는 3인칭으로 보여요' : 'Third person while eating',
+			forceThirdPerson: () => errand.phase === 'eat',
+		},
 		clip: (): NixClip | null => {
 			if (errand.phase === 'eat') return errand.elapsed < 4.28 ? 'Sit' : 'Carry';
 			if (errand.phase === 'water' || errand.phase === 'wait' || errand.phase === 'seat') {

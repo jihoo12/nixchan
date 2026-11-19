@@ -40,7 +40,14 @@ export default function start({ createGame, store }: GameContext) {
 ```
 
 `createGame` also takes `canGlide` and `canDash` (both off unless given) and `onKey` (keys that
-aren't for moving: `e` waves and `q` dashes unless the game uses them). What it gives back:
+aren't for moving: `e` waves and `q` dashes unless the game uses them).
+
+Games can opt in to `firstPerson: {}`. The view still starts in third person; **V** or the
+on-screen button switches to and from the eye-level camera, and mouse or touch drags still
+control looking. An optional `forceThirdPerson` predicate can hold the orbit view during
+a scene and then restore the player's selection. `game.firstPerson` reports the effective view.
+
+What it gives back:
 
 | | |
 | --- | --- |
