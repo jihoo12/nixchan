@@ -27,6 +27,12 @@ const copy = {
 	},
 } as const;
 
+export function lanternEmotes(ko: boolean) {
+	return ko
+		? { label: '표정', hint: '카메라를 돌리면 닉스쨩의 표정이 보여요.', labels: { happy: '기쁨', surprised: '놀람', sad: '슬픔', determined: '결의' } }
+		: { label: 'Expressions', labels: { happy: 'Happy', surprised: 'Surprised', sad: 'Sad', determined: 'Determined' } };
+}
+
 const css = `
 [data-lantern-hud] { z-index:21; position:fixed; inset:auto 0 max(24px, env(safe-area-inset-bottom)) 0; margin:auto;
 	width:min(440px,calc(100% - 32px)); box-sizing:border-box; padding:14px 16px 15px; border:1px solid #bd9e675e;

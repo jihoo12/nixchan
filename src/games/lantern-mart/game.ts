@@ -5,7 +5,7 @@ import type { World } from '../../lib/nixkit/world';
 import { buildShop, shopSolids } from './art';
 import { buildStreet } from './street';
 import { createRamen } from './ramen';
-import { createLanternHud, lanternKorean } from './ui';
+import { createLanternHud, lanternEmotes, lanternKorean } from './ui';
 import { createErrand, STEEP_SECONDS, EAT_SECONDS } from './errand';
 
 const SHELF = new THREE.Vector3(-2.72, 0, -4.54);
@@ -13,6 +13,8 @@ const KETTLE = new THREE.Vector3(2.70, 0, -6.05);
 const WINDOW = new THREE.Vector3(2.72, 0, -1.50);
 const SPAWN = new THREE.Vector3(0, 0, 8);
 const SEAT_HEADING = 0;
+// The first pair of chopsticks reaches her mouth just after a second (see ramen.ts).
+const FIRST_BITE = 1.30;
 const STREET_CAMERA_DISTANCE = 8.2;
 const indoors = (x: number, z: number) => Math.abs(x) < 4.6 && z < -0.32 && z > -8.05;
 const damp = (a: number, b: number, k: number, dt: number) => a + (b - a) * (1 - Math.exp(-k * dt));
@@ -103,15 +105,17 @@ function driftingSnow(scene: THREE.Scene) {
 
 export default function start({ createGame, store }: GameContext) {
 	const errand = createErrand();
+	const ko = lanternKorean();
 	const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 	const game = createGame({
 		spawn: { pos: SPAWN.clone(), heading: Math.PI },
 		world: map,
 		firstPerson: {
-			label: lanternKorean() ? '1인칭' : 'First person',
-			lockedLabel: lanternKorean() ? '식사 중에는 3인칭으로 보여요' : 'Third person while eating',
+			label: ko ? '1인칭' : 'First person',
+			lockedLabel: ko ? '식사 중에는 3인칭으로 보여요' : 'Third person while eating',
 			forceThirdPerson: () => errand.phase === 'eat',
 		},
+		emotes: lanternEmotes(ko),
 		clip: (): NixClip | null => {
 			if (errand.phase === 'eat') return errand.elapsed < 4.28 ? 'Sit' : 'Carry';
 			if (errand.phase === 'water' || errand.phase === 'wait' || errand.phase === 'seat') {
@@ -184,6 +188,7 @@ export default function start({ createGame, store }: GameContext) {
 		if (!game?.ready || !canReach()) return;
 		const previous = errand.phase;
 		if (!errand.act()) return;
+		if (previous === 'water') game.emote('surprised', 1.05); // The first puff of steam.
 		if (previous === 'seat') {
 			seatPrev.copy(player.pos);
 			player.vel.set(0, 0, 0);
@@ -194,8 +199,13 @@ export default function start({ createGame, store }: GameContext) {
 
 	game.onUpdate((dt, time) => {
 		elapsed += dt;
+		const sinceSit = errand.elapsed;
 		const finished = errand.tick(dt);
+		if (errand.phase === 'eat' && sinceSit < FIRST_BITE && errand.elapsed >= FIRST_BITE) {
+			game.emote('happy', 1.8);
+		}
 		if (finished) {
+			game.emote('happy', 2.4); // A warm bowl, and the first flakes outside.
 			const old = store.get('bowls');
 			store.set('bowls', (typeof old === 'number' && Number.isSafeInteger(old) && old >= 0 ? old : 0) + 1);
 			snowStarted = true;

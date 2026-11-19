@@ -47,6 +47,13 @@ on-screen button switches to and from the eye-level camera, and mouse or touch d
 control looking. An optional `forceThirdPerson` predicate can hold the orbit view during
 a scene and then restore the player's selection. `game.firstPerson` reports the effective view.
 
+Use `game.emote('happy', 2)` to give Nixchan a timed facial reaction without interrupting her
+movement or body animation. Available moods are `happy`, `surprised`, `sad`, and `determined`.
+A new cue replaces the old one and Nixchan returns to her usual face when it ends. Use
+`game.clearEmote()` to reset immediately. To let players choose, opt in with `emotes: {}`;
+the **B** key and a touch-friendly expression button open the palette in third person only.
+The options can provide a localized button label, choice labels, and a short orbit hint.
+
 What it gives back:
 
 | | |
