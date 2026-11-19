@@ -12,9 +12,6 @@ import type { FigureLook } from '../experimental/nix-figure';
 /** A soft rim of light along her silhouette, so she lifts off what's behind her. */
 const rim = smoothstep(0.45, 0.75, pow(clamp(dot(normalView, positionViewDirection), 0, 1).oneMinus(), 3)).mul(0.22).mul(vec3(1, 0.97, 1));
 
-/** How much further out the ink line is pushed than the WebGL look pushed it (see inkLine). */
-const INK_WIDEN = 2;
-
 export const nodeLook: FigureLook = {
 	toon(params) {
 		const mat = new MeshToonNodeMaterial(params);
@@ -23,11 +20,8 @@ export const nodeLook: FigureLook = {
 	},
 	inkLine(hex, width) {
 		const line = new MeshBasicNodeMaterial({ color: hex, side: THREE.BackSide });
-		// After skinning, so the line moves with her. Pushed out twice as far as the WebGL look did: the
-		// shell is only a few millimetres out, and much of the line WebGL drew was the shell showing
-		// through where the surface turns away, which WebGPU's finer depth buffer doesn't let it do.
-		// Twice the width draws it as thick as it was (compared side by side in /home and on the island).
-		line.positionNode = positionLocal.add(normalLocal.mul(width * INK_WIDEN));
+		// After skinning, so the line moves with her.
+		line.positionNode = positionLocal.add(normalLocal.mul(width));
 		return line;
 	},
 };

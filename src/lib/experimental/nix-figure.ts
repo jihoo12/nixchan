@@ -207,7 +207,11 @@ export function buildNixFigure(url: string, made: FigureLook = nodeLook): NixFig
 	// Hair gets a finer lavender line, so the thin tips don't turn into black spikes.
 	const inkLine = (hex: string, width: number) => made.inkLine(hex, width);
 	const outline = inkLine(INK, 0.012);
-	const hairLine = inkLine('#8a85c4', 0.006);
+	// Her hair's line is half as wide again as it once was: a few millimetres out, much of what WebGL
+	// drew of it was the shell showing through where the hair turns away, which WebGPU's finer depth
+	// buffer doesn't let it do. (Her body's line stays as it was: any wider, and it shows through in
+	// the crook of her arm when it bends.)
+	const hairLine = inkLine('#8a85c4', 0.009);
 	// Too fine to carry a line of their own.
 	const uninked = /^(Cords|Pin)$|Laces$|^Rod/;
 
