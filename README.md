@@ -37,8 +37,12 @@ nix develop
 npm ci
 astro dev --background   # then open http://localhost:4321/nixchan/ ; stop with `astro dev stop`
 npm run check:games
+npm test                 # Nixkit's unit tests (tools/test-nixkit-*.mjs)
 npm run build
 ```
+
+To look at the 3D pages, use a real browser on a real GPU. Headless Chromium draws them with a
+software renderer, which neither looks nor runs like the real thing.
 
 ## Nixchan's Island
 
@@ -54,18 +58,26 @@ The page is `src/pages/island/index.astro` (HTML/CSS for the menus and prompts),
 | `sky.ts`, `water.ts`, `theme.ts` | Light, sky, sea, and day/night (parts register with `theme.on`) |
 | `landmarks.ts` | Lighthouse, campfire, standing stones, chest, buoy |
 | `skyisle.ts` | Cloudrest, the islands in the sky, and the Windspouts that lift her up to them |
-| `player.ts`, `camera.ts`, `controls.ts` | Nixchan's movement, the follow camera, keys and touch |
-| `interact.ts` | What E does: sources register offers |
+| `look.ts` | The little geometries trees and rocks are made of (the toon shading is Nixkit's) |
 | `explore.ts`, `menu.ts` | Places found, the maps, the menu |
 | `fishing.ts`, `farm.ts`, `npc.ts`, `inventory.ts` | Things to do, and her bag |
+| `house.ts` | Her cottage: the porch, the wardrobe and mirror, and the front door into `/nixchan/home/` |
 | `talk.ts` | The conversation box and speech bubble everyone she talks to shares |
 | `owl.ts` | Somebody who lives somewhere hard to find (spoilers inside) |
+| `tortoise.ts`, `fourthwall.ts` | Parmen on the Lonely Islet, and the island's only door out: through the screen to `/nixchan/experimental/` |
 | `forge.ts` | The smithy: ore veins, smelting (iron, and ashen ore from the grey place), and the upgrades made at the anvil |
 | `machines.ts` | Sprinklers and Sprocket the clockwork helper, looking after the garden |
 | `rift.ts` | The grey rift at the standing stones, through to `/nixchan/monochrome/` |
 | `lantern.ts` | The Grey Lantern at her shoulder, made at the forge |
+| `blocks.ts` | Stone blocks, made at the forge, that she builds with on a one-metre grid |
 | `power.ts` | Windmills, the drills they power on the ore veins, and belts that carry ore (and power) to the hopper by the forge: power is only ever on or off, what's on a belt is worked out from when it set off, and a belt with power carries her too |
+| `lang.ts` | Which language the island speaks (the site's; `?lang=ko` to try one), and the names to keep the same in both |
+| `thumbnail.ts` | Little pictures of 3D things for the menus |
 | `save.ts` | Every localStorage key the island uses |
+
+Nixchan herself, how she moves, the follow camera, the keys and touch controls, and what E does
+(`interact.ts`: sources register offers) are Nixkit's (`src/lib/nixkit/`), shared with the games.
+The island still sets up its own renderer (WebGL) and frame loop rather than using `createGame`.
 
 To add something she can do, register it with `interactions.add(() => ({ label, go }))`. To add a landmark, add a function to `landmarks.ts`.
 

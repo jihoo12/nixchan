@@ -10,7 +10,8 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "check:games": "node tools/check-games.mjs"
+    "check:games": "node tools/check-games.mjs",
+    "test": "node --test tools/test-nixkit-*.mjs"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.3",
