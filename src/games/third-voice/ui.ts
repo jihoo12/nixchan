@@ -57,6 +57,28 @@ export function createDocket(store: GameStore) {
 	let hintCount = 0;
 	let change = (_chapter: number, _completed: number) => {};
 	let lastFocus: HTMLElement | null = null;
+	// Local game playtest actions. IDs are minted per rendered view and their
+	// targets are explicit buttons below, never arbitrary selectors or keys.
+	let agentChoices = new Map<string, HTMLButtonElement>();
+	let agentEpoch = 0;
+	let agentSpeaker = '';
+	let agentText = '';
+	let agentClues: string[] = [];
+	function agentScreen(speaker: string, text: string) {
+		agentEpoch++;
+		agentChoices = new Map();
+		agentSpeaker = speaker;
+		agentText = text;
+		agentClues = [];
+		agentChoice('close', closeButton);
+	}
+	function agentChoice(id: string, target: HTMLButtonElement) {
+		agentChoices.set(`v${agentEpoch}-${id}`, target);
+		return target;
+	}
+	function availableAgentChoices() {
+		return [...agentChoices].filter(([, target]) => target.isConnected && !target.disabled && !target.hidden);
+	}
 	const save = () => store.set(key, { drafts, notes, complete, ending, gloss, story });
 
 	const launcher = create('div', '', 'tv-launch');
@@ -170,6 +192,8 @@ export function createDocket(store: GameStore) {
 		const hasEvidence = sealed || hasAllTestimony(story, chapterIndex);
 		const atTribunal = fallback || near === chapterIndex;
 		const incident = caseForChapter(chapterIndex);
+		agentScreen(l(incident.title), objective.textContent ?? '');
+		agentClues = records.map(entry => line({ atom: entry.atom, source: entry.source, value: entry.sign }));
 		nav.replaceChildren(...CHAPTERS.map((item, index) => {
 			const tab = button(`${numerals[index]} · ${l(item.title)}${index < complete ? ' ✓' : ''}`, () => selectChapter(index));
 			tab.disabled = index > complete;
@@ -229,7 +253,8 @@ export function createDocket(store: GameStore) {
 
 		const puzzle = create('section', '', 'tv-section');
 		puzzle.append(create('h3', t('판결문 조립', 'Compose a verdict')));
-		const status = create('p', '', 'tv-mute');
+		const status = create('p', '', 'tv-mute tv-verdict-status');
+		status.id = 'tv-verdict-status';
 		status.setAttribute('role', 'status');
 		if (sealed) status.textContent = t('봉인된 기록이에요. 처음 제출한 판결이 보존돼요.', 'This record is sealed. Your accepted verdict is preserved.');
 		const slotMarks = new Map<string, HTMLElement>();
@@ -285,7 +310,11 @@ export function createDocket(store: GameStore) {
 				mark.textContent = !feedback || flag === 'pending' ? '' : flag === 'pass' ? t(' · 충족', ' · Met') : t(' · 불충족', ' · Unmet');
 				mark.dataset.mark = !feedback || flag === 'pending' ? '' : flag;
 			}
-			if (!sealed) status.textContent = !hasEvidence
+			if (sealed) {
+				status.textContent = chapterIndex === CHAPTERS.length - 1
+					? t('봉인 완료. 보류 칸은 두 문장(thae shai va, thae nuv va)이 모두 성립해요. 선택한 문장을 기록에 남겼어요.', 'Verdict sealed. Both thae shai va and thae nuv va are valid for Hold. Your chosen clause is on record.')
+					: t('봉인된 기록이에요. 처음 제출한 판결이 보존돼요.', 'This record is sealed. Your accepted verdict is preserved.');
+			} else status.textContent = !hasEvidence
 				? t('먼저 마을에서 아직 받지 못한 증언을 모으세요.', 'First gather the missing testimony in the village.')
 				: !atTribunal
 					? t(`초안은 여기서 써도 되지만 심사는 법정 ${numerals[chapterIndex]}번 석판에서만 할 수 있어요.`, `Draft here, but submit at tribunal tablet ${numerals[chapterIndex]}.`)
@@ -302,6 +331,7 @@ export function createDocket(store: GameStore) {
 			render(); focusHeading();
 		}, 'tv-primary');
 		submit.disabled = !hasEvidence || !atTribunal;
+		submit.setAttribute('aria-describedby', status.id);
 		if (!sealed) actions.append(submit, button(t('초안 비우기', 'Clear draft'), () => {
 			for (const [id, select] of selects) { delete draft[id]; select.value = ''; }
 			feedback = false;
@@ -309,7 +339,11 @@ export function createDocket(store: GameStore) {
 			refreshMarks();
 		}));
 		else if (chapterIndex + 1 < CHAPTERS.length) actions.append(button(t('다음 심리', 'Next hearing'), () => selectChapter(chapterIndex + 1), 'tv-primary'));
-		puzzle.append(actions, status);
+		if (!sealed && !fallback && (!hasEvidence || !atTribunal)) {
+			status.dataset.blocked = '';
+			actions.append(button(hasEvidence ? t('법정으로 돌아가기', 'Return to the tribunal') : t('증언을 더 모으러 가기', 'Return to gather evidence'), () => dialog.close()));
+		}
+		puzzle.append(status, actions);
 		refreshMarks();
 		const notesPanel = create('details');
 		notesPanel.append(create('summary', t('나의 기록 · 자동 저장', 'Scratch notes · saved')));
@@ -348,6 +382,7 @@ export function createDocket(store: GameStore) {
 	}
 
 	function renderArchive() {
+		agentScreen(t('지워진 밤의 기록', 'Records of the Night of the Erasure'), '');
 		nav.replaceChildren(button(t('사건 기록철', 'Case docket'), () => selectChapter(chapterIndex)));
 		const book = create('section', '', 'tv-section tv-archive');
 		const heading = create('h3', t('지워진 밤의 기록', 'Records of the Night of the Erasure'));
@@ -374,6 +409,8 @@ export function createDocket(store: GameStore) {
 	function renderWitness(id: NpcId, reading = current()) {
 		const npc = NPCS.find(person => person.id === id);
 		if (!npc) return;
+		const speaker = l(npc.name);
+		agentScreen(speaker, '');
 		const meeting = meetNpc(story, reading, id, complete);
 		const lines = reading === CHAPTERS.length - 1 && reading < complete && ending
 			? [...meeting.lines, POLICY[ending].responses[id]] : meeting.lines;
@@ -398,8 +435,12 @@ export function createDocket(store: GameStore) {
 		const currentReading = current();
 		const home = button(t('마을로 돌아가기', 'Return to the village'), () => fallback ? selectChapter(reading) : dialog.close());
 		actions.append(next, home);
+		agentChoice('leave', home);
 		function speak() {
-			dialogue.replaceChildren(create('p', lines[cursor] ? l(lines[cursor]) : ''));
+			agentText = lines[cursor] ? l(lines[cursor]) : '';
+			dialogue.replaceChildren(create('p', agentText));
+			for (const [id, target] of agentChoices) if (target === next) agentChoices.delete(id);
+			agentChoice(`continue-${cursor}`, next);
 			next.textContent = cursor + 1 < lines.length
 				? t('계속 듣기', 'Keep listening')
 				: meeting.newRecords > 0 ? t('증언을 기록한다', 'Record the testimony') : t('이야기를 마친다', 'Finish listening');
@@ -408,16 +449,18 @@ export function createDocket(store: GameStore) {
 			dialogue.replaceChildren(create('p', meeting.newRecords > 0
 				? t(`기록철에 증언 ${meeting.newRecords}개를 옮겼어요.`, `${meeting.newRecords} record(s) added to the docket.`)
 				: t('이야기를 끝까지 들었어요.', 'You heard their account.')));
-			if (meeting.records.length) dialogue.append(list(meeting.records, (entry) => create('code', line({ atom: entry.atom, source: entry.source, value: entry.sign }))));
+			agentScreen(speaker, dialogue.textContent ?? '');
+			agentClues = meeting.records.map(entry => line({ atom: entry.atom, source: entry.source, value: entry.sign }));
+			if (meeting.records.length) dialogue.append(list(agentClues, (clause) => create('code', clause)));
 			const read = button(t('기록철 보기', 'Read docket'), () => selectChapter(reading), 'tv-primary');
-			actions.replaceChildren(read, home);
+			actions.replaceChildren(agentChoice('read-docket', read), agentChoice('leave', home));
 			if (opened) {
 				dialogue.append(create('p', t('마을의 옛 기록이 하나 열렸어요.', 'A village archive record is now available.'), 'tv-afterword'));
 				const archive = archiveButton();
 				nav.replaceChildren(button(t('사건 기록철', 'Case docket'), () => selectChapter(reading)), archive);
 			}
-			if (prior !== undefined) actions.append(button(t('지난 판결을 어떻게 봤나요?', 'What did you think of the last verdict?'), () => renderWitness(id, prior)));
-			else if (reading !== currentReading) actions.append(button(t('오늘의 이야기', 'Today’s account'), () => renderWitness(id, currentReading)));
+			if (prior !== undefined) actions.append(agentChoice('previous-verdict', button(t('지난 판결을 어떻게 봤나요?', 'What did you think of the last verdict?'), () => renderWitness(id, prior))));
+			else if (reading !== currentReading) actions.append(agentChoice('today', button(t('오늘의 이야기', 'Today’s account'), () => renderWitness(id, currentReading))));
 			read.focus();
 		}
 		speak();
@@ -457,6 +500,26 @@ export function createDocket(store: GameStore) {
 		get isOpen() { return dialog.open; },
 		open,
 		interact,
+		agentDialogue() {
+			if (!dialog.open) return null;
+			return {
+				speaker: agentSpeaker,
+				text: agentText,
+				choices: availableAgentChoices().map(([id, target]) => ({ id, label: target.textContent ?? '' })),
+			};
+		},
+		agentClues() { return dialog.open ? [...agentClues] : []; },
+		agentChoose(id: string) {
+			if (!dialog.open) return false;
+			const target = availableAgentChoices().find(([choice]) => choice === id)?.[1];
+			if (!target) return false;
+			target.click();
+			return true;
+		},
+		agentNearbyAction() {
+			if (dialog.open || (near === undefined && !nearWitness)) return null;
+			return launch.textContent;
+		},
 		setNear(index: number | undefined, witness?: NpcId) { near = index; nearWitness = witness; syncLauncher(); },
 		onChange(set: typeof change) { change = set; change(complete === CHAPTERS.length ? -1 : complete, complete); },
 		reveal(noGraphics = false) {

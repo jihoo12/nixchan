@@ -1,5 +1,6 @@
+import { attachAgentBridge } from '../../lib/nixkit/agent-bridge';
 import type { GameContext } from '../../lib/nixkit/meta';
-import type { NpcId } from './story';
+import { NPCS, type NpcId } from './story';
 import { createDocket } from './ui';
 import { createTribunal, tribunalSpawn, tribunalStations, tribunalTerrain, tribunalWitnesses } from './world';
 
@@ -31,7 +32,51 @@ export default function start({ createGame, store }: GameContext) {
 		}
 	});
 	game.keys.intercept(() => docket.isOpen, 100);
-	void Promise.all([game.loaded, game.drawing]).then(([, draws]) => docket.reveal(!draws), () => docket.reveal(true));
-	game.engine.add({ dispose: docket.dispose });
+	let agent: ReturnType<typeof attachAgentBridge> | undefined;
+	let disposed = false;
+	void Promise.all([game.loaded, game.drawing]).then(([, draws]) => {
+		if (disposed) return;
+		docket.reveal(!draws);
+		if (!draws) return;
+		const ko = new URLSearchParams(location.search).get('lang') === 'ko'
+			|| (new URLSearchParams(location.search).get('lang') !== 'en' && navigator.language.startsWith('ko'));
+		agent = attachAgentBridge({
+			game: 'third-voice',
+			canAct: () => game.ready && !game.paused,
+			canMove: () => !docket.isOpen,
+			movement: game.controls.agentMovement,
+			observe: () => {
+				const { x, y, z } = game.player.pos;
+				const { yaw } = game.orbit;
+				const landmarks = tribunalWitnesses
+					.map(({ id, pos }) => {
+						const npc = NPCS.find(candidate => candidate.id === id);
+						const dx = pos.x - x, dz = pos.z - z;
+						return { label: npc ? `${npc.name[ko ? 'ko' : 'en']} · ${npc.location[ko ? 'ko' : 'en']}` : id, dx, dz, distance: Math.hypot(dx, dz) };
+					})
+					.filter(landmark => landmark.distance <= 10);
+				return {
+					position: { x, y, z },
+					ready: game.ready,
+					paused: game.paused,
+					navigation: {
+						forward: { x: -Math.sin(yaw), z: -Math.cos(yaw) },
+						right: { x: Math.cos(yaw), z: -Math.sin(yaw) },
+						landmarks,
+					},
+					nearbyAction: docket.agentNearbyAction(),
+					dialogue: docket.agentDialogue(),
+					clues: docket.agentClues(),
+				};
+			},
+			interact: () => {
+				if (!docket.agentNearbyAction()) return false;
+				docket.interact();
+				return docket.isOpen;
+			},
+			choose: docket.agentChoose,
+		});
+	}, () => { if (!disposed) docket.reveal(true); });
+	game.engine.add({ dispose() { disposed = true; agent?.dispose(); docket.dispose(); } });
 	void game.start();
 }

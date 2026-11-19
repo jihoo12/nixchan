@@ -2,6 +2,7 @@
 // drag (or a finger on the right of the screen) swings the camera round; the wheel zooms. Every
 // other key is handed to the game through `route`, which decides what it means right now.
 import * as THREE from 'three';
+import { createAgentMovement } from './agent-input';
 import { clamp } from './util';
 
 /** Where the camera sits round her: which way round, how high up, how far back. */
@@ -93,6 +94,7 @@ export function createControls(
 	route: KeyRoute,
 ) {
 	const keys = new Set<string>();
+	const agentMovement = createAgentMovement();
 	const stick = new THREE.Vector2();
 	const state = { jumpQueued: false, waveQueued: false, dashQueued: false };
 
@@ -187,9 +189,15 @@ export function createControls(
 		/** Jump, wave and dash are queued by a press and taken (cleared) by whoever acts on them. */
 		state,
 		/** Lets go of every held key, as when a menu opens over the game. */
-		clearKeys: () => keys.clear(),
+		clearKeys: () => {
+			keys.clear();
+			agentMovement.release();
+		},
+		agentMovement,
 		/** Which way she's asked to go, relative to the camera, and whether to run. */
 		move() {
+			const automated = agentMovement.sample();
+			if (automated) return automated;
 			const held = (...names: string[]) => (names.some((n) => keys.has(n)) ? 1 : 0);
 			let forward = held('w', 'arrowup') - held('s', 'arrowdown');
 			let right = held('d', 'arrowright') - held('a', 'arrowleft');

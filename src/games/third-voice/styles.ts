@@ -73,4 +73,6 @@ export const styleText = `
 .tv-archive-leaf { margin-top:.8rem; padding:.8rem; background:#151829; border-left:2px solid #9e7c56; border-radius:.25rem; }
 .tv-archive-leaf h4 { color:var(--tv-text); margin:.15rem 0 .35rem; font:600 1.25rem/1.3 Georgia,'Noto Serif KR',serif; }
 .tv-archive-leaf p { max-width:69ch; }
+
+.tv-verdict-status[data-blocked] { padding:.55rem .65rem; background:#282733; border-left:2px solid var(--tv-gilt); color:var(--tv-text); }
 `

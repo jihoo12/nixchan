@@ -227,3 +227,5 @@ so the page styles them as it likes.
 - `save.ts`, `daynight.ts`, `lang.ts`: saves, day and night, and the site's language
 - `thumbnail.ts`: pictures of 3D things for menus
 - `look.ts`, `util.ts`: toon materials, and small maths
+
+For local AI playtesting in The Third Voice, see the [Nixkit MCP guide](../../../tools/NIXKIT-MCP.md).
