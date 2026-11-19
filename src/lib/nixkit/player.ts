@@ -8,8 +8,7 @@ import * as THREE from 'three';
 import { buildNixFigure, type FigureLook, type NixClip } from '../experimental/nix-figure';
 import type { Controls, Orbit } from './controls';
 import type { Toon } from './look';
-import type { Emotion } from './emotions';
-import { createGestureLayer } from './gestures';
+import { createGestureLayer, type GestureName } from './gestures';
 import { clamp, damp } from './util';
 import { within, type World } from './world';
 
@@ -458,7 +457,7 @@ export function createPlayer(ctx: PlayerContext) {
 		figure,
 		root,
 		/** Starts a one-shot visual body cue, or returns 0 if another activity owns her body. */
-		playGesture(name: Emotion) {
+		playGesture(name: GestureName) {
 			const input = controls.state;
 			const move = controls.move();
 			if (!bodyAvailable || !grounded || swimming || gliding || dashing > 0 || waving > 0 || Math.hypot(vel.x, vel.z) > 0.2

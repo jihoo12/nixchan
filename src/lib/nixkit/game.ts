@@ -22,6 +22,7 @@ import { createFollowCamera } from './camera';
 import { createControls, type Orbit } from './controls';
 import { createHud } from './hud';
 import { createEmotionPlayer, EMOTIONS, type Emotion, type EmoteMenu } from './emotions';
+import type { GestureName } from './gestures';
 import { makeToon } from './look';
 import { createParts } from './parts';
 import { aimFirstPerson, createViewMode } from './view-mode';
@@ -31,13 +32,14 @@ import type { NixClip } from '../experimental/nix-figure';
 
 export type { NixClip };
 
-const ACTION_MOODS = {
+const ACTION_GESTURES = {
 	hop: 'happy',
 	flinch: 'surprised',
 	droop: 'sad',
 	'fist-pump': 'determined',
-} as const satisfies Record<string, Emotion>;
-export type BodyAction = keyof typeof ACTION_MOODS;
+	dance: 'dance',
+} as const satisfies Record<string, GestureName>;
+export type BodyAction = keyof typeof ACTION_GESTURES;
 
 export interface GameOptions {
 	canvas: HTMLCanvasElement;
@@ -189,19 +191,23 @@ export function createGame(opts: GameOptions) {
 	}
 	const motion = matchMedia('(prefers-reduced-motion: reduce)');
 	const emotions = createEmotionPlayer((name, strength) => player.figure.setEmotion(name, strength), () => motion.matches);
-	const react = (name: Emotion, faceOnlySeconds = 2.4) => {
+	const react = (name: Emotion, faceOnlySeconds = 2.4, gesture: GestureName = name) => {
 		if (!ready || paused || !EMOTIONS.includes(name)) return false;
-		const duration = player.playGesture(name);
+		const duration = player.playGesture(gesture);
 		if (duration) emotions.clear(); // Begin the new face with the new body pose.
 		else player.clearGesture(); // A face-only fallback replaces the previous reaction too.
 		emotions.play(name, duration || faceOnlySeconds);
 		return duration > 0;
 	};
-	const emoteMenu = opts.emotes && hud.emotes(opts.emotes, (name) => {
-		if (!ready || paused || isFirstPerson()) return;
-		if (opts.emotes?.gestures) react(name, 3.6);
+	const menu = opts.emotes;
+	const canChooseEmote = () => ready && !paused && !isFirstPerson();
+	const emoteMenu = menu && hud.emotes(menu, (name) => {
+		if (!canChooseEmote()) return;
+		if (menu.gestures) react(name, 3.6);
 		else emotions.play(name, 3.6);
-	});
+	}, menu.gestures && menu.danceLabel ? () => {
+		if (canChooseEmote()) react('happy', 3.6, 'dance');
+	} : undefined);
 	emoteMenu?.setVisible(false);
 	const controls = createControls(canvas, hud.touch, orbit, {
 		intercept(key, e) {
@@ -302,8 +308,8 @@ export function createGame(opts: GameOptions) {
 		},
 		/** A body-only gesture. True if accepted; never queues or changes the face. */
 		action(name: BodyAction) {
-			if (!ready || paused || !Object.hasOwn(ACTION_MOODS, name)) return false;
-			return player.playGesture(ACTION_MOODS[name]) > 0;
+			if (!ready || paused || !Object.hasOwn(ACTION_GESTURES, name)) return false;
+			return player.playGesture(ACTION_GESTURES[name]) > 0;
 		},
 		/** A matching face and body reaction, without a menu. True if the body cue was accepted. */
 		react(name: Emotion) {

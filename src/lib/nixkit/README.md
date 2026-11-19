@@ -52,7 +52,7 @@ Use these from a game event (for example, after completing a quest), without set
 | Call | What plays |
 | --- | --- |
 | `game.emote('happy', 2)` | Just the face for two seconds. Moods: `happy`, `surprised`, `sad`, `determined`. |
-| `game.action('hop')` | Just the body gesture. Actions: `hop`, `flinch`, `droop`, `fist-pump`. |
+| `game.action('hop')` | Just the body gesture. Actions: `hop`, `flinch`, `droop`, `fist-pump`, `dance`. |
 | `game.react('happy')` | The matching face and body gesture together. |
 
 `action` and `react` return `true` if the body cue was accepted. They do nothing before the
@@ -67,7 +67,8 @@ Set `emotes: { gestures: true }` to pair each menu choice with a body gesture on
 grounded Nixchan. Movement, jumping and game-owned poses take priority; with reduced motion
 the menu stays face-only. The **E** wave and scripted `game.emote()` cues keep their existing
 behavior. The menu uses the same reaction logic as `game.react()`. The options can provide localized
-button and choice labels and a short hint.
+button and choice labels and a short hint. Give a `danceLabel` with `gestures: true` to add
+a dance choice with a smile (as in Lantern Mart).
 
 What it gives back:
 

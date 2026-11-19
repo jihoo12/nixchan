@@ -52,7 +52,7 @@ let isGesturing = false, acceptsGesture = true;
 globalThis.mockPlayer = ({start, canGesture}) => ({
 	figure: {ready:new Promise(resolve => { resolveModel = resolve; }),group:new THREE.Group(),setEmotion:(name,strength)=>face.push([name,strength])},
 	root: new THREE.Group(),pos:start,vel:new THREE.Vector3(), gliderOpen: 0,
-	update(){if (!canGesture()) this.clearGesture();},playGesture(name){if (!canGesture()) return 0;gestures.push(name);isGesturing=acceptsGesture;return acceptsGesture?1.1:0;},
+	update(){if (!canGesture()) this.clearGesture();},playGesture(name){if (!canGesture()) return 0;gestures.push(name);isGesturing=acceptsGesture;return acceptsGesture ? (name === 'dance' ? 3.6 : 1.1) : 0;},
 	clearGesture(){isGesturing=false;},
 });
 const {createGame} = await import('../src/lib/nixkit/game.ts');
@@ -115,7 +115,7 @@ reduced = false;
 
 // Body-only action uses public action names, never starts or replaces a face cue.
 game.clearEmote();
-for (const [action, mood] of [['hop', 'happy'], ['flinch', 'surprised'], ['droop', 'sad'], ['fist-pump', 'determined']]) {
+for (const [action, mood] of [['hop', 'happy'], ['flinch', 'surprised'], ['droop', 'sad'], ['fist-pump', 'determined'], ['dance', 'dance']]) {
 	const before = face.length;
 	assert.equal(game.action(action), true);
 	assert.equal(gestures.at(-1), mood);
@@ -144,10 +144,11 @@ assert.equal(face.at(-1)[0], 'happy');
 assert.equal(gestures.length, beforeFaceOnly);
 
 // A face-only B menu keeps its old behavior, while programmatic react remains available.
-game = make({}); await load(game);
+game = make({danceLabel:'Starlight Step'}); await load(game);
 let menu = all(document.body, 'nk-emotes').at(-1);
 let [button, panel] = menu.children;
 const beforeMenu = gestures.length;
+assert.equal(all(menu, 'nk-emote-dance').length, 0);
 button.listeners.click(); panel.children[0].listeners.click(); next(5);
 assert.equal(face.at(-1)[0], 'happy');
 assert.equal(gestures.length, beforeMenu);
@@ -155,7 +156,7 @@ assert.equal(game.react('determined'), true);
 assert.equal(gestures.at(-1), 'determined');
 
 // Opt-in B choices and the API share behavior, including face fallback on body refusal.
-game = make({gestures:true}); await load(game);
+game = make({gestures:true, danceLabel:'Starlight Step'}); await load(game);
 menu = all(document.body, 'nk-emotes').at(-1);
 [button, panel] = menu.children;
 button.listeners.click(); panel.children[1].listeners.click(); next();
@@ -165,4 +166,26 @@ acceptsGesture = false;
 button.listeners.click(); panel.children[2].listeners.click(); next(9);
 assert.equal(face.at(-1)[0], 'sad');
 assert.equal(isGesturing, false);
+acceptsGesture = true;
+const [dance] = all(menu, 'nk-emote-dance');
+assert.equal(dance.textContent, 'Starlight Step');
+button.listeners.click(); dance.listeners.click(); next(25);
+assert.equal(panel.hidden, true);
+assert.equal(focus, button);
+assert.equal(gestures.at(-1), 'dance');
+assert.deepEqual(face.at(-1), ['happy', 1]);
+next(70); assert.deepEqual(face.at(-1), ['neutral', 0]);
+
+// The dance button must not bypass motion preferences or the active view.
+reduced = true;
+const beforeDance = gestures.length;
+button.listeners.click(); dance.listeners.click(); next();
+assert.equal(gestures.length, beforeDance);
+assert.deepEqual(face.at(-1), ['happy', 1]);
+reduced = false;
+key('v'); next();
+assert.equal(menu.hidden, true);
+dance.listeners.click(); next();
+assert.equal(gestures.length, beforeDance);
+
 console.log('react/action API: body-only mappings and face isolation, no-HUD use, readiness/invalid/pause guards, duration matching, first-person/reduced-motion/activity fallback, face-only compatibility, and B menu integration passed.');

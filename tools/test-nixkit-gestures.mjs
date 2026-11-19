@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import * as THREE from 'three';
 import { GESTURE_SECONDS, sampleGesture, createGestureLayer } from '../src/lib/nixkit/gestures.ts';
 
-test('all four cues have finite bounded poses and neutral endpoints', () => {
+test('all cues have finite bounded poses and neutral endpoints', () => {
 	for (const [name, seconds] of Object.entries(GESTURE_SECONDS)) {
 		for (const time of [-1, 0, seconds, seconds + 1, NaN, Infinity])
 			assert.deepEqual(sampleGesture(name, time), { lift: 0, bones: {} });
