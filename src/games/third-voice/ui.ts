@@ -1,5 +1,6 @@
 import type { GameStore } from '../../lib/nixkit/meta';
 import { CHAPTERS, WORDS, evaluate, line, type Chapter, type Localized } from './rules';
+import { NPCS, caseForChapter, hasAllTestimony, meetNpc, restoreStory, testimonyForNpc, visibleTestimony, type NpcId } from './story';
 import cover from './cover.webp?url';
 import { styleText } from './styles';
 
@@ -47,16 +48,20 @@ export function createDocket(store: GameStore) {
 	let ending: Ending | undefined = complete === CHAPTERS.length && (raw.ending === 'hold' || raw.ending === 'carry') ? raw.ending : undefined;
 	let chapterIndex = Math.min(complete, CHAPTERS.length - 1);
 	let gloss = raw.gloss === true;
+	let story = restoreStory(raw.story, complete);
+	let fallback = false;
+	let nearWitness: NpcId | undefined;
 	let near: number | undefined;
 	let feedback = false;
 	let hintCount = 0;
 	let change = (_chapter: number, _completed: number) => {};
 	let lastFocus: HTMLElement | null = null;
-	const save = () => store.set(key, { drafts, notes, complete, ending, gloss });
+	const save = () => store.set(key, { drafts, notes, complete, ending, gloss, story });
 
 	const launcher = create('div', '', 'tv-launch');
-	const launch = button('', () => open(near));
-	launcher.append(launch);
+	const launch = button('', () => interact());
+	const objective = create('p', '', 'tv-objective');
+	launcher.append(objective, launch);
 	launcher.hidden = true;
 	const dialog = create('dialog', '', 'tv-book');
 	dialog.setAttribute('aria-labelledby', 'tv-title');
@@ -68,7 +73,7 @@ export function createDocket(store: GameStore) {
 	const stamp = create('div', 'ARVEL   /   VA · YA · NU · DU', 'tv-kicker');
 	const title = create('h2', t('제3의 목소리', 'The Third Voice'));
 	title.id = 'tv-title';
-	const prologue = create('p', t('두 사람은 같은 문을 보았다. 기록관은 둘 중 아무도 지우지 않고 판결문을 쓰라고 했다.', 'Two witnesses saw the same door. The archivist asks for a verdict that erases neither of them.'));
+	const prologue = create('p', t('수문 마을의 기록관이 닉스쨩을 불렀다. 판결을 쓰기 전에, 물가와 기록소와 종탑에서 각자의 말을 들어보자.', 'The archivist of Weirhaven has summoned Nixchan. Before drafting a verdict, listen at the landing, archive and bell tower.'));
 	const closeButton = button(t('닫기', 'Close'), () => dialog.close(), 'tv-close');
 	head.append(art, stamp, title, prologue, closeButton);
 	const nav = create('nav', '', 'tv-nav');
@@ -79,11 +84,23 @@ export function createDocket(store: GameStore) {
 	document.head.append(styles);
 	document.body.append(launcher, dialog);
 
+	const current = () => Math.min(complete, CHAPTERS.length - 1);
 	const syncLauncher = () => {
-		const focus = near === undefined ? undefined : CHAPTERS[near];
-		launch.textContent = focus && near !== undefined && near <= complete
-			? t(`${numerals[near]} · 석판 읽기`, `${numerals[near]} · Read tablet`)
-			: t(`기록철 · ${complete}/3`, `Docket · ${complete}/3`);
+		const witness = NPCS.find(npc => npc.id === nearWitness);
+		const next = CHAPTERS[current()];
+		const records = visibleTestimony(story, current());
+		const count = records.length;
+		const missing = NPCS.find(npc => testimonyForNpc(current(), npc.id).some(entry => !records.some(record => record.id === entry.id)));
+		launch.textContent = witness
+			? t(`${l(witness.name)} · 말 걸기`, `${l(witness.name)} · Talk`)
+			: near !== undefined && near <= complete
+				? t(`${numerals[near]} · 석판 읽기`, `${numerals[near]} · Read tablet`)
+				: t('사건 기록철', 'Case docket');
+		objective.textContent = complete === CHAPTERS.length
+			? t('판결 뒤의 마을 · 증인에게 다시 물어볼 수 있어요', 'After the verdict · revisit the witnesses')
+			: count < next.corpus.length
+				? t(`증거 ${count}/${next.corpus.length}${missing ? ` · ${l(missing.location)}` : ''}`, `Evidence ${count}/${next.corpus.length}${missing ? ` · ${l(missing.location)}` : ''}`)
+				: t(`법정 ${numerals[current()]}번 석판에서 제출`, `Submit at tribunal tablet ${numerals[current()]}`);
 	};
 	const focusHeading = () => main.querySelector<HTMLElement>('h3')?.focus({ preventScroll: true });
 	function selectChapter(index: number) {
@@ -151,6 +168,10 @@ export function createDocket(store: GameStore) {
 		const chapter = CHAPTERS[chapterIndex];
 		const draft = drafts[chapterIndex];
 		const sealed = chapterIndex < complete;
+		const records = visibleTestimony(story, chapterIndex);
+		const hasEvidence = sealed || hasAllTestimony(story, chapterIndex);
+		const atTribunal = fallback || near === chapterIndex;
+		const incident = caseForChapter(chapterIndex);
 		nav.replaceChildren(...CHAPTERS.map((item, index) => {
 			const tab = button(`${numerals[index]} · ${l(item.title)}${index < complete ? ' ✓' : ''}`, () => selectChapter(index));
 			tab.disabled = index > complete;
@@ -160,7 +181,23 @@ export function createDocket(store: GameStore) {
 		const heading = create('h3', `${numerals[chapterIndex]} · ${l(chapter.title)}`);
 		heading.tabIndex = -1;
 		const brief = create('section', '', 'tv-section');
-		brief.append(heading, create('p', l(chapter.intro)));
+		brief.append(create('div', l(incident.title), 'tv-kicker'), heading, create('p', l(incident.summary)), create('p', l(chapter.intro)));
+		const directory = create('details', '', 'tv-directory');
+		directory.open = !hasEvidence;
+		directory.append(create('summary', t('마을 길잡이 · 증인과 증거', 'Village guide · witnesses and evidence')));
+		const cards = create('div', '', 'tv-witness-grid');
+		NPCS.forEach((npc) => {
+			const card = create('div', '', 'tv-witness-card');
+			card.append(create('strong', l(npc.name)), create('span', l(npc.role), 'tv-mute'), create('span', l(npc.location)));
+			const required = testimonyForNpc(chapterIndex, npc.id);
+			const gathered = required.filter((entry) => records.some(record => record.id === entry.id)).length;
+			if (required.length) card.append(create('span', t(`기록 ${gathered}/${required.length}`, `Records ${gathered}/${required.length}`), 'tv-mute'));
+			if (fallback || nearWitness === npc.id) card.append(button(t('말 걸기', 'Talk'), () => renderWitness(npc.id, chapterIndex), 'tv-visit'));
+			cards.append(card);
+		});
+		directory.append(cards);
+		if (!fallback) directory.append(create('p', t('길을 따라 증인에게 다가가 E 또는 말 걸기 버튼을 누르세요. 법정은 종탑을 지나 더 안쪽이에요.', 'Follow the path to a witness, then press E or Talk. The tribunal is just beyond the bell tower.'), 'tv-mute'));
+		brief.append(directory);
 		const grid = create('div', '', 'tv-grid');
 		const evidence = create('section', '', 'tv-section');
 		evidence.append(create('h3', t('아르벨어 원본', 'The Arvel record')));
@@ -172,13 +209,14 @@ export function createDocket(store: GameStore) {
 		}
 		evidence.append(translate);
 		setGloss();
-		evidence.append(list(chapter.corpus, (entry) => {
+		if (!hasEvidence) evidence.append(create('p', t('증인에게 받은 줄만 이 기록에 나타나요.', 'Only testimony collected from witnesses appears here.'), 'tv-mute'));
+		evidence.append(list(records, (entry) => {
 			const fragment = document.createDocumentFragment();
 			fragment.append(create('code', line({ atom: entry.atom, source: entry.source, value: entry.sign })),
 				create('div', l(entry.text), 'tv-mute tv-gloss'));
 			return fragment;
 		}));
-		if (chapter.rules.length) {
+		if (hasEvidence && chapter.rules.length) {
 			evidence.append(create('h4', t('기록관의 추론 규칙', 'Archivist’s inference rules')),
 				list(chapter.rules, (rule) => {
 					const fragment = document.createDocumentFragment();
@@ -248,17 +286,24 @@ export function createDocket(store: GameStore) {
 				mark.textContent = !feedback || flag === 'pending' ? '' : flag === 'pass' ? t(' · 충족', ' · Met') : t(' · 불충족', ' · Unmet');
 				mark.dataset.mark = !feedback || flag === 'pending' ? '' : flag;
 			}
-			if (!sealed) status.textContent = feedback ? t('판결이 보류됐어요. 기록과 계약을 다시 대조해 보세요.', 'Verdict withheld. Compare your clauses with the record and the contract.')
+			if (!sealed) status.textContent = !hasEvidence
+				? t('먼저 마을에서 아직 받지 못한 증언을 모으세요.', 'First gather the missing testimony in the village.')
+				: !atTribunal
+					? t(`초안은 여기서 써도 되지만 심사는 법정 ${numerals[chapterIndex]}번 석판에서만 할 수 있어요.`, `Draft here, but submit at tribunal tablet ${numerals[chapterIndex]}.`)
+					: feedback ? t('판결이 보류됐어요. 기록과 계약을 다시 대조해 보세요.', 'Verdict withheld. Compare your clauses with the record and the contract.')
 				: t('바꾸는 동안에는 판정하지 않아요.', 'The tribunal does not judge while you edit.');
 		}
 		const actions = create('div', '', 'tv-actions');
-		if (!sealed) actions.append(button(t('판결 심사', 'Test the verdict'), () => {
+		const submit = button(t('판결 심사', 'Test the verdict'), () => {
+			if (!hasEvidence || !atTribunal || sealed) return;
 			if (!evaluate(chapter, draft).solved) { feedback = true; refreshMarks(); return; }
 			complete = chapterIndex + 1;
 			feedback = false;
 			save(); syncLauncher(); change(chapterIndex, complete);
 			render(); focusHeading();
-		}, 'tv-primary'), button(t('초안 비우기', 'Clear draft'), () => {
+		}, 'tv-primary');
+		submit.disabled = !hasEvidence || !atTribunal;
+		if (!sealed) actions.append(submit, button(t('초안 비우기', 'Clear draft'), () => {
 			for (const [id, select] of selects) { delete draft[id]; select.value = ''; }
 			feedback = false;
 			save();
@@ -277,7 +322,7 @@ export function createDocket(store: GameStore) {
 		notesPanel.append(memo);
 		puzzle.append(notesPanel);
 
-		if (!sealed && chapter.hints.length) {
+		if (!sealed && hasEvidence && chapter.hints.length) {
 			const help = create('details');
 			const shown = list(chapter.hints.slice(0, hintCount), (item) => create('span', l(item)));
 			shown.setAttribute('aria-live', 'polite');
@@ -291,14 +336,75 @@ export function createDocket(store: GameStore) {
 		}
 		grid.append(evidence, puzzle);
 		main.replaceChildren(brief, grid);
+		if (sealed) {
+			const note = create('p', t('마을로 돌아가 같은 증인에게 말을 걸면, 이 판결에 대한 이야기도 들을 수 있어요.', 'Return to a witness to hear what changed after this verdict.'), 'tv-afterword');
+			brief.append(note);
+		}
 		if (complete === CHAPTERS.length && chapterIndex === CHAPTERS.length - 1) addEnding(main);
+	}
+
+	// Conversations live in the same modal so movement, touch and keyboard focus
+	// behave identically in the field and in the screen-reader-friendly text route.
+	function renderWitness(id: NpcId, reading = current()) {
+		const npc = NPCS.find(person => person.id === id);
+		if (!npc) return;
+		const meeting = meetNpc(story, reading, id, complete);
+		nav.replaceChildren(button(t('사건 기록철', 'Case docket'), () => selectChapter(reading)));
+		const card = create('section', '', 'tv-section tv-conversation');
+		const title = create('h3', l(npc.name));
+		title.tabIndex = -1;
+		card.append(create('div', `${l(npc.role)} · ${l(npc.location)}`, 'tv-kicker'), title);
+		const dialogue = create('div', '', 'tv-dialogue');
+		dialogue.setAttribute('role', 'status');
+		let cursor = 0;
+		const next = button('', () => {
+			if (cursor + 1 < meeting.lines.length) { cursor++; speak(); return; }
+			story = meeting.state;
+			save();
+			syncLauncher();
+			showReceipt();
+		}, 'tv-primary');
+		const actions = create('div', '', 'tv-actions');
+		const prior = complete > 0 && reading >= complete ? complete - 1 : undefined;
+		const currentReading = current();
+		const home = button(t('마을로 돌아가기', 'Return to the village'), () => fallback ? selectChapter(reading) : dialog.close());
+		actions.append(next, home);
+		function speak() {
+			dialogue.replaceChildren(create('p', meeting.lines[cursor] ? l(meeting.lines[cursor]) : ''));
+			next.textContent = cursor + 1 < meeting.lines.length
+				? t('계속 듣기', 'Keep listening')
+				: meeting.newRecords > 0 ? t('증언을 기록한다', 'Record the testimony') : t('이야기를 마친다', 'Finish listening');
+		}
+		function showReceipt() {
+			dialogue.replaceChildren(create('p', meeting.newRecords > 0
+				? t(`기록철에 증언 ${meeting.newRecords}개를 옮겼어요.`, `${meeting.newRecords} record(s) added to the docket.`)
+				: t('이야기를 끝까지 들었어요.', 'You heard their account.')));
+			if (meeting.records.length) dialogue.append(list(meeting.records, (entry) => create('code', line({ atom: entry.atom, source: entry.source, value: entry.sign }))));
+			const read = button(t('기록철 보기', 'Read docket'), () => selectChapter(reading), 'tv-primary');
+			actions.replaceChildren(read, home);
+			if (prior !== undefined) actions.append(button(t('지난 판결을 어떻게 봤나요?', 'What did you think of the last verdict?'), () => renderWitness(id, prior)));
+			else if (reading !== currentReading) actions.append(button(t('오늘의 이야기', 'Today’s account'), () => renderWitness(id, currentReading)));
+			read.focus();
+		}
+		speak();
+		card.append(dialogue, actions);
+		main.replaceChildren(card);
+		dialog.scrollTop = 0;
+		focusHeading();
+	}
+
+	function interact() {
+		if (!nearWitness || dialog.open) { open(near); return; }
+		lastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+		dialog.showModal();
+		renderWitness(nearWitness);
 	}
 
 	function open(index?: number) {
 		if (dialog.open) return;
 		if (index !== undefined && index >= 0 && index <= complete && index < CHAPTERS.length) {
 			chapterIndex = index;
-		} else chapterIndex = Math.min(complete, CHAPTERS.length - 1);
+		} else chapterIndex = current();
 		feedback = false;
 		hintCount = 0;
 		lastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -316,10 +422,12 @@ export function createDocket(store: GameStore) {
 	return {
 		get isOpen() { return dialog.open; },
 		open,
-		setNear(index: number | undefined) { near = index; syncLauncher(); },
+		interact,
+		setNear(index: number | undefined, witness?: NpcId) { near = index; nearWitness = witness; syncLauncher(); },
 		onChange(set: typeof change) { change = set; change(complete === CHAPTERS.length ? -1 : complete, complete); },
-		reveal(fallback = false) {
+		reveal(noGraphics = false) {
 			launcher.hidden = false;
+			fallback = noGraphics;
 			if (fallback) {
 				launcher.dataset.fallback = '';
 				open();

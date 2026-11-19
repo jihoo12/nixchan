@@ -56,4 +56,15 @@ export const styleText = `
 .tv-section[data-gloss=false] .tv-gloss { display:none; }
 .tv-book textarea, .tv-book code { user-select:text; -webkit-user-select:text; }
 .tv-launch[data-fallback] { z-index:45; }
+
+.tv-launch { display:grid; justify-items:center; gap:.28rem; }
+.tv-launch[hidden] { display:none; }
+.tv-objective { margin:0; border:1px solid #695b60; border-radius:2rem; background:#121625ed; padding:.22rem .66rem; color:var(--tv-mute); font-size:.86rem; text-align:center; }
+.tv-witness-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(10rem,1fr)); gap:.45rem; padding:.3rem 0; }
+.tv-witness-card { display:grid; align-content:start; gap:.18rem; background:#151827; border:1px solid var(--tv-border); border-radius:.45rem; padding:.55rem; }
+.tv-witness-card strong { color:var(--tv-jade); }
+.tv-visit { justify-self:start; margin-top:.35rem; }
+.tv-conversation { border-color:#776556; background:linear-gradient(128deg,#26273b,#1b1e30 72%); padding:clamp(.8rem,3vw,1.85rem); }
+.tv-dialogue { max-width:60ch; min-height:4.5rem; border-left:2px solid var(--tv-gilt); padding-left:.75rem; margin:.85rem 0; }
+.tv-afterword { color:var(--tv-jade); }
 `
