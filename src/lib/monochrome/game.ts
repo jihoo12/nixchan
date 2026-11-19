@@ -738,9 +738,13 @@ export async function startMonochrome() {
 		});
 
 	// ---------- the frame ----------
-	// In the engine's order: she moves (ORDER.player), what she's casting runs down, she steps over
-	// into the next cell if she's reached it, the place moves, the camera follows, and the sun.
+	// In the engine's order: she steps over into the next cell if she reached it last frame, she moves
+	// (ORDER.player), what she's casting runs down, the place moves, the camera follows, and the sun.
 
+	// Stepping over into the next cell shifts everything back by a cell: her, the camera, the place.
+	// It has to come before she moves, so that where she's drawn (the player puts her figure where she
+	// is as she moves) is shifted with the rest; after it, she'd be drawn a cell off for a frame.
+	engine.add({ order: ORDER.player - 1, update: () => crossOver() });
 	engine.add({
 		order: ORDER.player + 1,
 		update(dt) {
@@ -749,7 +753,6 @@ export async function startMonochrome() {
 			if (wasCasting && casting === 0 && castClip === 'Smith') figure.setProp('Hammer', false);
 		},
 	});
-	engine.add({ order: ORDER.contact, update: () => crossOver() });
 
 	let veinClock = 2;
 	engine.add({
