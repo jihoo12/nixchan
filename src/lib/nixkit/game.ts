@@ -17,7 +17,7 @@
 // onBeforeCompile doesn't draw here (CONTRIBUTING.md).
 import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
-import { fixToon, nodeLook } from './figure-nodes';
+import { nodeLook } from './figure-nodes';
 import { createFollowCamera } from './camera';
 import { createControls, type Orbit } from './controls';
 import { createHud } from './hud';
@@ -64,7 +64,6 @@ export function createGame(opts: GameOptions) {
 		cannotDraw();
 		return null;
 	}
-	fixToon(renderer);
 	// Settles once it's ready to draw; on WebGPU that's after the browser hands over a device.
 	const drawing = renderer.init().then(
 		() => true,
@@ -75,7 +74,7 @@ export function createGame(opts: GameOptions) {
 	);
 	renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
 	renderer.shadowMap.enabled = true;
-	renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+	renderer.shadowMap.type = THREE.PCFShadowMap;
 
 	const scene = new THREE.Scene();
 	const camera = new THREE.PerspectiveCamera(45, 1, 0.3, 1200);

@@ -174,7 +174,7 @@ export async function start() {
 	const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 	renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 	renderer.shadowMap.enabled = true;
-	renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+	renderer.shadowMap.type = THREE.PCFShadowMap;
 
 	const scene = new THREE.Scene();
 	const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 200);
@@ -1688,10 +1688,12 @@ export async function start() {
 	camPos.copy(wantPos);
 	camLook.copy(wantLook);
 
-	const clock = new THREE.Clock();
-	renderer.setAnimationLoop(() => {
-		const dt = Math.min(clock.getDelta(), 0.05);
-		const time = clock.elapsedTime;
+	const timer = new THREE.Timer();
+	timer.connect(document);
+	renderer.setAnimationLoop((now) => {
+		timer.update(now);
+		const dt = Math.min(timer.getDelta(), 0.05);
+		const time = timer.getElapsed();
 		if (roam && !roamable()) setRoam(false, false);
 		if (roam) {
 			roamFrame(dt);

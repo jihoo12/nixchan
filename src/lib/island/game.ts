@@ -86,7 +86,7 @@ export async function startIsland() {
 	}
 	renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
 	renderer.shadowMap.enabled = true;
-	renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+	renderer.shadowMap.type = THREE.PCFShadowMap;
 
 	const scene = new THREE.Scene();
 	// The near plane sits a little way out: the camera never comes closer than that, and it buys the

@@ -60,7 +60,7 @@ export function startRoom() {
 	}
 	renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
 	renderer.shadowMap.enabled = true;
-	renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+	renderer.shadowMap.type = THREE.PCFShadowMap;
 	const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 	const scene = new THREE.Scene();

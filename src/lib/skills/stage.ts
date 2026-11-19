@@ -75,7 +75,7 @@ export async function startSkills() {
 	const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 	renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
 	renderer.shadowMap.enabled = true;
-	renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+	renderer.shadowMap.type = THREE.PCFShadowMap;
 	renderer.setClearColor('#0d0c26');
 
 	const scene = new THREE.Scene();

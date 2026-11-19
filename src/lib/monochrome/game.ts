@@ -85,7 +85,7 @@ export async function startMonochrome() {
 	}
 	renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
 	renderer.shadowMap.enabled = true;
-	renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+	renderer.shadowMap.type = THREE.PCFShadowMap;
 
 	const scene = new THREE.Scene();
 	const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 400);
