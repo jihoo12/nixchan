@@ -1,11 +1,12 @@
 import type { GameStore } from '../../lib/nixkit/meta';
 import { CHAPTERS, WORDS, evaluate, line, type Chapter, type Localized } from './rules';
 import { NPCS, caseForChapter, hasAllTestimony, meetNpc, restoreStory, testimonyForNpc, visibleTestimony, type NpcId } from './story';
+import { ARCHIVE, POLICY, isArchiveOpen, type RecordPolicy } from './lore';
 import cover from './cover.webp?url';
 import { styleText } from './styles';
 
 type Draft = Record<string, number>;
-type Ending = 'hold' | 'carry';
+type Ending = RecordPolicy;
 const key = 'docket-v1';
 const numerals = ['I', 'II', 'III'];
 const create = <K extends keyof HTMLElementTagNameMap>(tag: K, content = '', className = '') => {
@@ -151,15 +152,12 @@ export function createDocket(store: GameStore) {
 			carry.setAttribute('aria-pressed', String(ending === 'carry'));
 			hold.dataset.mark = ending === 'hold' ? 'pass' : '';
 			carry.dataset.mark = ending === 'carry' ? 'pass' : '';
-			statement.textContent = ending === 'hold'
-				? t('닫힌 기록철에는 두 개의 서명이 남았다. 그것은 합의의 모양을 하지 않았다.', 'Two signatures remained in the closed docket. They did not resemble agreement.')
-				: ending === 'carry'
-					? t('닉스쨩이 판결을 읽자 문 밖에서 누군가 물었다. “그럼 우리가 아직 모르는 것은 어디에 적나요?”', 'After Nixchan read the verdict, someone outside asked, “Where do we write what we still don’t know?”')
-					: t('어느 쪽을 택해도 증거의 내용은 바뀌지 않아요.', 'Neither choice changes the evidence.');
+			statement.textContent = ending ? l(POLICY[ending].verdict)
+				: t('판결은 끝났지만 누구에게 어떤 방식으로 전할지는 아직 정하지 않았어요. 아래의 선택은 판결문이 아니라 마을에 남을 일을 바꿔요.', 'The verdict is settled; who hears it and how is not. This choice changes what happens in the village, not what the record proves.');
 		}
 		const picks = create('div', '', 'tv-actions');
 		picks.append(hold, carry);
-		box.append(statement, picks);
+		box.append(create('p', t('보관하면 근거를 다시 읽기 쉽지만, 서랍을 찾아야 해요. 낭독하면 누구나 이의를 낼 수 있지만, 결론만 멀리 퍼질 수 있어요.', 'An archive keeps the grounds legible, but people must know where to look. A reading invites objections, but the conclusion can travel alone.'), 'tv-mute'), statement, picks);
 		refreshEnding();
 		parent.append(box);
 	}
@@ -178,6 +176,7 @@ export function createDocket(store: GameStore) {
 			if (index === chapterIndex) tab.setAttribute('aria-current', 'step');
 			return tab;
 		}));
+		nav.append(archiveButton());
 		const heading = create('h3', `${numerals[chapterIndex]} · ${l(chapter.title)}`);
 		heading.tabIndex = -1;
 		const brief = create('section', '', 'tv-section');
@@ -343,13 +342,43 @@ export function createDocket(store: GameStore) {
 		if (complete === CHAPTERS.length && chapterIndex === CHAPTERS.length - 1) addEnding(main);
 	}
 
+	function archiveButton() {
+		const count = ARCHIVE.filter(fragment => isArchiveOpen(fragment, story, complete)).length;
+		return button(t(`옛 기록 ${count}/${ARCHIVE.length}`, `Archive ${count}/${ARCHIVE.length}`), renderArchive, 'tv-archive-tab');
+	}
+
+	function renderArchive() {
+		nav.replaceChildren(button(t('사건 기록철', 'Case docket'), () => selectChapter(chapterIndex)));
+		const book = create('section', '', 'tv-section tv-archive');
+		const heading = create('h3', t('지워진 밤의 기록', 'Records of the Night of the Erasure'));
+		heading.tabIndex = -1;
+		book.append(create('div', t('수문 마을 · 부록', 'WEIRHAVEN · APPENDIX'), 'tv-kicker'), heading,
+			create('p', t('같은 밤을 적은 문서들도 서로 다른 말을 해요. 아래 문서는 마을을 이해하기 위한 기록이며, 심리의 정답 조건은 아니에요.', 'Documents about the same night need not say the same thing. These records are optional; they do not change the solution to a hearing.'), 'tv-mute'));
+		for (const fragment of ARCHIVE) {
+			const item = create('article', '', 'tv-archive-leaf');
+			if (!isArchiveOpen(fragment, story, complete)) {
+				item.append(create('h4', t('봉인된 문서', 'Closed document')), create('p', l(fragment.origin), 'tv-mute'));
+			} else {
+				item.append(create('div', l(fragment.source), 'tv-kicker'), create('h4', l(fragment.title)),
+					...fragment.paragraphs.map(paragraph => create('p', l(paragraph))));
+			}
+			book.append(item);
+		}
+		main.replaceChildren(book);
+		dialog.scrollTop = 0;
+		focusHeading();
+	}
+
 	// Conversations live in the same modal so movement, touch and keyboard focus
 	// behave identically in the field and in the screen-reader-friendly text route.
 	function renderWitness(id: NpcId, reading = current()) {
 		const npc = NPCS.find(person => person.id === id);
 		if (!npc) return;
 		const meeting = meetNpc(story, reading, id, complete);
-		nav.replaceChildren(button(t('사건 기록철', 'Case docket'), () => selectChapter(reading)));
+		const lines = reading === CHAPTERS.length - 1 && reading < complete && ending
+			? [...meeting.lines, POLICY[ending].responses[id]] : meeting.lines;
+		const opened = ARCHIVE.some(fragment => !isArchiveOpen(fragment, story, complete) && isArchiveOpen(fragment, meeting.state, complete));
+		nav.replaceChildren(button(t('사건 기록철', 'Case docket'), () => selectChapter(reading)), archiveButton());
 		const card = create('section', '', 'tv-section tv-conversation');
 		const title = create('h3', l(npc.name));
 		title.tabIndex = -1;
@@ -358,7 +387,7 @@ export function createDocket(store: GameStore) {
 		dialogue.setAttribute('role', 'status');
 		let cursor = 0;
 		const next = button('', () => {
-			if (cursor + 1 < meeting.lines.length) { cursor++; speak(); return; }
+			if (cursor + 1 < lines.length) { cursor++; speak(); return; }
 			story = meeting.state;
 			save();
 			syncLauncher();
@@ -370,8 +399,8 @@ export function createDocket(store: GameStore) {
 		const home = button(t('마을로 돌아가기', 'Return to the village'), () => fallback ? selectChapter(reading) : dialog.close());
 		actions.append(next, home);
 		function speak() {
-			dialogue.replaceChildren(create('p', meeting.lines[cursor] ? l(meeting.lines[cursor]) : ''));
-			next.textContent = cursor + 1 < meeting.lines.length
+			dialogue.replaceChildren(create('p', lines[cursor] ? l(lines[cursor]) : ''));
+			next.textContent = cursor + 1 < lines.length
 				? t('계속 듣기', 'Keep listening')
 				: meeting.newRecords > 0 ? t('증언을 기록한다', 'Record the testimony') : t('이야기를 마친다', 'Finish listening');
 		}
@@ -382,6 +411,11 @@ export function createDocket(store: GameStore) {
 			if (meeting.records.length) dialogue.append(list(meeting.records, (entry) => create('code', line({ atom: entry.atom, source: entry.source, value: entry.sign }))));
 			const read = button(t('기록철 보기', 'Read docket'), () => selectChapter(reading), 'tv-primary');
 			actions.replaceChildren(read, home);
+			if (opened) {
+				dialogue.append(create('p', t('마을의 옛 기록이 하나 열렸어요.', 'A village archive record is now available.'), 'tv-afterword'));
+				const archive = archiveButton();
+				nav.replaceChildren(button(t('사건 기록철', 'Case docket'), () => selectChapter(reading)), archive);
+			}
 			if (prior !== undefined) actions.append(button(t('지난 판결을 어떻게 봤나요?', 'What did you think of the last verdict?'), () => renderWitness(id, prior)));
 			else if (reading !== currentReading) actions.append(button(t('오늘의 이야기', 'Today’s account'), () => renderWitness(id, currentReading)));
 			read.focus();

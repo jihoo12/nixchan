@@ -67,4 +67,10 @@ export const styleText = `
 .tv-conversation { border-color:#776556; background:linear-gradient(128deg,#26273b,#1b1e30 72%); padding:clamp(.8rem,3vw,1.85rem); }
 .tv-dialogue { max-width:60ch; min-height:4.5rem; border-left:2px solid var(--tv-gilt); padding-left:.75rem; margin:.85rem 0; }
 .tv-afterword { color:var(--tv-jade); }
+
+.tv-nav .tv-archive-tab { border-color:#a38764; color:var(--tv-gilt); }
+.tv-archive { padding:clamp(.9rem,3vw,1.8rem); }
+.tv-archive-leaf { margin-top:.8rem; padding:.8rem; background:#151829; border-left:2px solid #9e7c56; border-radius:.25rem; }
+.tv-archive-leaf h4 { color:var(--tv-text); margin:.15rem 0 .35rem; font:600 1.25rem/1.3 Georgia,'Noto Serif KR',serif; }
+.tv-archive-leaf p { max-width:69ch; }
 `
