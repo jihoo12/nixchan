@@ -4,7 +4,7 @@
 // See CONTRIBUTING.md.
 import type { GameOptions, createGame } from './game';
 
-export type { NixClip } from './game';
+export type { BodyAction, NixClip } from './game';
 export type { Emotion } from './emotions';
 
 export interface GameMeta {
