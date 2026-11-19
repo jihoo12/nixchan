@@ -74,7 +74,12 @@ every game before it's merged.
   `meta.ts`. If you think the kit itself needs something, say so in the pull request, or open a
   separate one for it.
 - **Import only from your own folder, from `src/lib/nixkit/`, and from `three`** (including
-  `three/examples/jsm/...`). No other packages.
+  `three/webgpu`, `three/tsl` and `three/examples/jsm/...`). No other packages.
+- **Shaders are TSL, not GLSL.** Nixkit draws with three's `WebGPURenderer` (WebGPU, or WebGL 2
+  where there's no WebGPU), so `ShaderMaterial` and `onBeforeCompile` don't draw. Ordinary materials
+  (`MeshToonMaterial`, `MeshStandardMaterial`, …) work as they are; for a shader of your own, use a
+  node material from `three/webgpu` with nodes from `three/tsl` (`src/lib/nixkit/portal.ts` has
+  one). Add `?webgl` to the page's address to see your game the way it looks without WebGPU.
 - **Nothing from outside the site.** No `fetch`, no network connections, no links to other sites
   in code. Models, pictures and sounds go in your folder (`.glb`, `.png`, `.jpg`, `.webp`, `.json`,
   `.mp3`, `.ogg`): up to 2 MB a file, and 6 MB for the whole game.

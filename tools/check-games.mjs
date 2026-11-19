@@ -34,6 +34,8 @@ const FORBIDDEN = [
 	[/\blocation\s*(\.\s*(href|assign|replace)|=)|\bwindow\s*\.\s*open\b/, 'no navigating away (the Gallery button is how out)'],
 	[/\bnavigator\s*\.\s*(clipboard|geolocation|mediaDevices|credentials)\b/, 'no clipboard, location, camera or credentials'],
 	[/['"`]\s*(https?:)?\/\/[^'"`\s]/, 'no links to other sites in code: anything the game loads goes in its folder'],
+	[/\b(ShaderMaterial|RawShaderMaterial|onBeforeCompile)\b/, 'no GLSL: Nixkit draws with WebGPU, so write shaders in TSL (three/tsl), as node materials'],
+	[/\b(WebGLRenderer|WebGPURenderer)\b/, 'no renderer of its own: draw with the one the game is given (game.renderer)'],
 ];
 
 /** The code without its comments (roughly: enough that a URL in a comment isn't taken for code). */
@@ -98,7 +100,7 @@ function checkCode(name, code, dir, file) {
 	}
 	for (const m of body.matchAll(/\b(?:import|export)\b[^'"`;]*?\bfrom\s*['"]([^'"]+)['"]|\bimport\s*['"]([^'"]+)['"]/g)) {
 		const spec = m[1] ?? m[2];
-		if (spec === 'three' || spec.startsWith('three/examples/jsm/')) continue;
+		if (spec === 'three' || spec === 'three/webgpu' || spec === 'three/tsl' || spec.startsWith('three/examples/jsm/')) continue;
 		if (spec.startsWith('.')) {
 			const target = resolve(file, '..', spec);
 			const nixkit = join(ROOT, 'src', 'lib', 'nixkit');

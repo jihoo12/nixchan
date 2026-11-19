@@ -263,11 +263,19 @@ export interface NixFigure {
 	tick(dt: number, time: number, state: { airborne: boolean; look: THREE.Vector2; still: boolean; jump: { t: number; clip: NixJump } | null; landed?: boolean }): void;
 }
 
-export function buildNixFigure(url: string): NixFigure {
-	const ramp = toonRamp();
-	// Toon shading plus a soft rim of light along the silhouette, so she lifts off the wall.
-	const toon = (hex: string, extra: THREE.MeshToonMaterialParameters = {}) => {
-		const mat = new THREE.MeshToonMaterial({ color: hex, gradientMap: ramp, ...extra });
+/** How her materials are made. The ones here patch three's WebGL shaders (onBeforeCompile); a page
+ * drawn with WebGPU passes its own, written in TSL (nixkit/figure-nodes.ts), the same look. */
+export interface FigureLook {
+	/** Toon shading, plus a soft rim of light along the silhouette. */
+	toon(params: THREE.MeshToonMaterialParameters): THREE.MeshToonMaterial;
+	/** The ink line: drawn on a back-facing twin of a mesh, pushed out `width` along its normals. */
+	inkLine(hex: string, width: number): THREE.Material;
+}
+
+/** Her look for pages drawn with WebGL. */
+export const glslLook: FigureLook = {
+	toon(params) {
+		const mat = new THREE.MeshToonMaterial(params);
 		mat.onBeforeCompile = (shader) => {
 			shader.fragmentShader = shader.fragmentShader.replace(
 				'#include <opaque_fragment>',
@@ -277,7 +285,20 @@ export function buildNixFigure(url: string): NixFigure {
 			);
 		};
 		return mat;
-	};
+	},
+	inkLine(hex, width) {
+		const line = new THREE.MeshBasicMaterial({ color: hex, side: THREE.BackSide });
+		line.onBeforeCompile = (shader) => {
+			shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>\ntransformed += normal * ${width.toFixed(4)};`);
+		};
+		return line;
+	},
+};
+
+export function buildNixFigure(url: string, made: FigureLook = glslLook): NixFigure {
+	const ramp = toonRamp();
+	// Toon shading plus a soft rim of light along the silhouette, so she lifts off the wall.
+	const toon = (hex: string, extra: THREE.MeshToonMaterialParameters = {}) => made.toon({ color: hex, gradientMap: ramp, ...extra });
 	const openFace = faceTexture(false);
 	const closedFace = faceTexture(true);
 	// Her face keeps a gentler shadow than her clothes, so it never cuts across her cheeks.
@@ -317,13 +338,7 @@ export function buildNixFigure(url: string): NixFigure {
 
 	// The ink line: a back-facing twin of each mesh, pushed out along its normals.
 	// Hair gets a finer lavender line, so the thin tips don't turn into black spikes.
-	const inkLine = (hex: string, width: number) => {
-		const line = new THREE.MeshBasicMaterial({ color: hex, side: THREE.BackSide });
-		line.onBeforeCompile = (shader) => {
-			shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>\ntransformed += normal * ${width.toFixed(4)};`);
-		};
-		return line;
-	};
+	const inkLine = (hex: string, width: number) => made.inkLine(hex, width);
 	const outline = inkLine(INK, 0.012);
 	const hairLine = inkLine('#8a85c4', 0.006);
 	// Too fine to carry a line of their own.

@@ -85,7 +85,7 @@ The parts are one world; the island's terrain, rocks, trees and sky island are a
 
 ## What's in the kit
 
-- `game.ts`: `createGame`, which sets up the renderer, sky and light, Nixchan, the camera, controls, HUD and parts, and runs the loop
+- `game.ts`: `createGame`, which sets up the renderer (three's `WebGPURenderer`: WebGPU, or WebGL 2 without it; `?webgl` forces that), sky and light, Nixchan, the camera, controls, HUD and parts, and runs the loop
 - `meta.ts`, `runner.ts`: what a game in `src/games/` is, its `store`, and what runs it on its page
 - `player.ts`: Nixchan and how she moves: walk, run, jump, swim, glide, dash
 - `camera.ts`: the camera that follows her

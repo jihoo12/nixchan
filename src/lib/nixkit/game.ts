@@ -11,7 +11,13 @@
 //
 // What's here came out of Nixchan's island (/island), which uses the same player, camera, controls
 // and look: the island's own world is its terrain and sky island (island/features.ts) rather than parts.
+//
+// It draws with three's WebGPURenderer: WebGPU where the browser has it, WebGL 2 where it doesn't.
+// So a game's own shaders are written in TSL (three/tsl), not GLSL: a ShaderMaterial or
+// onBeforeCompile doesn't draw here (CONTRIBUTING.md).
 import * as THREE from 'three';
+import { WebGPURenderer } from 'three/webgpu';
+import { nodeLook } from './figure-nodes';
 import { createFollowCamera } from './camera';
 import { createControls, type Orbit } from './controls';
 import { createHud } from './hud';
@@ -34,7 +40,7 @@ export interface GameOptions {
 	canDash?: () => boolean;
 	/** Keys that aren't for moving or jumping (lower case), for the game to use. */
 	onKey?: (key: string, e: KeyboardEvent) => void;
-	/** Called when Nixchan can't be loaded (no WebGL, or the model didn't come). */
+	/** Called when Nixchan can't be loaded (neither WebGPU nor WebGL 2, or the model didn't come). */
 	onFail?: (why: 'webgl' | 'model') => void;
 }
 
@@ -46,14 +52,26 @@ const SKIES = {
 
 export function createGame(opts: GameOptions) {
 	const { canvas } = opts;
-	let renderer: THREE.WebGLRenderer;
-	try {
-		renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-	} catch {
+	let renderer: WebGPURenderer;
+	const cannotDraw = () => {
 		document.documentElement.classList.add('no-3d');
 		opts.onFail?.('webgl');
+	};
+	try {
+		// ?webgl on the URL draws with WebGL 2 even where there's WebGPU, to see what that looks like.
+		renderer = new WebGPURenderer({ canvas, antialias: true, forceWebGL: new URLSearchParams(location.search).has('webgl') });
+	} catch {
+		cannotDraw();
 		return null;
 	}
+	// Settles once it's ready to draw; on WebGPU that's after the browser hands over a device.
+	const drawing = renderer.init().then(
+		() => true,
+		() => {
+			cannotDraw();
+			return false;
+		},
+	);
 	renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
 	renderer.shadowMap.enabled = true;
 	renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -122,6 +140,7 @@ export function createGame(opts: GameOptions) {
 		scene,
 		toon,
 		modelUrl: opts.modelUrl,
+		look: nodeLook,
 		start: opts.spawn.pos.clone(),
 		heading: opts.spawn.heading,
 		controls,
@@ -177,6 +196,12 @@ export function createGame(opts: GameOptions) {
 		world,
 		/** Settles once Nixchan's here (her model has loaded). */
 		loaded,
+		/** Whether it's drawing with WebGPU (or else WebGL 2), once `drawing` has settled. */
+		get webgpu() {
+			return !!(renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend;
+		},
+		/** Settles with whether it can draw at all. */
+		drawing,
 		get ready() {
 			return ready;
 		},
@@ -202,9 +227,10 @@ export function createGame(opts: GameOptions) {
 			player.respawn();
 			orbit.yaw = cameraYaw;
 		},
-		start() {
+		async start() {
 			resize();
 			addEventListener('resize', resize);
+			if (!(await drawing)) return;
 			let last = performance.now();
 			renderer.setAnimationLoop((now) => {
 				const dt = Math.min(0.05, (now - last) / 1000);

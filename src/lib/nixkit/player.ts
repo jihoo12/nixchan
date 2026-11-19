@@ -5,7 +5,7 @@
 // might be busy at (fishing, gardening, chatting) is outside; `hold` says whether one of them is
 // keeping her on the spot, and `clip` whether one wants her doing something in particular.
 import * as THREE from 'three';
-import { buildNixFigure, type NixClip } from '../experimental/nix-figure';
+import { buildNixFigure, type FigureLook, type NixClip } from '../experimental/nix-figure';
 import type { Controls, Orbit } from './controls';
 import type { Toon } from './look';
 import { clamp, damp } from './util';
@@ -39,6 +39,8 @@ export interface PlayerContext {
 	scene: THREE.Scene;
 	toon: Toon;
 	modelUrl: string;
+	/** How her materials are made: WebGL's by default, or nixkit/figure-nodes.ts's on WebGPU. */
+	look?: FigureLook;
 	start: THREE.Vector3;
 	heading: number;
 	controls: Controls;
@@ -74,7 +76,7 @@ export function createPlayer(ctx: PlayerContext) {
 	const windLift = world.windLift ?? (() => 0);
 	const ripple = ctx.ripple ?? (() => {});
 	const root = new THREE.Group();
-	const figure = buildNixFigure(ctx.modelUrl);
+	const figure = buildNixFigure(ctx.modelUrl, ctx.look);
 	root.add(figure.group);
 	ctx.scene.add(root);
 

@@ -4,6 +4,8 @@
 //
 //   addPortal(game, { at: [0, 0, 10], facing: Math.PI, title: 'Cloud Hop', note: 'An obstacle course in the sky', href: '/cloudhop/' });
 import * as THREE from 'three';
+import { MeshBasicNodeMaterial } from 'three/webgpu';
+import { atan, color, dot, length, mix, sin, smoothstep, sRGBTransferEOTF, uniform, uv, vec3 } from 'three/tsl';
 import type { Game } from './game';
 
 export interface PortalSpec {
@@ -25,29 +27,21 @@ export interface Portal {
 	exit: { pos: THREE.Vector3; heading: number };
 }
 
-const SWIRL_VERTEX = `
-varying vec2 vUv;
-void main() {
-	vUv = uv;
-	gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}`;
-const SWIRL_FRAGMENT = `
-uniform float uTime;
-uniform float uLit;
-uniform vec3 uA;
-uniform vec3 uB;
-varying vec2 vUv;
-void main() {
-	vec2 p = vUv * 2.0 - 1.0;
-	float r = length(p);
-	if (r > 1.0) discard;
-	float a = atan(p.y, p.x);
-	float s = sin(a * 3.0 + r * 9.0 - uTime * 2.6) * 0.5 + 0.5;
-	vec3 c = mix(uA, uB, s);
-	c = mix(c, vec3(1.0), smoothstep(0.35, 0.0, r) * 0.55 * uLit);
-	c = mix(vec3(dot(c, vec3(0.33))), c, 0.25 + 0.75 * uLit);
-	gl_FragColor = vec4(c, mix(0.35, 0.92, uLit) * (1.0 - smoothstep(0.82, 1.0, r) * 0.6));
-}`;
+/** The swirl in a portal's ring: its two colours turning round, bright when it's open, grey when
+ * it isn't. `lit` is 1 or 0; `time` goes up by the second. */
+function swirl(lit: number, a: string, b: string) {
+	const time = uniform(0);
+	const p = uv().mul(2).sub(1);
+	const r = length(p);
+	const s = sin(atan(p.y, p.x).mul(3).add(r.mul(9)).sub(time.mul(2.6))).mul(0.5).add(0.5);
+	const bright = mix(mix(color(a), color(b), s), vec3(1), smoothstep(0.35, 0, r).mul(0.55 * lit));
+	const material = new MeshBasicNodeMaterial({ transparent: true, side: THREE.DoubleSide, depthWrite: false });
+	// The old GLSL swirl wrote its colours out as they were, unconverted; decoding them here keeps
+	// them as deep as they were, through the renderer's conversion back.
+	material.colorNode = sRGBTransferEOTF(mix(vec3(dot(bright, vec3(0.33))), bright, 0.25 + 0.75 * lit));
+	material.opacityNode = smoothstep(0.82, 1, r).mul(0.6).oneMinus().mul(0.35 + 0.57 * lit);
+	return { material, time };
+}
 
 /** A name (and a note under it) on a card, as a sprite that always faces the camera. */
 function label(title: string, note: string | undefined, dim: boolean) {
@@ -109,16 +103,8 @@ export function addPortal(game: Game, spec: PortalSpec): Portal {
 		foot.position.set(side * 0.95, 0.25, 0);
 		rig.add(foot);
 	}
-	const uniforms = {
-		uTime: { value: 0 },
-		uLit: { value: open ? 1 : 0 },
-		uA: { value: new THREE.Color(ca) },
-		uB: { value: new THREE.Color(cb) },
-	};
-	const disc = new THREE.Mesh(
-		new THREE.CircleGeometry(R - 0.08, 48),
-		new THREE.ShaderMaterial({ uniforms, vertexShader: SWIRL_VERTEX, fragmentShader: SWIRL_FRAGMENT, transparent: true, side: THREE.DoubleSide, depthWrite: false }),
-	);
+	const look = swirl(open ? 1 : 0, ca, cb);
+	const disc = new THREE.Mesh(new THREE.CircleGeometry(R - 0.08, 48), look.material);
 	disc.position.y = ring.position.y;
 	rig.add(disc);
 	const card = label(spec.title, spec.note, !open);
@@ -139,7 +125,7 @@ export function addPortal(game: Game, spec: PortalSpec): Portal {
 	let refused = 0;
 	const { player, hud } = game;
 	game.onUpdate((dt, time) => {
-		uniforms.uTime.value = time;
+		look.time.value = time;
 		ring.rotation.z = Math.sin(time * 0.8) * 0.04;
 		const d = Math.hypot(player.pos.x - x, player.pos.z - z);
 		// Walking up, its name comes up on the screen.
