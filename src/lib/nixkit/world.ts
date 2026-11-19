@@ -50,3 +50,36 @@ export interface World {
 	/** Fallen below this, she's put back where she started (or wherever `respawn` says). */
 	fallOut?: number;
 }
+
+/** One world made of several, as when a game puts parts (nixkit/parts.ts) on terrain of its own:
+ * she stands on the highest ground any of them has, meets the lowest ceiling, walks round what's
+ * standing in all of them, and can go wherever any of them lets her. The sea is the first one's
+ * that has one, and she falls out below the lowest of their fallOuts. */
+export function combineWorlds(...worlds: World[]): World {
+	if (worlds.length === 1) return worlds[0];
+	const fallOuts = worlds.map((w) => w.fallOut).filter((f): f is number => f !== undefined);
+	const wading = worlds.filter((w) => w.wadeDepth);
+	const windy = worlds.filter((w) => w.windLift);
+	return {
+		groundAt(x, z, y) {
+			let g = -Infinity;
+			for (const w of worlds) g = Math.max(g, w.groundAt(x, z, y));
+			return g;
+		},
+		ceilingAt(x, z, y) {
+			let c = Infinity;
+			for (const w of worlds) c = Math.min(c, w.ceilingAt(x, z, y));
+			return c;
+		},
+		nearby(x, z) {
+			const all: Obstacle[] = [];
+			for (const w of worlds) for (const o of w.nearby(x, z)) all.push(o);
+			return all;
+		},
+		inside: (x, z) => worlds.some((w) => w.inside(x, z)),
+		sea: worlds.find((w) => w.sea)?.sea,
+		wadeDepth: wading.length ? (x, z, y) => Math.max(...wading.map((w) => w.wadeDepth!(x, z, y))) : undefined,
+		windLift: windy.length ? (x, z, y) => Math.max(...windy.map((w) => w.windLift!(x, z, y))) : undefined,
+		fallOut: fallOuts.length ? Math.min(...fallOuts) : undefined,
+	};
+}

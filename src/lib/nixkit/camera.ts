@@ -6,6 +6,40 @@ import type { Orbit } from './controls';
 import { damp } from './util';
 import type { Obstacle, World } from './world';
 
+/** Someone (or something) for the camera to frame her with: it swings round to `facing` + π + 0.9
+ * from them, and looks between the two of them. */
+export interface Framing {
+	x: number;
+	z: number;
+	facing: number;
+}
+
+/** Who the camera frames her with right now, if anyone: whoever she's talking to, or what she's
+ * working at. Each source says, every frame, who it would have framed (or null); the first one
+ * added that says anyone wins. */
+export function createFocus() {
+	let sources: (() => Framing | null | undefined)[] = [];
+	return {
+		/** Adds a source. Returns what takes it away again. */
+		add(source: () => Framing | null | undefined) {
+			sources = [...sources, source];
+			return () => {
+				sources = sources.filter((s) => s !== source);
+			};
+		},
+		/** Who to frame her with this frame, if anyone. */
+		current(): Framing | null {
+			for (const source of sources) {
+				const f = source();
+				if (f) return f;
+			}
+			return null;
+		},
+	};
+}
+
+export type Focus = ReturnType<typeof createFocus>;
+
 export function createFollowCamera(camera: THREE.PerspectiveCamera, orbit: Orbit, start: THREE.Vector3, world: World) {
 	const { groundAt, nearby } = world;
 	const seaLevel = world.sea ? 0.6 : -Infinity;
@@ -16,7 +50,7 @@ export function createFollowCamera(camera: THREE.PerspectiveCamera, orbit: Orbit
 	const orbitDir = new THREE.Vector3();
 
 	return {
-		update(dt: number, her: { pos: THREE.Vector3; gliderOpen: number }, chat: { x: number; z: number; facing: number } | null) {
+		update(dt: number, her: { pos: THREE.Vector3; gliderOpen: number }, chat: Framing | null) {
 			const { pos } = her;
 			if (chat) {
 				const want = chat.facing + Math.PI + 0.9;

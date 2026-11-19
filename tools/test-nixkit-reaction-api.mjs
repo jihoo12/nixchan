@@ -9,7 +9,7 @@ const mocked = {
 	'./player': "export const createPlayer = globalThis.mockPlayer;",
 };
 registerHooks({resolve(specifier, ctx, next) {
-	if (ctx.parentURL === file('../src/lib/nixkit/game.ts') && specifier in mocked)
+	if (ctx.parentURL?.startsWith(file('../src/lib/nixkit/')) && specifier in mocked)
 		return {shortCircuit: true, url: 'data:text/javascript,' + encodeURIComponent(mocked[specifier])};
 	if (specifier.startsWith('.') && !/\.[a-z]+$/.test(specifier))
 		return next(specifier + '.ts', ctx);

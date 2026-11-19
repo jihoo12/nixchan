@@ -112,6 +112,53 @@ What Nixchan and the camera know of where they are is a `World` (`world.ts`): ho
 is at a point, how low the ceiling, what obstacles stand near, whether there's a sea to swim in.
 The parts are one world; the island's terrain, rocks, trees and sky island are another
 (`island/features.ts`, `islandWorld`). A game can bring its own by passing `world` to `createGame`.
+`combineWorlds(terrain, parts.world)` makes one world of several: she stands on the highest ground
+any of them has, and walks round what stands in all of them.
+
+## The engine
+
+Under `createGame` is an engine (`engine.ts`) that owns the renderer, the scene and the camera
+and runs the frame. Everything that happens each frame is a **system**: something with an
+`update(dt, time)`, run in `order` (lowest first; `ORDER` names the usual places), and in the
+order they were added where two share one. `game.onUpdate(fn)` is a system at `ORDER.game`; a
+game can put others anywhere in the frame:
+
+```ts
+import { ORDER } from '../../lib/nixkit/engine';
+
+game.engine.add({ order: ORDER.world, update: (dt, time) => { /* before she moves */ } });
+game.engine.add({ order: ORDER.camera + 1, always: true, update: () => { /* after the camera */ } });
+```
+
+| `ORDER` | What runs there |
+| --- | --- |
+| `input` (0) | Before anything moves |
+| `world` (100) | Parts move |
+| `player` (200) | She moves |
+| `contact` (250) | What she's touching: pickups, checkpoints, lava |
+| `game` (300) | `onUpdate`: the game's own rules |
+| `effects` (350) | Her face |
+| `camera` (400) | The camera follows her |
+| `light` (450) | The sun's shadows follow her |
+| `hud` (480) | What the HUD shows |
+
+While `game.paused` is true, or until her model has loaded, time stands still and only systems
+marked `always` run (the camera and the light are). `engine.step(dt)` runs one frame by hand, which
+is what the tests do (`tools/test-nixkit-engine.mjs`).
+
+A few more things come with it:
+
+- `game.focus.add(() => talking ? { x, z, facing } : null)`: someone for the camera to frame her
+  with while she talks to them. The first source that names anyone wins.
+- `game.keys.intercept((key, e) => boolean, priority)`: a layer of keys, asked highest priority
+  first; returning true takes the key (as a conversation or an open menu would). `keys.command(fn)`
+  hears every key that isn't for moving.
+- `game.sky`: the sun, the hemisphere light and the fog (`environment.ts`).
+
+A bigger game can put itself together from the same pieces instead of `createGame`:
+`createEngine` with a renderer of its choosing, `createSkyLight` or a sky of its own, and
+`createNixchan(engine, { world, touch, ... })` (`nixchan.ts`) for Nixchan, her controls, the camera,
+the eye-level view and her reactions.
 
 ## Snow
 
@@ -131,13 +178,16 @@ page's address to see how fast it's drawing.
 
 ## What's in the kit
 
-- `game.ts`: `createGame`, which sets up the renderer (three's `WebGPURenderer`: WebGPU, or WebGL 2 without it; `?webgl` forces that), sky and light, Nixchan, the camera, controls, HUD and parts, and runs the loop
+- `game.ts`: `createGame`, an engine with three's `WebGPURenderer` (WebGPU, or WebGL 2 without it; `?webgl` forces that), sky and light, Nixchan, the HUD and parts put in it
+- `engine.ts`: `createEngine`, the renderer, scene and camera, and the frame's systems in order
+- `environment.ts`: the sky, fog, sun and hemisphere light, by day and by night
+- `nixchan.ts`: Nixchan in an engine: her, her controls, the follow camera, the eye-level view, faces and gestures
 - `meta.ts`, `runner.ts`: what a game in `src/games/` is, its `store`, and what runs it on its page
 - `player.ts`: Nixchan and how she moves: walk, run, jump, swim, glide, dash
-- `camera.ts`: the camera that follows her
-- `controls.ts`: keyboard, mouse and touch
+- `camera.ts`: the camera that follows her, and `createFocus`, who it frames her with
+- `controls.ts`: keyboard, mouse and touch, and `createKeyRouter`, keys in layers
 - `parts.ts`: parts and pickups, and the world they make
-- `world.ts`: what a world is
+- `world.ts`: what a world is, and `combineWorlds`
 - `hud.ts`: what's shown over the game
 - `portal.ts`: portals to other pages
 - `scenery.ts`: clouds

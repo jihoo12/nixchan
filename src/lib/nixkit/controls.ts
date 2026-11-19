@@ -25,6 +25,65 @@ export interface KeyRoute {
 	blur(): void;
 }
 
+/** A KeyRoute put together from layers, so each part of a game says what it does with keys on its
+ * own instead of one function knowing them all. Interceptors are asked highest `priority` first (in
+ * the order they were added where two share one) and the first to take a key has it; every
+ * command handler hears every key that isn't for moving. Each `add` returns what removes it. */
+export function createKeyRouter() {
+	type Intercept = (key: string, e: KeyboardEvent) => boolean | void;
+	let intercepts: { fn: Intercept; priority: number; n: number }[] = [];
+	let added = 0;
+	const commands: ((key: string, e: KeyboardEvent) => void)[] = [];
+	const releases: ((key: string) => void)[] = [];
+	const blurs: (() => void)[] = [];
+	const looks: ((dx: number, dy: number) => boolean)[] = [];
+	const zoomBlocks: (() => boolean)[] = [];
+	const adder = <T>(list: T[]) => (fn: T) => {
+		list.push(fn);
+		return () => {
+			const i = list.indexOf(fn);
+			if (i >= 0) list.splice(i, 1);
+		};
+	};
+	const route: KeyRoute = {
+		intercept: (key, e) => intercepts.some(({ fn }) => fn(key, e) === true),
+		adjustLook: (dx, dy) => looks.some((fn) => fn(dx, dy)),
+		blockZoom: () => zoomBlocks.some((fn) => fn()),
+		command: (key, e) => {
+			for (const fn of [...commands]) fn(key, e);
+		},
+		release: (key) => {
+			for (const fn of [...releases]) fn(key);
+		},
+		blur: () => {
+			for (const fn of [...blurs]) fn();
+		},
+	};
+	return {
+		route,
+		/** Gets a say on every key before movement does; returning true takes the key. */
+		intercept(fn: Intercept, priority = 0) {
+			const entry = { fn, priority, n: added++ };
+			intercepts = [...intercepts, entry].sort((a, b) => b.priority - a.priority || a.n - b.n);
+			return () => {
+				intercepts = intercepts.filter((x) => x !== entry);
+			};
+		},
+		/** Hears every key that isn't for moving or jumping (and that nothing intercepted). */
+		command: adder(commands),
+		/** Hears every key let go of. */
+		release: adder(releases),
+		/** Hears the window losing focus. */
+		blur: adder(blurs),
+		/** Can take a look drag (returning true) instead of the orbit's pitch changing. */
+		look: adder(looks),
+		/** Stops the wheel zooming while it says so. */
+		blockZoom: adder(zoomBlocks),
+	};
+}
+
+export type KeyRouter = ReturnType<typeof createKeyRouter>;
+
 const MOVE_KEYS = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift'];
 
 export function createControls(
