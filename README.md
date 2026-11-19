@@ -84,8 +84,9 @@ thing, where its page keeps the box and the bag). Keys go through Nixkit's key r
 through its focus. It draws with three's WebGPURenderer, as the games do (WebGPU, or WebGL 2
 without it; `?webgl` on the URL forces that), so its own shaders are TSL: the sky, the sea, Cloudrest's
 waterfalls and wind, the rift (`monochrome/rift-nodes.ts`), the mirror (three's reflector node) and
-the ink lines round Pebble, Hollis, Parmen, the fish and the garden. It still runs its own frame loop
-rather than Nixkit's engine; that's next.
+the ink lines round Pebble, Hollis, Parmen, the fish and the garden. And its frame is Nixkit's
+engine's: `game.ts` makes an engine, puts Nixchan in it with `createNixchan` on the island's terrain,
+and adds each part of the island to it as a system, in the engine's order.
 
 To add something she can do, register it with `interactions.add(() => ({ label, go }))`. To add a landmark, add a function to `landmarks.ts`.
 

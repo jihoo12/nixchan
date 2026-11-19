@@ -183,3 +183,21 @@ test('focus: the first source that frames anyone wins', () => {
 	removeForge();
 	assert.equal(focus.current(), null);
 });
+
+test('hands: one thing at a time, the one just taken up wins', async () => {
+	const { createHands } = await import('../src/lib/nixkit/hands.ts');
+	const state = { can: false, block: false, belt: false };
+	const thing = (k) => ({ holding: () => state[k], stop: () => (state[k] = false) });
+	const hands = createHands([thing('can'), thing('belt'), thing('block')]);
+	assert.equal(hands.holding(), false);
+	state.block = true;
+	hands.update();
+	assert.deepEqual(state, { can: false, block: true, belt: false });
+	state.belt = true; // taken up while the block is held: the block goes
+	hands.update();
+	assert.deepEqual(state, { can: false, block: false, belt: true });
+	state.can = state.block = true; // two at once: the first listed wins
+	hands.update();
+	assert.deepEqual(state, { can: true, block: false, belt: false });
+	assert.equal(hands.holding(), true);
+});

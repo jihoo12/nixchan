@@ -158,7 +158,13 @@ A few more things come with it:
 A bigger game can put itself together from the same pieces instead of `createGame`:
 `createEngine` with a renderer of its choosing, `createSkyLight` or a sky of its own, and
 `createNixchan(engine, { world, touch, ... })` (`nixchan.ts`) for Nixchan, her controls, the camera,
-the eye-level view and her reactions.
+the eye-level view and her reactions. Nixchan's island is made this way (`src/lib/island/game.ts`): its
+own terrain for a world, its own sky and sea, `view: { fov: [45, 60], near: 0.5 }` for a camera that
+suits a big island, `keys: { wave: false, dash: false }` since its E and Q do other things, and every
+part of the island a system in the engine.
+
+`createHands([{ holding, stop }, ...])` (`hands.ts`) is for things she carries in her arms: one at a
+time, so taking one up puts the rest away. `hands.holding` is what to pass as the player's `carrying`.
 
 ## Snow
 
@@ -204,6 +210,7 @@ so the page styles them as it likes.
 - `engine.ts`: `createEngine`, the renderer, scene and camera, and the frame's systems in order
 - `environment.ts`: the sky, fog, sun and hemisphere light, by day and by night
 - `nixchan.ts`: Nixchan in an engine: her, her controls, the follow camera, the eye-level view, faces and gestures
+- `hands.ts`: one thing in her arms at a time
 - `meta.ts`, `runner.ts`: what a game in `src/games/` is, its `store`, and what runs it on its page
 - `player.ts`: Nixchan and how she moves: walk, run, jump, swim, glide, dash
 - `camera.ts`: the camera that follows her, and `createFocus`, who it frames her with

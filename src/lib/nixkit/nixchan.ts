@@ -57,6 +57,10 @@ export interface NixchanOptions {
 	hud?: Hud;
 	/** Where the camera starts round her (behind her, a little above, 9 m back, without it). */
 	orbit?: Partial<Orbit>;
+	/** The follow camera's field of view, in a landscape window and a portrait one, and its near
+	 * plane (48°, 62° and 0.3 m without it). A big world with gently shelving beaches wants the near
+	 * plane further out, for the depth buffer's sake. */
+	view?: { fov?: [landscape: number, portrait: number]; near?: number };
 	canGlide?: () => boolean;
 	canDash?: () => boolean;
 	/** Opt in to an eye-level view (V / HUD button). Third person remains the default. */
@@ -216,8 +220,9 @@ export function createNixchan(engine: Engine, opts: NixchanOptions) {
 	const frameView = (active: boolean) => {
 		framedInFirstPerson = active;
 		const portrait = engine.size.width < engine.size.height;
-		camera.fov = active ? (portrait ? 76 : 64) : (portrait ? 62 : 48);
-		camera.near = active ? 0.08 : 0.3;
+		const [landscape, upright] = opts.view?.fov ?? [48, 62];
+		camera.fov = active ? (portrait ? 76 : 64) : portrait ? upright : landscape;
+		camera.near = active ? 0.08 : (opts.view?.near ?? 0.3);
 		camera.updateProjectionMatrix();
 	};
 	// Before anything else: catch the yaw from before a cutscene, before the game can change it.

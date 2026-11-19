@@ -4,15 +4,15 @@
 // explores, a glider for jumping off high ground, fish to catch, a garden to grow, and Pebble at the
 // market stand.
 //
-// This file only puts the island together and runs the frame. Each part lives in its own module:
+// This file only puts the island together: each part is a system in Nixkit's engine
+// (nixkit/engine.ts), and Nixchan, her controls and the camera are Nixkit's (nixkit/nixchan.ts).
+// Each part of the island lives in its own module:
 //   terrain, features  the ground and what stands on it (all movement asks is "how high is it here?")
 //   layout, scatter    where the places, rocks and trees go
 //   sky, water, theme  light, sea and day/night (parts that change colour register with the theme)
 //   landmarks          the pier, lighthouse, campfire and the rest
 //   skyisle            the island in the sky, and the Windspout's wind up to it
-//   player, camera     Nixchan and the camera that follows her
-//   controls           keys, mouse and touch
-//   interact           what E does here (sources register offers)
+//   interact           what E does here (sources register offers; nixkit/interact.ts)
 //   explore, menu      places found, the maps, and the menu over the game
 //   fishing, farm, npc, inventory   the things to do
 //   talk               the conversation box and speech bubble Pebble and Hollis share
@@ -29,8 +29,9 @@ import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
 import { nodeLook } from '../nixkit/figure-nodes';
 import { blockGround, createBlocks } from './blocks';
-import { createFocus, createFollowCamera } from '../nixkit/camera';
-import { createControls, createKeyRouter, type Orbit } from '../nixkit/controls';
+import { createEngine, ORDER } from '../nixkit/engine';
+import { createHands } from '../nixkit/hands';
+import { createNixchan } from '../nixkit/nixchan';
 import { createExplore } from './explore';
 import { createFarm } from './farm';
 import { addFeature, groundAt, islandWorld, removeFeature, roomy } from './features';
@@ -48,7 +49,6 @@ import { canDash, createOwl } from './owl';
 import { createFourthWall } from './fourthwall';
 import { createHouse } from './house';
 import { createTortoise } from './tortoise';
-import { createPlayer } from '../nixkit/player';
 import { MAX_BELTS, MAX_WINDMILLS, REACH, beltCarry, createPower } from './power';
 import { createLantern } from './lantern';
 import { createIslandRift, riftArrival } from './rift';
@@ -81,33 +81,20 @@ export async function startIsland() {
 
 	// Drawn with three's WebGPURenderer, as Nixkit's games are: WebGPU where the browser has it, WebGL
 	// 2 where it doesn't (or with ?webgl on the URL, to see what that looks like). So the island's own
-	// shaders are TSL (sky.ts, water.ts, skyisle.ts, monochrome/rift-nodes.ts).
-	let renderer: WebGPURenderer;
-	const cannotDraw = () => {
-		document.documentElement.classList.add('no-3d');
-		if (ui.loading) ui.loading.textContent = 'The island needs WebGPU or WebGL 2, which this browser has turned off.';
-	};
-	try {
-		renderer = new WebGPURenderer({ canvas, antialias: true, forceWebGL: new URLSearchParams(location.search).has('webgl') });
-	} catch {
-		cannotDraw();
-		return;
-	}
-	const drawing = renderer.init().then(
-		() => true,
-		() => {
-			cannotDraw();
-			return false;
+	// shaders are TSL (sky.ts, water.ts, skyisle.ts, monochrome/rift-nodes.ts). The frame is Nixkit's
+	// engine's (nixkit/engine.ts): each part of the island below is a system in it.
+	const engine = createEngine({
+		canvas,
+		renderer: (c) => new WebGPURenderer({ canvas: c, antialias: true, forceWebGL: new URLSearchParams(location.search).has('webgl') }),
+		// The near plane sits a little way out: the camera never comes closer than that, and it buys the
+		// depth buffer enough precision that the gently shelving beaches don't flicker against the sea.
+		camera: { fov: 45, near: 0.5, far: 2000 },
+		onFail: () => {
+			if (ui.loading) ui.loading.textContent = 'The island needs WebGPU or WebGL 2, which this browser has turned off.';
 		},
-	);
-	renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
-	renderer.shadowMap.enabled = true;
-	renderer.shadowMap.type = THREE.PCFShadowMap;
-
-	const scene = new THREE.Scene();
-	// The near plane sits a little way out: the camera never comes closer than that, and it buys the
-	// depth buffer enough precision that the gently shelving beaches don't flicker against the sea.
-	const camera = new THREE.PerspectiveCamera(45, 1, 0.5, 2000);
+	});
+	if (!engine) return;
+	const { renderer, scene, camera } = engine;
 	const toon = makeToon();
 	const theme = createTheme();
 
@@ -132,10 +119,71 @@ export async function startIsland() {
 		heading = out.heading;
 		history.replaceState(null, '', location.pathname);
 	}
-	// (From the rift, the camera starts off to one side, so the rift isn't in the way.)
-	const orbit: Orbit = { yaw: heading + Math.PI + (fromRift ? 0.9 : 0), pitch: 0.32, distance: 9 };
+	// Her arms hold one thing at a time: whatever she's just taken up, the rest are put away.
+	const hands = createHands([
+		{ holding: () => machines.carrying, stop: () => machines.stop() },
+		{ holding: () => power.carrying, stop: () => power.stop() },
+		{ holding: () => blocks.on, stop: () => blocks.stop() },
+	]);
+	// Nixchan, her controls and the camera that follows her (nixkit/nixchan.ts), on the island's
+	// terrain. E and Q are the island's own (below), so they don't wave or dash by themselves.
+	const nix = createNixchan(engine, {
+		canvas,
+		modelUrl: canvas.dataset.model ?? '',
+		spawn: { pos: layout.START, heading },
+		world: islandWorld,
+		toon,
+		look: nodeLook,
+		touch: ui,
+		// (From the rift, the camera starts off to one side, so the rift isn't in the way.)
+		orbit: { yaw: heading + Math.PI + (fromRift ? 0.9 : 0) },
+		view: { fov: [45, 60], near: 0.5 },
+		keys: { wave: false, dash: false },
+		canGlide: () => true,
+		canDash,
+		hold(tryingToMove) {
+			// Chatting with Pebble or tending the garden keeps her on the spot, facing it, until done.
+			let held: number | null = null;
+			if (npc.talking) held = npc.facing;
+			if (owl?.talking) held = owl.facing;
+			if (tortoise.talking) held = tortoise.facing;
+			// Breaking the fourth wall, she turns to face whoever's watching.
+			if (wall.breaking) return towardCamera();
+			if (farm.busy) held = farm.facing;
+			if (forge.busy) held = forge.facing;
+			if (house.dressing) held = house.facing;
+			// So does fishing, but walking off (or jumping) puts the rod away, unless a fish is on the line.
+			if (fishing.active) {
+				if (held === null && tryingToMove && !fishing.hooked) fishing.interrupt();
+				if (fishing.active) held = fishing.facing;
+			}
+			return held;
+		},
+		clip: () => forge.clip ?? farm.clip ?? fishing.clip,
+		player: {
+			ripple: water.ripple,
+			carrying: hands.holding,
+			// A belt with power carries her along it.
+			carriedBy: beltCarry,
+			// Remade at the forge, the glider flies faster and sinks slower; the prism glider most of all.
+			glider: () => (forge.has('prism') ? { speed: 12, sink: 1.1 } : forge.has('glider') ? { speed: 10.5, sink: 1.4 } : { speed: 8.5, sink: 2.3 }),
+		},
+		onModelFail: () => {
+			if (ui.loading) ui.loading.textContent = "Nixchan couldn't make it to the island just now. Try reloading?";
+		},
+	});
+	const { player, controls, orbit, keys } = nix;
+	const { figure, pos } = player;
+	let ready = false;
+	nix.loaded.then(
+		() => {
+			ready = true;
+			ui.loading?.setAttribute('hidden', '');
+		},
+		() => {},
+	);
+
 	// What keys do, in layers (nixkit/controls.ts): whatever has her attention gets them first.
-	const keys = createKeyRouter();
 	// Knocking on the screen, nothing else does anything.
 	keys.intercept((key, e) => {
 		if (!wall.breaking) return false;
@@ -183,60 +231,7 @@ export async function startIsland() {
 		if (key === 'f') fishing.release();
 	});
 	keys.blur(() => fishing.release());
-	const controls = createControls(canvas, ui, orbit, keys.route);
-
-	const player = createPlayer({
-		world: islandWorld,
-		scene,
-		toon,
-		modelUrl: canvas.dataset.model ?? '',
-		look: nodeLook,
-		start: layout.START,
-		heading,
-		controls,
-		orbit,
-		ripple: water.ripple,
-		hold(tryingToMove) {
-			// Chatting with Pebble or tending the garden keeps her on the spot, facing it, until done.
-			let held: number | null = null;
-			if (npc.talking) held = npc.facing;
-			if (owl?.talking) held = owl.facing;
-			if (tortoise.talking) held = tortoise.facing;
-			// Breaking the fourth wall, she turns to face whoever's watching.
-			if (wall.breaking) return towardCamera();
-			if (farm.busy) held = farm.facing;
-			if (forge.busy) held = forge.facing;
-			if (house.dressing) held = house.facing;
-			// So does fishing, but walking off (or jumping) puts the rod away, unless a fish is on the line.
-			if (fishing.active) {
-				if (held === null && tryingToMove && !fishing.hooked) fishing.interrupt();
-				if (fishing.active) held = fishing.facing;
-			}
-			return held;
-		},
-		clip: () => forge.clip ?? farm.clip ?? fishing.clip,
-		carrying: () => machines.carrying || blocks.on || power.carrying,
-		// A belt with power carries her along it.
-		carriedBy: beltCarry,
-		canDash,
-		// Remade at the forge, the glider flies faster and sinks slower; the prism glider most of all.
-		glider: () => (forge.has('prism') ? { speed: 12, sink: 1.1 } : forge.has('glider') ? { speed: 10.5, sink: 1.4 } : { speed: 8.5, sink: 2.3 }),
-	});
-	const { figure, pos } = player;
-	let ready = false;
-	figure.ready.then(
-		() => {
-			ready = true;
-			figure.group.traverse((o) => (o.castShadow = true));
-			ui.loading?.setAttribute('hidden', '');
-		},
-		() => {
-			if (ui.loading) ui.loading.textContent = "Nixchan couldn't make it to the island just now. Try reloading?";
-		},
-	);
-
 	const landmarks = buildLandmarks(scene, toon, theme, layout, pos);
-	const follow = createFollowCamera(camera, orbit, layout.START, islandWorld);
 	const towardCamera = () => Math.atan2(camera.position.x - pos.x, camera.position.z - pos.z);
 	const talk = createTalk(camera);
 	talk.keysFor(keys, 90);
@@ -625,52 +620,38 @@ export async function startIsland() {
 
 	theme.start();
 	// For trying things out in development: where she is, and Hollis's ledge.
-	if (import.meta.env.DEV) Object.assign(window, { island: { pos, player, owl, orbit, blocks, inventory, house, layout, npc, skyIsle, rift, theme, renderer, scene, camera, groundAt } });
+	if (import.meta.env.DEV) Object.assign(window, { island: { engine, nix, pos, player, owl, orbit, blocks, inventory, house, layout, npc, skyIsle, rift, theme, renderer, scene, camera, groundAt } });
 
 	// Who the camera frames her with: whoever she's talking to, or what she's working at.
-	const focus = createFocus();
+	const { focus } = nix;
 	focus.add(() => (npc.talking ? { ...npc.spot, facing: npc.facing } : null));
 	focus.add(() => (owl?.talking ? { ...owl.spot, facing: owl.facing } : null));
 	focus.add(() => (tortoise.talking ? { ...tortoise.spot, facing: tortoise.facing } : null));
 	focus.add(() => house.framing);
 	focus.add(() => forge.framing);
 
-	// ---------- the loop ----------
+	// ---------- the frame ----------
+	// In the engine's order (nixkit/engine.ts): she moves (ORDER.player), then the island's rules, then
+	// what moves whether or not she's here yet, the camera (ORDER.camera), the sky and sea round it
+	// (ORDER.light), and the maps.
 
-	const resize = () => {
-		const w = innerWidth;
-		const h = innerHeight;
-		renderer.setSize(w, h, false);
-		camera.aspect = w / h;
-		camera.fov = w < h ? 60 : 45;
-		camera.updateProjectionMatrix();
-		explore.sizeMinimap();
-		if (menu.isOpen) explore.sizeAtlas();
-	};
-	resize();
-	addEventListener('resize', resize);
+	engine.add({
+		resize() {
+			explore.sizeMinimap();
+			if (menu.isOpen) explore.sizeAtlas();
+		},
+	});
 
-	let time = 0;
-	let last = performance.now();
-	let mapClock = 0;
 	let greeted = false;
-	let held = { sprinkler: false, blocks: false, power: false };
-
-	if (!(await drawing)) return;
-	last = performance.now();
-	renderer.setAnimationLoop((now) => {
-		const dt = Math.min(0.05, (now - last) / 1000);
-		last = now;
-		time += dt;
-
-		if (ready) {
+	engine.add({
+		order: ORDER.game,
+		update(dt, time) {
 			if (!greeted) {
 				greeted = true;
 				explore.announce("Nixchan's Island", fromRift ? 'Back where there\u2019s colour' : 'Go wherever you like');
 				if (broughtHome) fishing.toast(`${broughtHome} ashen ore, carried home from the grey place.`);
 				if (menu.firstVisit) menu.open('help');
 			}
-			player.update(dt, time);
 			fishing.update(dt, time);
 			farm.update(dt);
 			machines.update(dt, time);
@@ -679,39 +660,42 @@ export async function startIsland() {
 			owl?.update(dt, time);
 			tortoise.update(dt);
 			talk.update(dt);
-			// Her arms hold one thing at a time: whatever she's just taken up, the rest go away.
-			const holding = { sprinkler: machines.carrying, blocks: blocks.on, power: power.carrying };
-			if (holding.sprinkler && !held.sprinkler) {
-				blocks.stop();
-				power.stop();
-			} else if (holding.power && !held.power) {
-				blocks.stop();
-				machines.stop();
-			} else if (holding.blocks && !held.blocks) {
-				machines.stop();
-				power.stop();
-			}
-			held = { sprinkler: machines.carrying, blocks: blocks.on, power: power.carrying };
+			hands.update();
 			blocks.update(time);
 			interactions.update();
-		}
-		landmarks.update(time, dt);
-		skyIsle.update(time, dt);
-		rift.update(time, dt);
-		lantern.update(time, dt);
-		forge.update(time, dt);
-		house.update(dt);
-
-		follow.update(dt, player, focus.current());
-		sky.update(time, camera, pos);
-		water.update(time, dt);
-
-		mapClock -= dt;
-		if (mapClock <= 0 && ready) {
+		},
+	});
+	engine.add({
+		order: ORDER.effects + 10,
+		always: true,
+		update(dt, time) {
+			landmarks.update(time, dt);
+			skyIsle.update(time, dt);
+			rift.update(time, dt);
+			lantern.update(time, dt);
+			forge.update(time, dt);
+			house.update(dt);
+		},
+	});
+	engine.add({
+		order: ORDER.light,
+		always: true,
+		update(dt, time) {
+			sky.update(time, camera, pos);
+			water.update(time, dt);
+		},
+	});
+	let mapClock = 0;
+	engine.add({
+		order: ORDER.hud,
+		update(dt) {
+			mapClock -= dt;
+			if (mapClock > 0) return;
 			mapClock = 0.1;
 			explore.update(pos, player.turn);
 			if (menu.isOpen && menu.tab === 'map') explore.drawAtlas(pos, player.turn);
-		}
-		renderer.render(scene, camera);
+		},
 	});
+
+	await engine.start();
 }
