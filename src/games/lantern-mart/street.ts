@@ -227,8 +227,15 @@ export function buildStreet(scene: THREE.Scene) {
 	frontage(10.5, -3.55, 7.5, 4, '#5b5269', '#38304a', '#5f5069');
 	frontage(-18.2, -1.85, 6.8, 3, '#4f4965', '#32304a', '#805968');
 	frontage(18.6, -2.3, 7.3, 3, '#55516c', '#34374d', '#4d636b');
-	sign('LAST STOP', 'TEA  ·  BOOKS', -10.4, 3.09, -2.50, 3.2, 0.61, '#35385d', '#e6c8a2');
-	sign('MOON LAUNDRY', 'OPEN UNTIL THE RAIN STOPS', 10.5, 3.10, -3.40, 4.0, 0.66, '#3c344f', '#e8badc');
+	// Mount the boards on the awning fascia, between the two rows of windows.
+	// The art plane sits just beyond its backing, clear of even the awning's light strip.
+	function fasciaSign(label: string, subtitle: string, x: number, zFront: number, w: number, ground: RGB, ink: RGB) {
+		const y = 2.54, z = zFront + 1.355, h = 0.51;
+		block(x, y, z - 0.035, w, h, 0.064, ground);
+		sign(label, subtitle, x, y, z, w, h, ground, ink);
+	}
+	fasciaSign('LAST STOP', 'TEA  ·  BOOKS', -10.4, -2.65, 3.2, '#35385d', '#e6c8a2');
+	fasciaSign('MOON LAUNDRY', 'OPEN UNTIL THE RAIN STOPS', 10.5, -3.55, 4.0, '#3c344f', '#e8badc');
 
 	// Far city gets colour and a few bigger silhouettes, not an endlessly repeated facade.
 	for (let i = 0; i < 16; i++) {
