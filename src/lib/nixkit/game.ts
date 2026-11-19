@@ -51,7 +51,7 @@ export interface GameOptions {
 		/** Temporarily show the avatar for a cutscene without losing the player's preference. */
 		forceThirdPerson?: () => boolean;
 	};
-	/** Opt in to a player expression menu (B / HUD). Scripted cues work without it. */
+	/** Opt in to a player reaction menu (B / HUD). Scripted face cues work without it. */
 	emotes?: EmoteMenu;
 	/** Something for her to be doing instead of walking about (a clip: 'Shot', 'Slam', 'Summon',
 	 * 'Dash', 'Cast', 'Wave' …), asked every frame; null for her own. */
@@ -181,7 +181,12 @@ export function createGame(opts: GameOptions) {
 	}
 	const motion = matchMedia('(prefers-reduced-motion: reduce)');
 	const emotions = createEmotionPlayer((name, strength) => player.figure.setEmotion(name, strength), () => motion.matches);
-	const emoteMenu = opts.emotes && hud.emotes(opts.emotes, (name) => emotions.play(name, 3.6));
+	const emoteMenu = opts.emotes && hud.emotes(opts.emotes, (name) => {
+		if (!ready || paused || isFirstPerson()) return;
+		const duration = opts.emotes?.gestures ? player.playGesture(name) : 0;
+		if (duration) emotions.clear(); // Begin the new face with the new body pose.
+		emotions.play(name, duration || 3.6);
+	});
 	emoteMenu?.setVisible(false);
 	const controls = createControls(canvas, hud.touch, orbit, {
 		intercept(key, e) {
@@ -190,7 +195,7 @@ export function createGame(opts: GameOptions) {
 				return true;
 			}
 			if (emoteMenu && key === 'b') {
-				if (!e.repeat && !isFirstPerson()) emoteMenu.toggle(true);
+				if (!e.repeat && !paused && !isFirstPerson()) emoteMenu.toggle(true);
 				return true;
 			}
 			return false;
@@ -226,6 +231,7 @@ export function createGame(opts: GameOptions) {
 		clip: opts.clip ?? (() => null),
 		canGlide: opts.canGlide ?? (() => false),
 		canDash: opts.canDash,
+		canGesture: () => !!opts.emotes?.gestures && !paused && !isFirstPerson() && !motion.matches,
 		respawnAt: () => parts.spawn,
 		carriedBy: (x, z, y) => parts.carriedBy(x, z, y),
 	});
@@ -306,7 +312,10 @@ export function createGame(opts: GameOptions) {
 		/** Stops (or starts again) everything moving: her, the parts, the game's own updates. */
 		set paused(p: boolean) {
 			paused = p;
-			if (p) controls.clearKeys();
+			if (p) {
+				controls.clearKeys();
+				player.clearGesture();
+			}
 		},
 		get paused() {
 			return paused;
@@ -348,7 +357,7 @@ export function createGame(opts: GameOptions) {
 				sun.position.set(p.x + 24, p.y + 50, p.z + 16);
 				sun.target.position.copy(p);
 				const atEye = syncView();
-				emoteMenu?.setVisible(ready && !atEye);
+				emoteMenu?.setVisible(ready && !paused && !atEye);
 				if (atEye !== framedInFirstPerson) frameView(atEye);
 				if (!atEye) {
 					renderer.render(scene, camera);

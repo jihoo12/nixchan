@@ -52,7 +52,10 @@ movement or body animation. Available moods are `happy`, `surprised`, `sad`, and
 A new cue replaces the old one and Nixchan returns to her usual face when it ends. Use
 `game.clearEmote()` to reset immediately. To let players choose, opt in with `emotes: {}`;
 the **B** key and a touch-friendly expression button open the palette in third person only.
-The options can provide a localized button label, choice labels, and a short orbit hint.
+Set `emotes: { gestures: true }` to pair each menu choice with a body gesture on stationary,
+grounded Nixchan. Movement, jumping and game-owned poses take priority; with reduced motion
+the menu stays face-only. The **E** wave and scripted `game.emote()` cues keep their existing
+behavior. The options can provide localized button and choice labels and a short hint.
 
 What it gives back:
 

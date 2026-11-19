@@ -122,7 +122,7 @@ export function createHud() {
 			});
 			return b;
 		},
-		/** Optional, keyboard- and touch-friendly disclosure for facial reactions. */
+		/** Optional, keyboard- and touch-friendly disclosure for reactions. */
 		emotes(opts: EmoteMenu, play: (emotion: Emotion) => void) {
 			const holder = el('div', 'nk-emotes', actions);
 			const button = el('button', 'nk-action', holder);

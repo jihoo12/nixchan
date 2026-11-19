@@ -127,8 +127,7 @@ export default function start({ createGame, store }: GameContext) {
 		onKey: (key, e) => {
 			if (key !== 'e' || e.altKey || e.ctrlKey || e.metaKey) return;
 			if (e.target instanceof HTMLButtonElement || e.target instanceof HTMLAnchorElement) return;
-			if (game) game.controls.state.waveQueued = false;
-			interact();
+			if (game && (interact() || errand.phase === 'eat')) game.controls.state.waveQueued = false;
 		},
 	});
 	if (!game) return;
@@ -185,9 +184,9 @@ export default function start({ createGame, store }: GameContext) {
 			Math.hypot(player.pos.x - at.x, player.pos.z - at.z) <= 1.10;
 	}
 	function interact() {
-		if (!game?.ready || !canReach()) return;
+		if (!game?.ready || !canReach()) return false;
 		const previous = errand.phase;
-		if (!errand.act()) return;
+		if (!errand.act()) return false;
 		if (previous === 'water') game.emote('surprised', 1.05); // The first puff of steam.
 		if (previous === 'seat') {
 			seatPrev.copy(player.pos);
@@ -195,6 +194,7 @@ export default function start({ createGame, store }: GameContext) {
 			player.face(SEAT_HEADING);
 			seatBlend = true;
 		}
+		return true;
 	}
 
 	game.onUpdate((dt, time) => {

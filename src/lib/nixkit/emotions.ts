@@ -3,6 +3,8 @@ export const EMOTIONS = ['happy', 'surprised', 'sad', 'determined'] as const;
 export type Emotion = (typeof EMOTIONS)[number];
 
 export interface EmoteMenu {
+	/** Pair player-selected faces with a body gesture when it is safe to animate. */
+	gestures?: boolean;
 	label?: string;
 	labels?: Readonly<Record<Emotion, string>>;
 	hint?: string;
