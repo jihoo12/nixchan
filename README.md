@@ -78,7 +78,12 @@ The page is `src/pages/island/index.astro` (HTML/CSS for the menus and prompts),
 
 Nixchan herself, how she moves, the follow camera, the keys and touch controls, and what E does
 (`interact.ts`: sources register offers) are Nixkit's (`src/lib/nixkit/`), shared with the games.
-The island still sets up its own renderer (WebGL) and frame loop rather than using `createGame`.
+So are the workings of `talk.ts`, `inventory.ts`, `menu.ts`, `save.ts`, `theme.ts` and `lang.ts`:
+the island's files say only what's the island's own (its save keys, its palettes, its kinds of
+thing, where its page keeps the box and the bag). Keys go through Nixkit's key router in layers
+(the fourth wall, then a conversation, the menu, a shop, the wardrobe), and the camera's framing
+through its focus. The island still sets up its own renderer (WebGL) and frame loop rather than
+using the engine; that's next.
 
 To add something she can do, register it with `interactions.add(() => ({ label, go }))`. To add a landmark, add a function to `landmarks.ts`.
 

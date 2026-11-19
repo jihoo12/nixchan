@@ -176,6 +176,25 @@ A burst is thrown from `at` along `dir`, scattered as far as `spread` says, then
 as snow. The vortex spins whatever's near it round, pulls it in and lifts it. Add `?fps` to the
 page's address to see how fast it's drawing.
 
+## Talking, the bag, menus, saves and the clock
+
+These came out of the island, and any game can use them. Each draws into the page's own elements,
+so the page styles them as it likes.
+
+- `createTalk(camera, ui)` (`talk.ts`): a conversation box and a speech bubble. `open({ name, color })`,
+  `say(text, choices)`, `bye(text)`, `bubble(text, at)`, and `update(dt)` each frame.
+  `talk.keysFor(game.keys)` gives it the keys while someone's talking.
+- `createInventory({ slots, kinds, store, grid, detail, summary })` (`inventory.ts`): a bag of stacks,
+  a stack a slot. Register each kind of thing with a name, a picture and what she can do with it.
+- `createMenu({ root, close, start, seen, onOpen, onShow })` (`menu.ts`): tabs over the game
+  (`data-tab`, `data-panel`, `data-open`), with help that opens by itself on a first visit.
+- `createSaves({ short: 'storage-key' })` (`save.ts`): readers and writers for a game's own
+  localStorage keys that never throw. (A game in `src/games/` has `store` for this already.)
+- `createDayNight({ day, night })` (`daynight.ts`): a palette of the game's own, by the site's clock.
+  `clock.on(p => ...)` changes with it; `game.sky.clock` is the default sky's.
+- `lang`, `pick({ en, ko })`, `josa(word, '이', '가')` (`lang.ts`): the site's language, words for
+  it, and Korean particles.
+
 ## What's in the kit
 
 - `game.ts`: `createGame`, an engine with three's `WebGPURenderer` (WebGPU, or WebGL 2 without it; `?webgl` forces that), sky and light, Nixchan, the HUD and parts put in it
@@ -194,4 +213,6 @@ page's address to see how fast it's drawing.
 - `snow.ts`: snow on the GPU: snowfall, bursts and a vortex
 - `figure-nodes.ts`: Nixchan's look in TSL, for WebGPU
 - `interact.ts`: "press E to …" offers
+- `talk.ts`, `inventory.ts`, `menu.ts`: conversations, the bag, and tabs over the game
+- `save.ts`, `daynight.ts`, `lang.ts`: saves, day and night, and the site's language
 - `look.ts`, `util.ts`: toon materials, and small maths

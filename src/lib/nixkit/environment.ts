@@ -2,6 +2,7 @@
 // that casts shadows round wherever she is, and a hemisphere light, by day or by night (the site's
 // time, documentElement.dataset.time, which it says has changed with a 'site-time' event).
 import * as THREE from 'three';
+import { createDayNight } from './daynight';
 import { ORDER, type Engine } from './engine';
 
 /** The sky's colours, top to bottom, and the light, for one time of day. */
@@ -55,9 +56,8 @@ export function createSkyLight(engine: Engine, opts: SkyLightOptions) {
 	const fog = new THREE.Fog(skies.day.fog, near, far);
 	scene.fog = fog;
 
-	const isNight = () => document.documentElement.dataset.time === 'night';
-	const paint = () => {
-		const sky = isNight() ? skies.night : skies.day;
+	const clock = createDayNight(skies);
+	const paint = (sky: Sky) => {
 		const ctx = skyCanvas.getContext('2d')!;
 		const g = ctx.createLinearGradient(0, 0, 0, 256);
 		g.addColorStop(0, sky.top);
@@ -71,8 +71,8 @@ export function createSkyLight(engine: Engine, opts: SkyLightOptions) {
 		hemi.groundColor.set(sky.ground);
 		hemi.intensity = sky.hemi;
 	};
-	paint();
-	addEventListener('site-time', paint);
+	clock.on(paint);
+	clock.start();
 
 	engine.add({
 		order: ORDER.light,
@@ -84,10 +84,10 @@ export function createSkyLight(engine: Engine, opts: SkyLightOptions) {
 			sun.target.position.copy(p);
 		},
 		dispose() {
-			removeEventListener('site-time', paint);
+			clock.dispose();
 			skyTexture.dispose();
 		},
 	});
 
-	return { sun, hemi, fog, isNight, /** Paints the sky again (after changing `skies`). */ paint };
+	return { sun, hemi, fog, /** Day or night, and the sky for it: `clock.on(sky => ...)` to change with it. */ clock };
 }

@@ -27,8 +27,8 @@
 //   save               every key the island keeps in localStorage
 import * as THREE from 'three';
 import { blockGround, createBlocks } from './blocks';
-import { createFollowCamera } from '../nixkit/camera';
-import { createControls, type Orbit } from '../nixkit/controls';
+import { createFocus, createFollowCamera } from '../nixkit/camera';
+import { createControls, createKeyRouter, type Orbit } from '../nixkit/controls';
 import { createExplore } from './explore';
 import { createFarm } from './farm';
 import { addFeature, groundAt, islandWorld, removeFeature, roomy } from './features';
@@ -118,63 +118,56 @@ export async function startIsland() {
 	}
 	// (From the rift, the camera starts off to one side, so the rift isn't in the way.)
 	const orbit: Orbit = { yaw: heading + Math.PI + (fromRift ? 0.9 : 0), pitch: 0.32, distance: 9 };
-	const controls = createControls(canvas, ui, orbit, {
-		intercept(key, e) {
-			// Knocking on the screen, nothing else does anything.
-			if (wall.breaking) {
-				e.preventDefault();
-				return true;
+	// What keys do, in layers (nixkit/controls.ts): whatever has her attention gets them first.
+	const keys = createKeyRouter();
+	// Knocking on the screen, nothing else does anything.
+	keys.intercept((key, e) => {
+		if (!wall.breaking) return false;
+		e.preventDefault();
+		return true;
+	}, 100);
+	// (Talking with Pebble, Hollis or Parmen, the keys work the conversation: talk.keysFor, at 90.)
+	// With the menu open, only the keys that work the menu do anything.
+	keys.intercept((key) => menu.isOpen && !['m', 'i', 'h', '?', 'escape'].includes(key), 80);
+	keys.intercept((key) => (farm.shopOpen || forge.dialogOpen) && key !== 'escape', 70);
+	// At the wardrobe, the panel's buttons are what's working; Esc (or E) puts it away.
+	keys.intercept((key) => {
+		if (!house.dressing) return false;
+		if (key === 'escape' || key === 'e') house.close();
+		return true;
+	}, 60);
+	keys.command((key, e) => {
+		if (key === 'escape') {
+			// With nothing open to close, Esc puts her blocks away.
+			if (!menu.isOpen && !farm.shopOpen && !forge.dialogOpen) {
+				blocks.stop();
+				power.stop();
 			}
-			// Talking with Pebble (or Hollis), the keys work the conversation.
-			if (talk.talking) {
-				if (key === ' ' || key.startsWith('arrow') || key === 'enter') e.preventDefault();
-				if (!e.repeat) talk.key(key);
-				return true;
-			}
-			// With the menu open, only the keys that work the menu do anything.
-			if (menu.isOpen && !['m', 'i', 'h', '?', 'escape'].includes(key)) return true;
-			if ((farm.shopOpen || forge.dialogOpen) && key !== 'escape') return true;
-			// At the wardrobe, the panel's buttons are what's working; Esc (or E) puts it away.
-			if (house.dressing) {
-				if (key === 'escape' || key === 'e') house.close();
-				return true;
-			}
-			return false;
-		},
-		command(key, e) {
-			if (key === 'escape') {
-				// With nothing open to close, Esc puts her blocks away.
-				if (!menu.isOpen && !farm.shopOpen && !forge.dialogOpen) {
-					blocks.stop();
-					power.stop();
-				}
-				menu.close();
-				farm.closeShop();
-				forge.closeDialog();
-			}
-			if (e.repeat) return;
-			// E does whatever there is to do here, and otherwise she waves.
-			if (key === 'e') {
-				if (!interactions.press()) controls.state.waveQueued = true;
-			} else if (key === 'f') fishing.press();
-			else if (key === 'b') blocks.toggle();
-			else if (key === 'q') {
-				// Q takes back a belt or a block while she's laying or building; otherwise it's a dash.
-				if (power.laying) power.takeBelt();
-				else if (blocks.on) blocks.take();
-				else controls.state.dashQueued = true;
-			}
-			else if (key === 'm') menu.toggle('map');
-			else if (key === 'i') menu.toggle('bag');
-			else if (key === 'h' || key === '?') menu.toggle('help');
-		},
-		release(key) {
-			if (key === 'f') fishing.release();
-		},
-		blur() {
-			fishing.release();
-		},
+			menu.close();
+			farm.closeShop();
+			forge.closeDialog();
+		}
+		if (e.repeat) return;
+		// E does whatever there is to do here, and otherwise she waves.
+		if (key === 'e') {
+			if (!interactions.press()) controls.state.waveQueued = true;
+		} else if (key === 'f') fishing.press();
+		else if (key === 'b') blocks.toggle();
+		else if (key === 'q') {
+			// Q takes back a belt or a block while she's laying or building; otherwise it's a dash.
+			if (power.laying) power.takeBelt();
+			else if (blocks.on) blocks.take();
+			else controls.state.dashQueued = true;
+		}
+		else if (key === 'm') menu.toggle('map');
+		else if (key === 'i') menu.toggle('bag');
+		else if (key === 'h' || key === '?') menu.toggle('help');
 	});
+	keys.release((key) => {
+		if (key === 'f') fishing.release();
+	});
+	keys.blur(() => fishing.release());
+	const controls = createControls(canvas, ui, orbit, keys.route);
 
 	const player = createPlayer({
 		world: islandWorld,
@@ -229,6 +222,7 @@ export async function startIsland() {
 	const follow = createFollowCamera(camera, orbit, layout.START, islandWorld);
 	const towardCamera = () => Math.atan2(camera.position.x - pos.x, camera.position.z - pos.z);
 	const talk = createTalk(camera);
+	talk.keysFor(keys, 90);
 
 	// ---------- things to do ----------
 
@@ -616,6 +610,14 @@ export async function startIsland() {
 	// For trying things out in development: where she is, and Hollis's ledge.
 	if (import.meta.env.DEV) Object.assign(window, { island: { pos, player, owl, orbit, blocks, inventory, house } });
 
+	// Who the camera frames her with: whoever she's talking to, or what she's working at.
+	const focus = createFocus();
+	focus.add(() => (npc.talking ? { ...npc.spot, facing: npc.facing } : null));
+	focus.add(() => (owl?.talking ? { ...owl.spot, facing: owl.facing } : null));
+	focus.add(() => (tortoise.talking ? { ...tortoise.spot, facing: tortoise.facing } : null));
+	focus.add(() => house.framing);
+	focus.add(() => forge.framing);
+
 	// ---------- the loop ----------
 
 	const resize = () => {
@@ -681,7 +683,7 @@ export async function startIsland() {
 		forge.update(time, dt);
 		house.update(dt);
 
-		follow.update(dt, player, npc.talking ? { ...npc.spot, facing: npc.facing } : owl?.talking ? { ...owl.spot, facing: owl.facing } : tortoise.talking ? { ...tortoise.spot, facing: tortoise.facing } : (house.framing ?? forge.framing));
+		follow.update(dt, player, focus.current());
 		sky.update(time, camera, pos);
 		water.update(time, dt);
 

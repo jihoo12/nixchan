@@ -1,6 +1,9 @@
 // Day and night. The site's clock button sets `data-time` on the page; each part of the island
 // that changes with it (sky, sea, lamps…) registers with `on`, and is told the palette whenever it
-// switches, so nothing has to know about everything else that changes colour.
+// switches, so nothing has to know about everything else that changes colour (nixkit/daynight.ts).
+import { createDayNight, type DayNight } from '../nixkit/daynight';
+
+export { isNight } from '../nixkit/daynight';
 
 export interface Palette {
 	top: string;
@@ -50,33 +53,6 @@ export const NIGHT: Palette = {
 	night: true,
 };
 
-export const isNight = () => document.documentElement.dataset.time === 'night';
+export type Theme = DayNight<Palette>;
 
-export interface Theme {
-	/** Calls `apply` with the palette now (once `start` has run) and whenever day turns to night or back. */
-	on(apply: (p: Palette) => void): void;
-	/** Applies the palette to everything registered so far, and follows the clock from then on. */
-	start(): void;
-}
-
-export function createTheme(): Theme {
-	const listeners: ((p: Palette) => void)[] = [];
-	let started = false;
-	const current = () => (isNight() ? NIGHT : DAY);
-	const apply = () => {
-		const p = current();
-		for (const fn of listeners) fn(p);
-	};
-	return {
-		on(fn) {
-			listeners.push(fn);
-			if (started) fn(current());
-		},
-		start() {
-			if (started) return;
-			started = true;
-			apply();
-			addEventListener('site-time', apply);
-		},
-	};
-}
+export const createTheme = (): Theme => createDayNight({ day: DAY, night: NIGHT });
