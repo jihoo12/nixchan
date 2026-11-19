@@ -36,6 +36,7 @@ Tools come from the Nix flake (`nix develop`), which provides Node.js:
 nix develop
 npm ci
 astro dev --background   # then open http://localhost:4321/nixchan/ ; stop with `astro dev stop`
+npm run check            # types (astro check)
 npm run check:games
 npm test                 # Nixkit's unit tests (tools/test-nixkit-*.mjs)
 npm run build

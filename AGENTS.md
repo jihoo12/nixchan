@@ -8,8 +8,8 @@ astro dev --background
 
 Manage the background server with `astro dev stop`, `astro dev status`, and `astro dev logs`.
 
-Before finishing a change, run `npm run check:games`, `npm test` (Nixkit's unit tests,
-`tools/test-nixkit-*.mjs`) and `npm run build`.
+Before finishing a change, run `npm run check` (types, with `astro check`), `npm run check:games`,
+`npm test` (Nixkit's unit tests, `tools/test-nixkit-*.mjs`) and `npm run build`.
 
 ## Checking it in a browser
 

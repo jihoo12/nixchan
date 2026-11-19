@@ -27,5 +27,9 @@ jobs:
         run: npm ci
       - name: Check games
         run: node tools/check-games.mjs --changed origin/${{ github.base_ref || 'main' }}
+      - name: Check types
+        run: npm run check
+      - name: Test Nixkit
+        run: npm test
       - name: Build
         run: npm run build
