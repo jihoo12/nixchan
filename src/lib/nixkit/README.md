@@ -47,15 +47,27 @@ on-screen button switches to and from the eye-level camera, and mouse or touch d
 control looking. An optional `forceThirdPerson` predicate can hold the orbit view during
 a scene and then restore the player's selection. `game.firstPerson` reports the effective view.
 
-Use `game.emote('happy', 2)` to give Nixchan a timed facial reaction without interrupting her
-movement or body animation. Available moods are `happy`, `surprised`, `sad`, and `determined`.
-A new cue replaces the old one and Nixchan returns to her usual face when it ends. Use
-`game.clearEmote()` to reset immediately. To let players choose, opt in with `emotes: {}`;
+Use these from a game event (for example, after completing a quest), without setting up a menu:
+
+| Call | What plays |
+| --- | --- |
+| `game.emote('happy', 2)` | Just the face for two seconds. Moods: `happy`, `surprised`, `sad`, `determined`. |
+| `game.action('hop')` | Just the body gesture. Actions: `hop`, `flinch`, `droop`, `fist-pump`. |
+| `game.react('happy')` | The matching face and body gesture together. |
+
+`action` and `react` return `true` if the body cue was accepted. They do nothing before the
+model has loaded or while paused. When a body cue is unavailable (for example during movement,
+in first person, or with reduced motion), `react` still shows the face, and `action` does nothing.
+No body cue is queued for later. A face cue returns to neutral when it ends; use
+`game.clearEmote()` to reset just the face immediately.
+
+To let players choose, opt in with `emotes: {}`;
 the **B** key and a touch-friendly expression button open the palette in third person only.
 Set `emotes: { gestures: true }` to pair each menu choice with a body gesture on stationary,
 grounded Nixchan. Movement, jumping and game-owned poses take priority; with reduced motion
 the menu stays face-only. The **E** wave and scripted `game.emote()` cues keep their existing
-behavior. The options can provide localized button and choice labels and a short hint.
+behavior. The menu uses the same reaction logic as `game.react()`. The options can provide localized
+button and choice labels and a short hint.
 
 What it gives back:
 
