@@ -1,7 +1,7 @@
 // What Nixchan's wearing: the colour of her hoodie and the design on its front (logos.ts), which hat,
 // and the hat's colour. She changes at the wardrobe in her house on /island (island/house.ts), and
 // the choice is saved in the browser, so she's dressed the same wherever her figure shows up
-// (/island, /experimental, /skills).
+// (/island, /experimental, and the games).
 import { loadJSON, saveJSON } from '../island/save';
 import { LOGOS, LOGO_COLOURS, type LogoColourId, type LogoId } from './logos';
 import type { NixFigure } from './nix-figure';

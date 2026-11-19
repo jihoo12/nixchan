@@ -18,7 +18,7 @@
 # Her other hats (StrawHat and BucketHat) sit on her head beside the beanie's parts (Beanie...),
 # and the page shows one hat at a time; with none, it swaps HairShell (open where a hat covers it)
 # for HairShellBare (whole) and shows HairCrownLocks over it.
-# For /skills she has a fighting stance (Ready), a held spell (Charge), and four spells that each
+# For snow magic (the Snow Magic game) she has a fighting stance (Ready), a held spell (Charge), and four spells that each
 # play once from Ready back to Ready: Shot, Slam, Summon and Dash.
 import math
 import os
@@ -1468,7 +1468,7 @@ PLANT_KEYS = [
 plant = keyed(PLANT_KEYS)
 
 
-# ---------- snow magic, for /skills ----------
+# ---------- snow magic, for the Snow Magic game ----------
 # Ready is a loop: a light, wide stance with both paws up in front, bouncing on her toes. The spells
 # play once each, from Ready back to Ready; the page throws the effects at the moments noted.
 

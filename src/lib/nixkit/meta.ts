@@ -4,6 +4,8 @@
 // See CONTRIBUTING.md.
 import type { GameOptions, createGame } from './game';
 
+export type { NixClip } from './game';
+
 export interface GameMeta {
 	/** Its name, on its portal and its page. */
 	title: string;

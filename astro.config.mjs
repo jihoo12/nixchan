@@ -7,6 +7,8 @@ export default defineConfig({
 	site: 'https://jihoo12.github.io',
 	base: '/nixchan',
 	integrations: [sitemap()],
+	// Snow magic was a stage of its own once; it's a game now, walked about in.
+	redirects: { '/skills': '/nixchan/play/snowmagic/' },
 	vite: {
 		// Bundle three up front in development. Found one page at a time instead, Vite re-bundles it
 		// partway through a session, and a page still holding the old bundle never loads.

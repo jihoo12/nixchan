@@ -22,7 +22,6 @@ All under `/nixchan/`:
 - **Her house** (`/home/`) — through the front door on the island.
 - **Monochrome** (`/monochrome/`) — the grey place through the rift at the island's standing stones (see below).
 - **3D path** (`/experimental/`) — a walk past jihoo's projects, notes and comics, to the sky gate and the island. The projects, notes and comics come from jihoo's site as the page opens (`/home-scene.json`, the same origin).
-- **Snow magic** (`/skills/`) — a stage for her spells.
 - **Gallery** (`/gallery/`) — a plaza where Nixchan walks into portals to her games.
 - **Games** (`/play/<id>/`) — games made with Nixkit (`src/lib/nixkit/`), one folder each in `src/games/`. Anyone can add one: see [CONTRIBUTING.md](CONTRIBUTING.md).
 

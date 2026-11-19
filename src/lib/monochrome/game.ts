@@ -3,7 +3,7 @@
 // round her, walks her through them, keeps the camera out of the walls, and looks after what
 // there is to do: three colour shards to find, ashen ore to chip from the rocks and carry home for
 // the forge, stones with things carved on them, and snowflakes she can leave on the floor (her snow
-// magic, from /skills) to know a place again.
+// magic, from Snow Magic) to know a place again.
 //
 // Everything is worked out in the laid-out frame: her cell is in the middle, at (0, 0). When she
 // steps over into the next cell, that cell becomes the middle, everything she's carrying (where she

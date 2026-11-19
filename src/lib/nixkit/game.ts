@@ -25,6 +25,9 @@ import { makeToon } from './look';
 import { createParts } from './parts';
 import { createPlayer, type Player } from './player';
 import type { World } from './world';
+import type { NixClip } from '../experimental/nix-figure';
+
+export type { NixClip };
 
 export interface GameOptions {
 	canvas: HTMLCanvasElement;
@@ -38,6 +41,12 @@ export interface GameOptions {
 	canGlide?: () => boolean;
 	/** Whether she can dash. */
 	canDash?: () => boolean;
+	/** Something for her to be doing instead of walking about (a clip: 'Shot', 'Slam', 'Summon',
+	 * 'Dash', 'Cast', 'Wave' …), asked every frame; null for her own. */
+	clip?: () => NixClip | null;
+	/** Keeps her on the spot, facing the angle it gives (null: she's free to move). Told whether
+	 * she's trying to move, which may be enough to let her go. */
+	hold?: (tryingToMove: boolean) => number | null;
 	/** Keys that aren't for moving or jumping (lower case), for the game to use. */
 	onKey?: (key: string, e: KeyboardEvent) => void;
 	/** Called when Nixchan can't be loaded (neither WebGPU nor WebGL 2, or the model didn't come). */
@@ -145,8 +154,8 @@ export function createGame(opts: GameOptions) {
 		heading: opts.spawn.heading,
 		controls,
 		orbit,
-		hold: () => null,
-		clip: () => null,
+		hold: opts.hold ?? (() => null),
+		clip: opts.clip ?? (() => null),
 		canGlide: opts.canGlide ?? (() => false),
 		canDash: opts.canDash,
 		respawnAt: () => parts.spawn,

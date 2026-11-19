@@ -29,6 +29,14 @@ const STYLE = `
 .nk-action { border: 0; border-radius: 9px; padding: 7px 13px; background: var(--surface, #fff); color: var(--ink, #1c1a3e); font: 800 14px var(--sans, system-ui); box-shadow: 0 4px 0 var(--edge, #c9c6e6); cursor: pointer; }
 .nk-action:hover { transform: translateY(-2px); }
 @media (max-width: 560px) { .nk-actions { top: 104px; } }
+.nk-skills { position: fixed; left: 50%; bottom: 58px; transform: translateX(-50%); display: flex; gap: 10px; }
+.nk-skill { position: relative; overflow: hidden; display: flex; align-items: center; gap: 8px; border: 0; border-radius: 12px; padding: 9px 14px 9px 10px; background: var(--surface, #fff); color: var(--ink, #1c1a3e); font: 800 14px var(--sans, system-ui); box-shadow: 0 4px 0 var(--edge, #c9c6e6); cursor: pointer; touch-action: manipulation; }
+.nk-skill:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--edge, #c9c6e6); }
+.nk-skill kbd { display: grid; place-items: center; min-width: 22px; height: 22px; border-radius: 6px; background: var(--accent-soft, #e6e3ff); font: 900 12px ui-monospace, monospace; }
+.nk-skill .nk-cool { position: absolute; inset: 0; background: rgba(28, 26, 62, 0.35); transform-origin: left; transform: scaleX(0); pointer-events: none; }
+.nk-skill.cooling { cursor: default; }
+@media (max-width: 700px) { .nk-skills { bottom: 190px; flex-wrap: wrap; justify-content: center; width: calc(100% - 32px); } .nk-skill { padding: 8px 11px 8px 8px; font-size: 13px; } }
+@media (pointer: coarse) { .nk-skill kbd { display: none; } }
 /* Going through a portal, everything fades to white. */
 .nk-leaving .nk-flash { opacity: 1; transition: opacity 0.4s; }
 @media (max-width: 560px) { .nk-stats { top: 62px; } .nk-stat { font-size: 13px; padding: 5px 10px; } }
@@ -55,6 +63,7 @@ export function createHud() {
 	banner.setAttribute('aria-live', 'polite');
 	const bannerTitle = el('p', 'nk-banner-title', banner);
 	const bannerNote = el('p', 'nk-banner-note', banner);
+	const skills = el('div', 'nk-skills', root);
 	const toast = el('p', 'nk-toast', root);
 	toast.setAttribute('aria-live', 'polite');
 	const stick = el('div', 'nk-stick', root);
@@ -101,6 +110,27 @@ export function createHud() {
 				b.blur();
 			});
 			return b;
+		},
+		/** A button in the row along the bottom for something she can do (a skill), with the key
+		 * that does it too. `use` is called by either; `cool(f)` greys `f` (1 … 0) of it over while
+		 * it can't be used again yet. */
+		skill(label: string, key: string, use: () => void) {
+			const b = el('button', 'nk-skill', skills);
+			b.type = 'button';
+			const k = el('kbd', '', b);
+			k.textContent = key.toUpperCase();
+			b.append(label);
+			const cover = el('span', 'nk-cool', b);
+			b.addEventListener('click', () => {
+				use();
+				b.blur();
+			});
+			return {
+				cool(f: number) {
+					cover.style.transform = `scaleX(${Math.max(0, Math.min(1, f))})`;
+					b.classList.toggle('cooling', f > 0);
+				},
+			};
 		},
 		/** A counter in the row along the top; set its text whenever it changes. */
 		stat(text = '') {
