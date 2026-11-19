@@ -49,7 +49,7 @@ export interface NixchanOptions {
 	/** Where she is: what she stands on, bumps into and swims in. */
 	world: World;
 	toon: Toon;
-	/** How her materials are made: WebGL's without it, nixkit/figure-nodes.ts's on WebGPU. */
+	/** How her materials are made (nixkit/figure-nodes.ts's nodeLook without it). */
 	look?: FigureLook;
 	/** The on-screen stick, knob and jump (and dash) buttons, for touch. */
 	touch: Parameters<typeof createControls>[1];

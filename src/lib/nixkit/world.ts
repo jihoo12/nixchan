@@ -51,9 +51,10 @@ export interface World {
 	/** Fallen below this, she's put back where she started (or wherever `respawn` says). */
 	fallOut?: number;
 	/** Pushes `p` (her feet, `r` round) out of anything else she can't walk into: walls, boxes, the
-	 * edges of a room. Asked as she moves, after she's been pushed out of the obstacles; it moves her
-	 * and leaves how fast she's going alone, so she can lean into a wall. */
-	collide?(p: THREE.Vector3, r: number): void;
+	 * edges of a room. Asked as she moves, after she's been pushed out of the obstacles. It may take
+	 * away the part of `vel` that's carrying her into what it pushed her out of (so she slides along
+	 * it), or leave it (so she leans into it). */
+	collide?(p: THREE.Vector3, r: number, vel: THREE.Vector3): void;
 }
 
 /** One world made of several, as when a game puts parts (nixkit/parts.ts) on terrain of its own:

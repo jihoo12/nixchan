@@ -65,7 +65,7 @@ export interface PlayerContext {
 	scene: THREE.Scene;
 	toon: Toon;
 	modelUrl: string;
-	/** How her materials are made: WebGL's by default, or nixkit/figure-nodes.ts's on WebGPU. */
+	/** How her materials are made (nixkit/figure-nodes.ts's nodeLook without it). */
 	look?: FigureLook;
 	start: THREE.Vector3;
 	heading: number;
@@ -253,7 +253,7 @@ export function createPlayer(ctx: PlayerContext) {
 			if (Math.abs(dy) < reach) out(c.x, c.z, Math.sqrt(reach * reach - dy * dy));
 		}
 		// Anything else the world has her walk round, as it likes (walls, boxes).
-		world.collide?.(p, bodyR);
+		world.collide?.(p, bodyR, vel);
 	};
 
 	const steer = new THREE.Vector3();
@@ -446,7 +446,8 @@ export function createPlayer(ctx: PlayerContext) {
 		root.position.copy(pos);
 
 		const planar = Math.hypot(vel.x, vel.z);
-		if (planar > 0.2) heading = Math.atan2(vel.x, vel.z);
+		// (Held, she faces what's holding her, even while she's still slowing down.)
+		if (planar > 0.2 && held === null) heading = Math.atan2(vel.x, vel.z);
 		turn += Math.atan2(Math.sin(heading - turn), Math.cos(heading - turn)) * (1 - Math.exp(-turnRate * dt));
 		figure.group.rotation.y = turn;
 

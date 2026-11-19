@@ -96,7 +96,7 @@ test('autoSteer walks her only while nothing is pressed', () => {
 	assert.equal(player.pos.x, x, 'null stands her still');
 });
 
-test('world.collide moves her out and leaves her speed, so she leans into a wall', () => {
+test('world.collide moves her out; leaving her speed, she leans into a wall', () => {
 	const wall = (p, r) => { if (p.x > 1 - r) p.x = 1 - r; };
 	const { player, move, plays, run } = setup({ moves: { body: 0.38 } }, { collide: wall });
 	move.right = 1;

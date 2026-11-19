@@ -1,5 +1,5 @@
 // Noise for shaders in TSL: the hash, value noise and fractal noise the rift and the sky gate swirl
-// with. (The GLSL they came from is in monochrome/rift.ts, which the grey place still draws with.)
+// with (monochrome/rift.ts, experimental/portal.ts).
 import type { Node } from 'three/webgpu';
 import { dot, float, floor, fract, mix, sin, vec2 } from 'three/tsl';
 

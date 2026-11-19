@@ -81,7 +81,7 @@ export async function startIsland() {
 
 	// Drawn with three's WebGPURenderer, as Nixkit's games are: WebGPU where the browser has it, WebGL
 	// 2 where it doesn't (or with ?webgl on the URL, to see what that looks like). So the island's own
-	// shaders are TSL (sky.ts, water.ts, skyisle.ts, monochrome/rift-nodes.ts). The frame is Nixkit's
+	// shaders are TSL (sky.ts, water.ts, skyisle.ts, monochrome/rift.ts). The frame is Nixkit's
 	// engine's (nixkit/engine.ts): each part of the island below is a system in it.
 	const engine = createEngine({
 		canvas,

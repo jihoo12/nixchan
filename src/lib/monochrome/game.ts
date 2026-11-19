@@ -10,22 +10,20 @@
 // is, the camera) shifts back by a cell to match, and the cells round her are laid out afresh.
 // The layout keeps its turn as she goes, so the light and the camera never jump.
 import * as THREE from 'three';
-import { buildNixFigure, snowflakeTexture, type NixClip } from '../experimental/nix-figure';
-import { createControls, type Orbit } from '../nixkit/controls';
+import { WebGPURenderer } from 'three/webgpu';
+import { snowflakeTexture, type NixClip } from '../experimental/nix-figure';
+import { createEngine, ORDER } from '../nixkit/engine';
+import { nodeLook } from '../nixkit/figure-nodes';
+import { createNixchan } from '../nixkit/nixchan';
 import { createInteractions } from '../nixkit/interact';
 import { makeToon } from '../nixkit/look';
 import { loadJSON, loadText, saveJSON, saveText } from '../island/save';
 import { clamp, damp, noise } from '../nixkit/util';
 import { loadBlocks, type CellModel, type Solid, type Spot } from './blocks';
+import { greyCollide, greyMoves } from './moves';
 import { CELL, DIRS, HALF, REGION_NAMES, SHARDS, START, cellById, place, turn, type Cell, type Placed, type ShardId, type Side } from './world';
 import { to as inSite } from '../base';
 
-const WALK = 3;
-const RUN = 7.5;
-const GRAVITY = 26;
-const JUMP_SPEED = 8.6;
-const FLIGHT = (2 * JUMP_SPEED) / GRAVITY;
-const BODY_R = 0.45;
 /** Where she comes out of the rift, in the Threshold's first cell. */
 const SPAWN = { x: 0, z: 1.6 };
 /** The camera starts out in front of the rift, looking back at her and it. */
@@ -76,19 +74,15 @@ export async function startMonochrome() {
 		fade: $('[data-fade]'),
 	};
 
-	let renderer: THREE.WebGLRenderer;
-	try {
-		renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-	} catch {
-		document.documentElement.classList.add('no-3d');
-		return;
-	}
-	renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
-	renderer.shadowMap.enabled = true;
-	renderer.shadowMap.type = THREE.PCFShadowMap;
-
-	const scene = new THREE.Scene();
-	const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 400);
+	// Drawn with three's WebGPURenderer, as the rest of Nixchan's world is (WebGL 2 without WebGPU, or
+	// with ?webgl), in Nixkit's engine: each thing below that happens every frame is a system in it.
+	const engine = createEngine({
+		canvas,
+		renderer: (c) => new WebGPURenderer({ canvas: c, antialias: true, forceWebGL: new URLSearchParams(location.search).has('webgl') }),
+		camera: { fov: 50, near: 0.1, far: 400 },
+	});
+	if (!engine) return;
+	const { scene, camera } = engine;
 	const toon = makeToon();
 	const isNight = () => document.documentElement.dataset.time === 'night';
 
@@ -150,20 +144,45 @@ export async function startMonochrome() {
 
 	// ---------- Nixchan ----------
 
-	const her = new THREE.Group();
-	const figure = buildNixFigure(canvas.dataset.model ?? '');
-	her.add(figure.group);
-	scene.add(her);
+	// She moves as Nixkit's player does (nixkit/player.ts), which is as she always has here: the walls
+	// and columns of the cells round her push her out as they did (moves.ts), and
+	// tools/test-nixkit-grey-feel.mjs keeps it so. The camera's the grey place's own (follow, below).
+	const nix = createNixchan(engine, {
+		canvas,
+		modelUrl: canvas.dataset.model ?? '',
+		spawn: { pos: new THREE.Vector3(SPAWN.x, 0, SPAWN.z), heading: SPAWN_YAW },
+		world: {
+			groundAt: () => 0,
+			ceilingAt: () => Infinity,
+			nearby: () => [],
+			inside: () => true,
+			collide: greyCollide(() => solidsNear),
+		},
+		toon,
+		look: nodeLook,
+		touch: ui,
+		orbit: { yaw: SPAWN_YAW, pitch: 0.3, distance: 8 },
+		camera: false,
+		// E and Q leave snowflakes here (or do what there is to do); she doesn't wave or dash.
+		keys: { wave: false, dash: false },
+		canGlide: () => false,
+		// Casting (or chipping at a rock), reading the help, or stepping through a rift, she stays put
+		// (facing what she's chipping at).
+		hold: () => (casting > 0 ? (castFacing ?? player.heading) : helpOpen || leaving ? player.heading : null),
+		clip: () => (casting > 0 ? castClip : null),
+		player: { moves: greyMoves },
+	});
+	const { player, controls, orbit, keys } = nix;
+	const { figure, pos } = player;
 	let ready = false;
 
 	let blocks: Awaited<ReturnType<typeof loadBlocks>>;
 	try {
-		[blocks] = await Promise.all([loadBlocks(canvas.dataset.blocks ?? '', toon), figure.ready]);
+		[blocks] = await Promise.all([loadBlocks(canvas.dataset.blocks ?? '', toon), nix.loaded]);
 	} catch {
 		if (ui.loading) ui.loading.textContent = "The rift won't open just now. Try reloading?";
 		return;
 	}
-	figure.group.traverse((o) => (o.castShadow = true));
 	ready = true;
 	ui.loading?.setAttribute('hidden', '');
 
@@ -312,19 +331,11 @@ export async function startMonochrome() {
 
 	// ---------- where she is ----------
 
-	const pos = new THREE.Vector3(SPAWN.x, 0, SPAWN.z);
-	const vel = new THREE.Vector3();
-	let vy = 0;
-	let grounded = true;
-	let jumped = false;
-	let airTime = 0;
-	let heading = SPAWN_YAW;
-	let turnTo = heading;
 	let casting = 0;
 	/** What she's doing while `casting`: a spell, or chipping at a rock with her hammer. */
 	let castClip: NixClip = 'Summon';
-	let nextBlink = 2;
-	const orbit: Orbit = { yaw: SPAWN_YAW, pitch: 0.3, distance: 8 };
+	/** Which way she faces while she does it (null: whichever way she was). */
+	let castFacing: number | null = null;
 	const camLook = new THREE.Vector3(pos.x, 1.3, pos.z);
 	const camPos = new THREE.Vector3();
 	let camReach = orbit.distance;
@@ -345,21 +356,14 @@ export async function startMonochrome() {
 		if (e.target === ui.help) openHelp(false);
 	});
 
-	const controls = createControls(canvas, ui, orbit, {
-		intercept(key) {
-			if (helpOpen && !['h', '?', 'escape'].includes(key)) return true;
-			return leaving;
-		},
-		command(key, e) {
-			if (key === 'escape') openHelp(false);
-			if (e.repeat) return;
-			if (key === 'e') {
-				if (!interactions.press()) dropMark();
-			} else if (key === 'q') dropMark();
-			else if (key === 'h' || key === '?') openHelp(!helpOpen);
-		},
-		release() {},
-		blur() {},
+	keys.intercept((key) => (helpOpen && !['h', '?', 'escape'].includes(key)) || leaving, 100);
+	keys.command((key, e) => {
+		if (key === 'escape') openHelp(false);
+		if (e.repeat) return;
+		if (key === 'e') {
+			if (!interactions.press()) dropMark();
+		} else if (key === 'q') dropMark();
+		else if (key === 'h' || key === '?') openHelp(!helpOpen);
 	});
 	ui.mark?.addEventListener('pointerdown', (e) => {
 		e.preventDefault();
@@ -376,7 +380,7 @@ export async function startMonochrome() {
 
 	/** She casts a snowflake onto the floor where she stands. */
 	function dropMark() {
-		if (!ready || !grounded || casting > 0 || helpOpen || leaving) return;
+		if (!ready || !player.grounded || casting > 0 || helpOpen || leaving) return;
 		// Where she is in her own cell's frame: her cell is laid out at the middle, turned rootRot.
 		const [x, z] = turn(pos.x, pos.z, -rootRot);
 		const mark = { cell: root.id, x: clamp(x, -HALF, HALF), z: clamp(z, -HALF, HALF), a: Math.random() * Math.PI * 2 };
@@ -389,51 +393,6 @@ export async function startMonochrome() {
 	}
 
 	// ---------- moving her, and stepping from cell to cell ----------
-
-	const pushOut = () => {
-		for (const s of solidsNear) {
-			let nx: number;
-			let nz: number;
-			let depth: number;
-			if (s.circle) {
-				const dx = pos.x - s.circle.x;
-				const dz = pos.z - s.circle.z;
-				const d = Math.hypot(dx, dz);
-				const min = s.circle.r + BODY_R;
-				if (d >= min || d < 1e-5) continue;
-				nx = dx / d;
-				nz = dz / d;
-				depth = min - d;
-			} else {
-				const b = s.box!;
-				const cx = clamp(pos.x, b.x0, b.x1);
-				const cz = clamp(pos.z, b.z0, b.z1);
-				const dx = pos.x - cx;
-				const dz = pos.z - cz;
-				const d = Math.hypot(dx, dz);
-				if (d >= BODY_R) continue;
-				if (d > 1e-5) {
-					nx = dx / d;
-					nz = dz / d;
-					depth = BODY_R - d;
-				} else {
-					// Right inside it (a step too far in one frame): out the nearest way.
-					const out = [pos.x - b.x0, b.x1 - pos.x, pos.z - b.z0, b.z1 - pos.z];
-					const k = out.indexOf(Math.min(...out));
-					nx = k === 0 ? -1 : k === 1 ? 1 : 0;
-					nz = k === 2 ? -1 : k === 3 ? 1 : 0;
-					depth = out[k] + BODY_R;
-				}
-			}
-			pos.x += nx * depth;
-			pos.z += nz * depth;
-			const into = vel.x * nx + vel.z * nz;
-			if (into < 0) {
-				vel.x -= into * nx;
-				vel.z -= into * nz;
-			}
-		}
-	};
 
 	let shownRegion = '';
 	const announce = (name: string, note = '') => {
@@ -492,71 +451,13 @@ export async function startMonochrome() {
 		root = START;
 		rootRot = 0;
 		pos.set(SPAWN.x, 0, SPAWN.z);
-		vel.set(0, 0, 0);
-		heading = turnTo = SPAWN_YAW;
+		player.vel.set(0, 0, 0);
+		player.face(SPAWN_YAW);
 		orbit.yaw = SPAWN_YAW;
 		camLook.set(pos.x, 1.3, pos.z);
 		camReach = 2;
 		relayout();
 		arrived();
-	};
-
-	const steer = new THREE.Vector3();
-	const step = (dt: number) => {
-		const { forward, right, running } = controls.move();
-		const yaw = orbit.yaw;
-		steer.set(-Math.sin(yaw) * forward + Math.cos(yaw) * right, 0, -Math.cos(yaw) * forward - Math.sin(yaw) * right);
-		if (steer.lengthSq() > 1) steer.normalize();
-		if (casting > 0 || helpOpen || leaving) {
-			steer.set(0, 0, 0);
-			controls.state.jumpQueued = false;
-		}
-		const moving = steer.lengthSq() > 0.01;
-		const speed = running ? RUN : WALK;
-		const control = grounded ? 10 : 3;
-		vel.x = damp(vel.x, steer.x * speed, control, dt);
-		vel.z = damp(vel.z, steer.z * speed, control, dt);
-		pos.x += vel.x * dt;
-		pos.z += vel.z * dt;
-		pushOut();
-		pushOut();
-		crossOver();
-
-		if (controls.state.jumpQueued && grounded) {
-			vy = JUMP_SPEED;
-			grounded = false;
-			jumped = true;
-			airTime = 0;
-		}
-		controls.state.jumpQueued = false;
-		controls.state.waveQueued = false;
-		if (!grounded) {
-			airTime += dt;
-			vy -= GRAVITY * dt;
-			pos.y += vy * dt;
-			if (pos.y <= 0) {
-				pos.y = 0;
-				vy = 0;
-				grounded = true;
-			}
-		}
-		her.position.copy(pos);
-
-		const planar = Math.hypot(vel.x, vel.z);
-		if (planar > 0.2 && moving) heading = Math.atan2(vel.x, vel.z);
-		turnTo += Math.atan2(Math.sin(heading - turnTo), Math.cos(heading - turnTo)) * (1 - Math.exp(-10 * dt));
-		figure.group.rotation.y = turnTo;
-
-		const wasCasting = casting > 0;
-		casting = Math.max(0, casting - dt);
-		if (wasCasting && casting === 0 && castClip === 'Smith') figure.setProp('Hammer', false);
-		let clip: NixClip = planar > 3 ? 'Run' : planar > 0.25 ? 'Walk' : 'Idle';
-		if (casting > 0) clip = castClip;
-		const pace = clip === 'Run' ? clamp(planar / 4.2, 0.8, 2.4) : clip === 'Walk' ? clamp(planar / 1.5, 0.6, 2.6) : 1;
-		figure.play(clip, pace);
-		const airborne = !grounded;
-		const t = jumped ? clamp(airTime / FLIGHT, 0, 0.97) : clamp(0.5 + airTime, 0.5, 0.97);
-		return airborne ? { t, clip: 'JumpStand' as const } : null;
 	};
 
 	// ---------- the camera ----------
@@ -633,7 +534,7 @@ export async function startMonochrome() {
 		setTimeout(() => location.assign(HOME), matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 700);
 	};
 	interactions.add(() => {
-		if (!grounded || casting > 0) return null;
+		if (!player.grounded || casting > 0) return null;
 		let best: NearSpot | null = null;
 		let bestD = Infinity;
 		for (const s of spotsNear) {
@@ -668,17 +569,17 @@ export async function startMonochrome() {
 	});
 
 	/** She plays `clip` for `seconds`, standing still. */
-	function cast(clip: NixClip, seconds: number) {
+	function cast(clip: NixClip, seconds: number, facing: number | null = null) {
 		castClip = clip;
 		casting = seconds;
+		castFacing = facing;
 		figure.setProp('Hammer', clip === 'Smith');
 		figure.play(clip);
 	}
 
 	/** One strike of her hammer, and a shard or two of ashen ore comes away. */
 	const chip = (id: string, at: { x: number; z: number }) => {
-		heading = Math.atan2(at.x - pos.x, at.z - pos.z);
-		cast('Smith', 0.9);
+		cast('Smith', 0.9, Math.atan2(at.x - pos.x, at.z - pos.z));
 		const n = Math.random() < 0.3 ? 2 : 1;
 		const seed = Math.random() < ASHEN_SEED_CHANCE;
 		carried += n;
@@ -806,16 +707,12 @@ export async function startMonochrome() {
 
 	// ---------- the loop ----------
 
-	const resize = () => {
-		const w = innerWidth;
-		const h = innerHeight;
-		renderer.setSize(w, h, false);
-		camera.aspect = w / h;
-		camera.fov = w < h ? 64 : 50;
-		camera.updateProjectionMatrix();
-	};
-	resize();
-	addEventListener('resize', resize);
+	engine.add({
+		resize(w, h) {
+			camera.fov = w < h ? 64 : 50;
+			camera.updateProjectionMatrix();
+		},
+	});
 
 	relayout();
 	ui.fade?.classList.remove('show');
@@ -829,7 +726,7 @@ export async function startMonochrome() {
 	// For poking at from the console while working on it.
 	if (import.meta.env.DEV)
 		Object.assign(window, {
-			mono: { cell: () => root.id, rot: () => rootRot, pos, orbit, cam: () => ({ camReach, camLift, look: camLook.toArray(), at: camPos.toArray() }), layout: () => layout.map((p) => `${p.cell.id}@${p.gx},${p.gz}r${p.rot}`), take: (id: ShardId) => take(id),
+			mono: { engine, nix, cell: () => root.id, rot: () => rootRot, pos, orbit, cam: () => ({ camReach, camLift, look: camLook.toArray(), at: camPos.toArray() }), layout: () => layout.map((p) => `${p.cell.id}@${p.gx},${p.gz}r${p.rot}`), take: (id: ShardId) => take(id),
 				visit: (id: string, x = 0, z = 3) => {
 					root = cellById(id) ?? root;
 					rootRot = 0;
@@ -840,54 +737,60 @@ export async function startMonochrome() {
 			},
 		});
 
-	const zero = new THREE.Vector2();
-	let time = 0;
-	let veinClock = 2;
-	let last = performance.now();
-	renderer.setAnimationLoop((now) => {
-		const dt = Math.min(0.05, (now - last) / 1000);
-		last = now;
-		time += dt;
+	// ---------- the frame ----------
+	// In the engine's order: she moves (ORDER.player), what she's casting runs down, she steps over
+	// into the next cell if she's reached it, the place moves, the camera follows, and the sun.
 
-		const jump = step(dt);
-		figure.tick(dt, time, { airborne: !grounded, look: zero, still: false, jump, landed: true });
-		nextBlink -= dt;
-		if (nextBlink < 0) {
-			const closed = nextBlink > -0.13;
-			figure.setBlink(closed);
-			if (!closed) nextBlink = 2.5 + Math.random() * 3;
-		}
-		interactions.update();
-
-		for (const { group } of shown) {
-			for (const c of group.userData.cubes as THREE.Object3D[]) {
-				const ph = c.userData.phase as number;
-				c.position.y = 2.9 + Math.sin(time * 0.8 + ph) * 0.25;
-				c.rotation.set(time * 0.3 + ph, time * 0.45 + ph * 0.5, 0);
-			}
-			const shard = group.userData.shard as THREE.Object3D | undefined;
-			if (shard?.visible) {
-				shard.position.y = 1.9 + Math.sin(time * 1.6) * 0.12;
-				shard.rotation.y = time * 1.1;
-			}
-		}
-		blocks.riftMat.uniforms.uTime.value = time;
-		freshAge += dt;
-		drawFlakes();
-		// Ore grows back on its rock while she's about.
-		veinClock -= dt;
-		if (veinClock <= 0) {
-			veinClock = 2;
-			showVeins();
-		}
-
-		toastClock -= dt;
-		if (toastClock <= 0) ui.toast?.classList.remove('show');
-		compass(time);
-
-		follow(dt);
-		sun.position.copy(pos).add(SUN_FROM);
-		sun.target.position.copy(pos);
-		renderer.render(scene, camera);
+	engine.add({
+		order: ORDER.player + 1,
+		update(dt) {
+			const wasCasting = casting > 0;
+			casting = Math.max(0, casting - dt);
+			if (wasCasting && casting === 0 && castClip === 'Smith') figure.setProp('Hammer', false);
+		},
 	});
+	engine.add({ order: ORDER.contact, update: () => crossOver() });
+
+	let veinClock = 2;
+	engine.add({
+		order: ORDER.game,
+		update(dt, time) {
+			interactions.update();
+			for (const { group } of shown) {
+				for (const c of group.userData.cubes as THREE.Object3D[]) {
+					const ph = c.userData.phase as number;
+					c.position.y = 2.9 + Math.sin(time * 0.8 + ph) * 0.25;
+					c.rotation.set(time * 0.3 + ph, time * 0.45 + ph * 0.5, 0);
+				}
+				const shard = group.userData.shard as THREE.Object3D | undefined;
+				if (shard?.visible) {
+					shard.position.y = 1.9 + Math.sin(time * 1.6) * 0.12;
+					shard.rotation.y = time * 1.1;
+				}
+			}
+			blocks.riftMat.uniforms.uTime.value = time;
+			freshAge += dt;
+			drawFlakes();
+			// Ore grows back on its rock while she's about.
+			veinClock -= dt;
+			if (veinClock <= 0) {
+				veinClock = 2;
+				showVeins();
+			}
+
+			toastClock -= dt;
+			if (toastClock <= 0) ui.toast?.classList.remove('show');
+			compass(time);
+		},
+	});
+	engine.add({ order: ORDER.camera, update: (dt) => follow(dt) });
+	engine.add({
+		order: ORDER.light,
+		update() {
+			sun.position.copy(pos).add(SUN_FROM);
+			sun.target.position.copy(pos);
+		},
+	});
+
+	await engine.start();
 }
