@@ -17,7 +17,7 @@
 // onBeforeCompile doesn't draw here (CONTRIBUTING.md).
 import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
-import { nodeLook } from './figure-nodes';
+import { fixToon, nodeLook } from './figure-nodes';
 import { createFollowCamera } from './camera';
 import { createControls, type Orbit } from './controls';
 import { createHud } from './hud';
@@ -64,6 +64,7 @@ export function createGame(opts: GameOptions) {
 		cannotDraw();
 		return null;
 	}
+	fixToon(renderer);
 	// Settles once it's ready to draw; on WebGPU that's after the browser hands over a device.
 	const drawing = renderer.init().then(
 		() => true,
