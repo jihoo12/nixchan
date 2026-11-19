@@ -1,11 +1,8 @@
 ---
+import { to } from '../../lib/base';
 // An experimental 3D take on the homepage. The regular 2D site is untouched; this page only reads the same data.
 import BaseHead from '../../components/BaseHead.astro';
-import { getCollection } from 'astro:content';
 import { getImage } from 'astro:assets';
-import { featuredProjects } from '../../lib/projects';
-import { publishedComics, comicSlug } from '../../lib/comics';
-import { ACTIVITY_DAYS } from '../../lib/activity';
 import thinkingArt from '../../assets/nixchan/nixchan-math-thinking-01.png';
 import napArt from '../../assets/nixchan/nixchan-penguin-nap-01.png';
 import bodyIdle from '../../assets/nixchan/live/body-idle.webp';
@@ -18,33 +15,9 @@ import portalModel from '../../assets/experimental/portal.glb?url';
 const title = 'Jihoo — in 3D (experimental)';
 const description = 'An experimental, walk-along 3D version of my little corner of the internet.';
 
-const dateLabel = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' });
-
-const projects = (await featuredProjects(3)).map(({ data, commits }) => ({
-	title: data.title,
-	tagline: data.tagline,
-	language: data.language,
-	commits,
-	href: data.repo,
-}));
-
-const posts = (await getCollection('blog'))
-	.sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf())
-	.slice(0, 3)
-	.map((post) => ({
-		title: post.data.title,
-		description: post.data.description,
-		date: dateLabel.format(post.data.pubDate),
-		href: `/blog/${post.id}/`,
-	}));
-
-const comics = await Promise.all(
-	(await publishedComics()).slice(0, 3).map(async (comic) => ({
-		title: comic.data.title,
-		href: `/comics/${comicSlug(comic.id)}/`,
-		image: (await getImage({ src: comic.data.cover ?? comic.data.pages[0].src, width: 640, format: 'webp' })).src,
-	})),
-);
+// The path walks past jihoo's projects, notes and comics. They're jihoo's site's, so this page
+// asks it for them as it opens (/home-scene.json, same origin) and fills in the stops then; if that
+// fails, each stop shows a sign pointing at the page on jihoo's site instead.
 
 const art = {
 	thinking: (await getImage({ src: thinkingArt, width: 640, format: 'webp' })).src,
@@ -53,7 +26,7 @@ const art = {
 	portal: portalModel,
 };
 
-const scene = { projects, posts, comics, art };
+const scene = { projects: [], posts: [], comics: [], art };
 ---
 <!doctype html>
 <html lang="en">
@@ -69,7 +42,7 @@ const scene = { projects, posts, comics, art };
 			<a class="brand" href="/">jihoo<span class="period">.</span></a>
 			<span class="badge">3D · experimental</span>
 			<span class="spacer"></span>
-			<a class="pill" href="/?view=2d">Back to 2D</a>
+			<a class="pill" href="/">Back to 2D</a>
 			<button class="pill" type="button" data-roam hidden aria-pressed="false">Walk: scroll</button>
 			<button class="pill" type="button" data-nix-mode hidden aria-pressed="true">Nixchan: 3D</button>
 			<button class="pill clock" type="button" data-clock aria-label="Switch between day and night"><span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span></button>
@@ -99,10 +72,8 @@ const scene = { projects, posts, comics, art };
 			<section class="stop side" data-stop aria-labelledby="projects-title">
 				<div class="card">
 					<h2 id="projects-title" class="display">Things I'm building<span class="period">.</span></h2>
-					<p>Taller means busier in the last {ACTIVITY_DAYS} days. Click a tower to open it on GitHub.</p>
-					<ul class="links">
-						{projects.map((p) => <li><a href={p.href} target="_blank" rel="noopener noreferrer">{p.title}</a> — {p.tagline}</li>)}
-					</ul>
+					<p>Taller means busier lately. Click a tower to open it on GitHub.</p>
+					<ul class="links" data-links="projects"></ul>
 					<a class="text-link" href="/projects/">See all projects <span aria-hidden="true">→</span></a>
 				</div>
 			</section>
@@ -111,9 +82,7 @@ const scene = { projects, posts, comics, art };
 				<div class="card">
 					<h2 id="notes-title" class="display">Recent notes<span class="period">.</span></h2>
 					<p>Fresh pages, hung up to dry. Click one to read it.</p>
-					<ul class="links">
-						{posts.map((p) => <li><a href={p.href}>{p.title}</a> <span class="when">{p.date}</span></li>)}
-					</ul>
+					<ul class="links" data-links="posts"></ul>
 					<a class="text-link" href="/blog/">View all <span aria-hidden="true">→</span></a>
 				</div>
 			</section>
@@ -122,9 +91,7 @@ const scene = { projects, posts, comics, art };
 				<div class="card">
 					<h2 id="comics-title" class="display">Comics<span class="period">.</span></h2>
 					<p>Little stories starring Nixchan and friends.</p>
-					<ul class="links">
-						{comics.map((c) => <li><a href={c.href}>{c.title}</a></li>)}
-					</ul>
+					<ul class="links" data-links="comics"></ul>
 					<a class="text-link" href="/comics/">All comics <span aria-hidden="true">→</span></a>
 				</div>
 			</section>
@@ -132,9 +99,9 @@ const scene = { projects, posts, comics, art };
 			<section class="stop side end" data-stop aria-labelledby="end-title">
 				<div class="card">
 					<h2 id="end-title" class="display">A little at a time, at my own pace<span class="period">.</span></h2>
-					<p>That's the end of the path — almost. Past here a stone gate opens onto <a class="inline" href="/island/">Nixchan's island</a>; walk her through it, or just click it. This 3D version is an experiment — the regular site has everything.</p>
+					<p>That's the end of the path — almost. Past here a stone gate opens onto <a class="inline" href={to('/island/')}>Nixchan's island</a>; walk her through it, or just click it. This 3D version is an experiment — the regular site has everything.</p>
 					<div class="keys">
-						<a class="button primary" href="/?view=2d">Back to the 2D site</a>
+						<a class="button primary" href="/">Back to the 2D site</a>
 						<a class="button secondary" href="https://github.com/jihoo12" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
 					</div>
 				</div>
@@ -192,6 +159,36 @@ const scene = { projects, posts, comics, art };
 		}
 		window.dispatchEvent(new Event('site-time'));
 	});
+
+	// jihoo's projects, notes and comics, from jihoo's site (src/pages/home-scene.json.ts there).
+	type Item = { title: string; href: string; tagline?: string; date?: string };
+	const node = document.querySelector('[data-scene]');
+	const scene = JSON.parse(node?.textContent || '{}');
+	try {
+		const res = await fetch('/home-scene.json', { signal: AbortSignal.timeout(4000) });
+		if (res.ok) Object.assign(scene, await res.json());
+	} catch {
+		// The stops show their signs to jihoo's pages instead.
+	}
+	const list = (key: 'projects' | 'posts' | 'comics', item: (x: Item) => Node[]) =>
+		document.querySelector(`[data-links="${key}"]`)?.replaceChildren(
+			...(scene[key] as Item[]).map((x) => {
+				const li = document.createElement('li');
+				li.append(...item(x));
+				return li;
+			}),
+		);
+	const link = (x: Item, external = false) => {
+		const a = document.createElement('a');
+		a.href = x.href;
+		a.textContent = x.title;
+		if (external) Object.assign(a, { target: '_blank', rel: 'noopener noreferrer' });
+		return a;
+	};
+	list('projects', (x) => [link(x, true), document.createTextNode(` — ${x.tagline ?? ''}`)]);
+	list('posts', (x) => [link(x), document.createTextNode(' '), Object.assign(document.createElement('span'), { className: 'when', textContent: x.date ?? '' })]);
+	list('comics', (x) => [link(x)]);
+	if (node) node.textContent = JSON.stringify(scene);
 
 	start();
 </script>

@@ -1,4 +1,4 @@
-name: Verify website
+name: Verify Nixchan
 
 on:
   pull_request:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build Astro website
+    name: Build the site
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -29,5 +29,3 @@ jobs:
         run: node tools/check-games.mjs --changed origin/${{ github.base_ref || 'main' }}
       - name: Build
         run: npm run build
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

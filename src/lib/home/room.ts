@@ -9,6 +9,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { buildNixFigure } from '../experimental/nix-figure';
 import { makeToon } from '../nixkit/look';
 import { clamp, damp } from '../nixkit/util';
+import { to as inSite } from '../base';
 
 // The sizes in tools/home-room/build.py.
 const W = 9;
@@ -288,7 +289,7 @@ export function startRoom() {
 		leaving = true;
 		target = null;
 		ui.dim?.classList.add('out');
-		setTimeout(() => location.assign('/island/?from=home'), reduceMotion ? 0 : 550);
+		setTimeout(() => location.assign(inSite('/island/?from=home')), reduceMotion ? 0 : 550);
 	};
 	addEventListener('pageshow', (e) => {
 		if (!e.persisted) return;

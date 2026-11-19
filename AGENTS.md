@@ -26,3 +26,13 @@ Consult these guides before working on related tasks:
 Games with Nixchan live in `src/games/<id>/`, one folder each, made with Nixkit (`src/lib/nixkit/`).
 To add one, follow `CONTRIBUTING.md`: copy `src/games/_template/`, change only files in that
 folder, and run `npm run check:games` and `npm run build` before finishing.
+
+## Links
+
+The site is published at `/nixchan/` (`base` in `astro.config.mjs`). Link to its own pages with
+`to('/island/')` from `src/lib/base.ts`, never a bare `/island/`: a bare path is jihoo's site.
+
+## Links
+
+The site is published at `/nixchan/` (`base` in `astro.config.mjs`). Link to its own pages with
+`to('/island/')` from `src/lib/base.ts`, never a bare `/island/`: a bare path is jihoo's site.

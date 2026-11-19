@@ -10,8 +10,9 @@ import type { Offer } from '../nixkit/interact';
 import { loadJSON } from './save';
 import type { Theme } from './theme';
 import { damp } from '../nixkit/util';
+import { to as inSite } from '../base';
 
-const THROUGH = '/monochrome/';
+const THROUGH = inSite('/monochrome/');
 /** How far in from the altar the rift hangs, towards the middle of the island. */
 const OUT = 2.7;
 

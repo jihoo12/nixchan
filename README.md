@@ -1,24 +1,33 @@
-# Jihoo — Personal Website
+# Nixchan
 
-A clean, responsive personal website and journal, built with Astro and published on GitHub Pages.
+Nixchan, a child of snow (*nix* is Latin for snow), and her world: an island to roam, a grey place
+through a rift, a 3D path to walk, a gallery of portals to games, and her snow magic. TypeScript and
+three.js, built with Astro and published on GitHub Pages at
+[jihoo12.github.io/nixchan](https://jihoo12.github.io/nixchan/).
 
-[![Watch the trailer: Nixchan walks the 3D homepage, roams her island, steps through the rift and into the gallery's portals](public/trailer-poster.jpg)](https://jihoo12.github.io/trailer.mp4)
+[![Watch the trailer: Nixchan walks the 3D path, roams her island, steps through the rift and into the gallery's portals](public/trailer-poster.jpg)](https://jihoo12.github.io/nixchan/trailer.mp4)
 
 A 41-second trailer, recorded from the site itself ([`public/trailer.mp4`](public/trailer.mp4)).
 
+She started out as a little NixOS personification on [jihoo's site](https://jihoo12.github.io/)
+([jihoo12/jihoo12.github.io](https://github.com/jihoo12/jihoo12.github.io)), and grew into a
+character of her own; this repository was split out of that one, history and all.
+
 ## Pages
 
-- **Home** — welcoming introduction, original hero artwork, and journal preview.
-- **About** — a short personal introduction.
-- **Journal** — a simple post index with a friendly empty state.
-- **Projects** and **Comics**.
-- **Experimental** (`/experimental/`) — a 3D Nixchan.
+All under `/nixchan/`:
+
+- **Nixchan** (`/nixchan/`, `/nixchan/ko/`) — who she is.
 - **Island** (`/island/`) — Nixchan's island, a small three.js game (see below).
+- **Her house** (`/home/`) — through the front door on the island.
 - **Monochrome** (`/monochrome/`) — the grey place through the rift at the island's standing stones (see below).
+- **3D path** (`/experimental/`) — a walk past jihoo's projects, notes and comics, to the sky gate and the island. The projects, notes and comics come from jihoo's site as the page opens (`/home-scene.json`, the same origin).
+- **Snow magic** (`/skills/`) — a stage for her spells.
 - **Gallery** (`/gallery/`) — a plaza where Nixchan walks into portals to her games.
 - **Games** (`/play/<id>/`) — games made with Nixkit (`src/lib/nixkit/`), one folder each in `src/games/`. Anyone can add one: see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Previous blog posts have been removed as part of this redesign. New Markdown posts can be added under `src/content/blog/`, using the existing Astro content collection.
+Links to pages of this site go through `src/lib/base.ts` (`to('/island/')` is `/nixchan/island/`).
+Saves are in `localStorage`, which this site shares with jihoo's (the same origin).
 
 ## Development
 
@@ -27,7 +36,8 @@ Tools come from the Nix flake (`nix develop`), which provides Node.js:
 ```sh
 nix develop
 npm ci
-astro dev --background   # stop with `astro dev stop`
+astro dev --background   # then open http://localhost:4321/nixchan/ ; stop with `astro dev stop`
+npm run check:games
 npm run build
 ```
 
@@ -53,7 +63,7 @@ The page is `src/pages/island/index.astro` (HTML/CSS for the menus and prompts),
 | `owl.ts` | Somebody who lives somewhere hard to find (spoilers inside) |
 | `forge.ts` | The smithy: ore veins, smelting (iron, and ashen ore from the grey place), and the upgrades made at the anvil |
 | `machines.ts` | Sprinklers and Sprocket the clockwork helper, looking after the garden |
-| `rift.ts` | The grey rift at the standing stones, through to `/monochrome/` |
+| `rift.ts` | The grey rift at the standing stones, through to `/nixchan/monochrome/` |
 | `lantern.ts` | The Grey Lantern at her shoulder, made at the forge |
 | `power.ts` | Windmills, the drills they power on the ore veins, and belts that carry ore (and power) to the hopper by the forge: power is only ever on or off, what's on a belt is worked out from when it set off, and a belt with power carries her too |
 | `save.ts` | Every localStorage key the island uses |
@@ -79,19 +89,18 @@ The page is `src/pages/monochrome/index.astro`, and the code is in `src/lib/mono
 
 ## Deployment
 
-GitHub Actions builds and publishes the site at [jihoo12.github.io](https://jihoo12.github.io/). The canonical site URL is set in `astro.config.mjs`.
+GitHub Actions builds and publishes the site at [jihoo12.github.io/nixchan](https://jihoo12.github.io/nixchan/). The base path is set in `astro.config.mjs`.
 
 ## Artwork
 
-All the artwork is Nixchan, drawn and modelled by jihoo for this site:
+All the artwork is Nixchan and her world, drawn and modelled by jihoo:
 
-- **Illustrations** — `src/assets/nixchan/*.png`, used across the site and optimized at build time by `astro:assets`.
-- **Live Nixchan** — `src/assets/nixchan/live/`, the parts (body, eyes, legs) of the Nixchan who perches on cards on the home and 404 pages.
-- **3D Nixchan** — `src/assets/nixchan/nixchan-3d.glb`, built by `tools/nixchan-3d/build.py`, for `/experimental/` and the island.
-- **Island models** — `src/assets/island/` (fish, garden, market stand and the garden's machines, Pebble the otter, the ruins on Cloudrest, the forge, the windmill, the drill and the hopper), built by the scripts in `tools/island-*/`.
-- **Monochrome models** — `src/assets/monochrome/` (walls, posts, columns, the obelisk and the rest of the grey place), built by `tools/monochrome/build.py`.
+- **Illustrations** — `src/assets/nixchan/*.png`, optimized at build time by `astro:assets`. (The rest of her illustrations are on jihoo's site.)
+- **Live Nixchan** — `src/assets/nixchan/live/`, the parts (body, eyes, legs) of the Nixchan who perches on cards.
+- **3D Nixchan** — `src/assets/nixchan/nixchan-3d.glb`, built by `tools/nixchan-3d/build.py`.
+- **Island, house, path and grey place models** — `src/assets/island/`, `src/assets/home/`, `src/assets/experimental/`, `src/assets/monochrome/`, built by the Blender scripts in `tools/`.
 
 ## License
 
 - **Code** (including the Blender scripts in `tools/`) — [Apache License 2.0](LICENSE).
-- **Artwork** (`src/assets/nixchan/`, `src/assets/island/`, `src/assets/monochrome/`) — [CC BY 4.0](LICENSE-ARTWORK). Use and adapt it freely, with credit: "Nixchan by jihoo, CC BY 4.0".
+- **Artwork** (`src/assets/nixchan/`, `src/assets/island/`, `src/assets/home/`, `src/assets/experimental/`, `src/assets/monochrome/`) — [CC BY 4.0](LICENSE-ARTWORK). Use and adapt it freely, with credit: "Nixchan by jihoo, CC BY 4.0".

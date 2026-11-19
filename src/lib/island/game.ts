@@ -58,6 +58,7 @@ import { createTalk } from './talk';
 import { ISLET, PIER_DIR, deckAt, terrainMesh } from './terrain';
 import { createTheme, isNight } from './theme';
 import { createWater } from './water';
+import { to as inSite } from '../base';
 
 export async function startIsland() {
 	const canvas = document.querySelector<HTMLCanvasElement>('[data-stage]');
@@ -496,7 +497,7 @@ export async function startIsland() {
 		renderer,
 		scene,
 		camera,
-		to: '/experimental/?from=island',
+		to: inSite('/experimental/?from=island'),
 		say: (text) => talk.bubble(text, overHer.set(pos.x, pos.y + 2.3, pos.z), 3),
 		knock: () => (controls.state.waveQueued = true),
 	});

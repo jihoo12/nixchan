@@ -1,4 +1,5 @@
 ---
+import { to } from '../../lib/base';
 // Nixchan's snow magic: a little night arena for trying out spell effects on a training dummy.
 // Kept apart from /island on purpose — the island is cozy, this is the flashy one.
 import BaseHead from '../../components/BaseHead.astro';
@@ -24,11 +25,11 @@ const skills = [
 		<div class="flash" data-flash aria-hidden="true"></div>
 
 		<header class="bar">
-			<a class="brand" href="/">jihoo<span class="period">.</span></a>
+			<a class="brand" href={to('/')}>nixchan<span class="period">.</span></a>
 			<span class="badge">skills · experimental</span>
 			<span class="spacer"></span>
-			<a class="pill" href="/island/">Island</a>
-			<a class="pill" href="/experimental/">3D home</a>
+			<a class="pill" href={to('/island/')}>Island</a>
+			<a class="pill" href={to('/experimental/')}>3D path</a>
 		</header>
 
 		<p class="loading" data-loading role="status">Nixchan's getting ready…</p>

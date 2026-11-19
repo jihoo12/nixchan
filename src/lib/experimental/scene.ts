@@ -7,6 +7,7 @@ import { buildNixFigure, type NixClip, type NixJump } from './nix-figure';
 import { buildPortal, PORTAL_FEET, PORTAL_HALF_WIDTH, PORTAL_RADIUS } from './portal';
 import { loadText, saveText } from '../island/save';
 import { playPrologue, resetPrologue } from './prologue';
+import { to as inSite } from '../base';
 
 interface SceneData {
 	projects: { title: string; tagline: string; language: string; commits: number; href: string }[];
@@ -565,7 +566,7 @@ export async function start() {
 		const S = 3.6;
 		const GAP = 0.9;
 		const nailY = 4.3;
-		const comics = data.comics;
+		const comics = data.comics.length ? data.comics : [{ title: 'Comics', href: '/comics/', image: data.art.thinking }];
 		const rowW = comics.length * S + (comics.length - 1) * GAP;
 		const tilts = [-0.035, 0.025, -0.015];
 		const hangs = [1.1, 0.7, 1.4];
@@ -619,7 +620,7 @@ export async function start() {
 		into.add(frame);
 		const shelfY = -1.2;
 		plank(7, 1.1, cx + 0.4, shelfY, 0.36);
-		pickables.push({ object: frame, label: 'Back to the 2D site', href: '/?view=2d' });
+		pickables.push({ object: frame, label: 'Back to the 2D site', href: '/' });
 		stops.push({ center: new THREE.Vector3(cx, -0.6, WALL_Z + 1), width: 8, height: 8.5, perch: new THREE.Vector3(cx + 2.2, shelfY, WALL_Z + 1.15), swing: 2 });
 	}
 
@@ -1378,7 +1379,7 @@ export async function start() {
 	);
 
 	// ---------- through the gate ----------
-	const ISLAND = '/island/';
+	const ISLAND = inSite('/island/');
 	const warp = document.querySelector<HTMLElement>('[data-warp]');
 	/** Counts up from 0 to 1 while she goes through the gate, and the page fades into the sky; -1 before. */
 	let leaving = -1;

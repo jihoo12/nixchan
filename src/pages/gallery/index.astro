@@ -1,4 +1,5 @@
 ---
+import { to } from '../../lib/base';
 // Nixchan's gallery: a plaza in the sky where she walks among portals to the games made for her
 // (src/lib/gallery/gallery.ts, made with Nixkit in src/lib/nixkit).
 import BaseHead from '../../components/BaseHead.astro';
@@ -17,7 +18,7 @@ const description = 'Walk Nixchan round a plaza in the sky, and step through a p
 		<canvas class="stage" data-stage data-model={nixModel} aria-label="Nixchan in her gallery of portals"></canvas>
 
 		<header class="bar">
-			<a class="brand" href="/">jihoo<span class="period">.</span></a>
+			<a class="brand" href={to('/')}>nixchan<span class="period">.</span></a>
 			<span class="badge">gallery · experimental</span>
 			<span class="spacer"></span>
 			<button class="pill clock" type="button" data-clock aria-label="Switch between day and night"><span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span></button>

@@ -1,4 +1,5 @@
 ---
+import { to } from '../../lib/base';
 // Inside Nixchan's house, reached through the front door of her house on /island (and back out of
 // it). The room and everything in it is drawn by src/lib/home/room.ts.
 import BaseHead from '../../components/BaseHead.astro';
@@ -18,7 +19,7 @@ const description = "Inside Nixchan's house on her island: her room, her bed, an
 		<canvas class="stage" data-room data-model={nixModel} data-room-model={roomModel} aria-label="Inside Nixchan's house"></canvas>
 
 		<header class="bar">
-			<a class="brand" href="/">jihoo<span class="period">.</span></a>
+			<a class="brand" href={to('/')}>nixchan<span class="period">.</span></a>
 			<span class="badge">home · experimental</span>
 			<span class="spacer"></span>
 			<button class="pill clock" type="button" data-clock aria-label="Switch between day and night"><span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span></button>

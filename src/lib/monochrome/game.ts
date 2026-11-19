@@ -18,6 +18,7 @@ import { loadJSON, loadText, saveJSON, saveText } from '../island/save';
 import { clamp, damp, noise } from '../nixkit/util';
 import { loadBlocks, type CellModel, type Solid, type Spot } from './blocks';
 import { CELL, DIRS, HALF, REGION_NAMES, SHARDS, START, cellById, place, turn, type Cell, type Placed, type ShardId, type Side } from './world';
+import { to as inSite } from '../base';
 
 const WALK = 3;
 const RUN = 7.5;
@@ -29,7 +30,7 @@ const BODY_R = 0.45;
 const SPAWN = { x: 0, z: 1.6 };
 /** The camera starts out in front of the rift, looking back at her and it. */
 const SPAWN_YAW = 0.45;
-const HOME = '/island/?from=rift';
+const HOME = inSite('/island/?from=rift');
 /** Where the camera looks for room, backed against a wall: how much higher, how far round. */
 const CAMERA_LIFTS = [0, 0.3, 0.6, 0.95];
 const CAMERA_SWINGS = [0, 0.5, -0.5, 1, -1, 1.6, -1.6, 2.3, -2.3];

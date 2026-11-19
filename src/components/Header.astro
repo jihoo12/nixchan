@@ -2,6 +2,7 @@
 import { Image } from 'astro:assets';
 import face from '../assets/nixchan/nixchan-avatar.png';
 import { type Lang, localize, nav, unlocalize, urlLang } from '../i18n';
+import { JIHOO, to } from '../lib/base';
 
 interface Props {
 	/** Where the language sign leads. Defaults to this page in the other language. */
@@ -12,26 +13,24 @@ const other: Lang = lang === 'ko' ? 'en' : 'ko';
 const t = nav[lang];
 const current = unlocalize(Astro.url.pathname);
 const alternate = Astro.props.alternate ?? localize(current, other);
+// Only Nixchan's page comes in Korean; the 3D pages are one page each, in the remembered language.
 const links = [
-	{ label: t.home, href: '/', active: current === '/', drop: 26 },
-	{ label: t.projects, href: '/projects/', active: current.startsWith('/projects'), drop: 44 },
-	{ label: t.journal, href: '/blog/', active: current.startsWith('/blog') || current.startsWith('/papers'), drop: 18 },
-	{ label: t.comics, href: '/comics/', active: current.startsWith('/comics'), drop: 30 },
-	{ label: t.about, href: '/about/', active: current.startsWith('/about'), drop: 36 },
-].map((link) => ({ ...link, href: localize(link.href, lang) }));
-// The gallery is one page in 3D, the same in either language.
-links.push({ label: t.gallery, href: '/gallery/', active: current.startsWith('/gallery'), drop: 24 });
+	{ label: t.home, href: localize('/', lang), active: current === '/', drop: 26 },
+	{ label: t.island, href: to('/island/'), active: current.startsWith('/island'), drop: 44 },
+	{ label: t.path, href: to('/experimental/'), active: current.startsWith('/experimental'), drop: 18 },
+	{ label: t.gallery, href: to('/gallery/'), active: current.startsWith('/gallery'), drop: 30 },
+	{ label: t.snow, href: to('/skills/'), active: current.startsWith('/skills'), drop: 36 },
+];
 ---
 <header class="signs wrap">
-	<a class="sign brand" style="--drop:30px" href={localize('/', lang)} aria-label={t.homeLabel}><Image class="brand-mark" src={face} alt="" width={64} height={64} loading="eager" /><span class="brand-word">jihoo<span class="period">.</span></span></a>
+	<a class="sign brand" style="--drop:30px" href={localize('/', lang)} aria-label={t.homeLabel}><Image class="brand-mark" src={face} alt="" width={64} height={64} loading="eager" /><span class="brand-word">nixchan<span class="period">.</span></span></a>
 	<nav aria-label={t.main}>
 		{links.map((link) => (
 			<a class:list={['sign', { active: link.active, 'home-link': link.href === localize('/', lang) }]} style={`--drop:${link.drop}px`} href={link.href} aria-current={link.active ? 'page' : undefined}>{link.label}</a>
 		))}
 	</nav>
 	<div class="right">
-		<a class="sign three-d" style="--drop:34px" href="/?view=3d" aria-label={t.threeDLabel}>{t.threeD}</a>
-		<a class="sign github" style="--drop:22px" href="https://github.com/jihoo12" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+		<a class="sign github" style="--drop:22px" href={lang === 'ko' ? `${JIHOO}ko/` : JIHOO}>{t.jihoo}</a>
 		<a class="sign lang" style="--drop:30px" href={alternate} hreflang={other} lang={other} aria-label={t.switchLabel} data-lang={other}>{t.switchTo}</a>
 		<button class="sign clock" style="--drop:40px" type="button" data-clock aria-label={t.clock}><span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span></button>
 	</div>

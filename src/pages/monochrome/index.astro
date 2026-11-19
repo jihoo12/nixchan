@@ -1,4 +1,5 @@
 ---
+import { to } from '../../lib/base';
 // The grey place through the rift at the island's standing stones: a world with no colour left in
 // it, whose cells don't join up the way a map would, for Nixchan to find her way round.
 import BaseHead from '../../components/BaseHead.astro';
@@ -19,13 +20,13 @@ const description = "Through the rift at the standing stones: a grey place that 
 		<div class="fade show" data-fade aria-hidden="true"></div>
 
 		<header class="bar">
-			<a class="brand" href="/">jihoo<span class="period">.</span></a>
+			<a class="brand" href={to('/')}>nixchan<span class="period">.</span></a>
 			<span class="badge">monochrome · experimental</span>
 			<span class="spacer"></span>
 			<span class="carried" data-carried hidden aria-live="polite"></span>
 			<span class="shards" data-shards aria-label="Colour shards found"></span>
 			<button class="pill help-button" type="button" data-help-open aria-label="Help (H)">?</button>
-			<a class="pill" href="/island/">Island</a>
+			<a class="pill" href={to('/island/')}>Island</a>
 			<button class="pill clock" type="button" data-clock aria-label="Switch between day and night"><span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span></button>
 		</header>
 

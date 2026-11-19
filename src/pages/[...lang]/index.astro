@@ -17,7 +17,8 @@ import ramenArt from '../../assets/nixchan/nixchan-ramen-break-01.png';
 import coffeeArt from '../../assets/nixchan/nixchan-night-coffee-01.png';
 import starsArt from '../../assets/nixchan/nixchan-stargazing-01.png';
 import napArt from '../../assets/nixchan/nixchan-penguin-nap-01.png';
-import { langPaths, localize, ogLocale, pairAlternates, routeLang } from '../../i18n';
+import { langPaths, ogLocale, pairAlternates, routeLang } from '../../i18n';
+import { JIHOO, to } from '../../lib/base';
 
 export const getStaticPaths = langPaths;
 const lang = routeLang(Astro.params.lang);
@@ -27,7 +28,7 @@ const REAL_NAME = '???';
 
 const t = ko
 	? {
-			title: '닉스쨩 — Jihoo',
+			title: '닉스쨩',
 			description: '눈(nix)의 아이, 닉스쨩을 소개해요.',
 			eyebrow: '닉스쨩을 소개해요',
 			name: '닉스쨩',
@@ -60,8 +61,8 @@ const t = ko
 			nixEyebrow: '닉스쨩의 눈 마법',
 			nix: '손끝에서 눈이 내려요',
 			reasons: [
-				['❄', '눈 마법', '달빛 무대에서 눈 마법을 연습해요. 상대는 늘 묵묵히 맞아 주는 허수아비예요.', '/skills/'],
-				['👣', '눈송이 발자국', '앞뒤가 맞지 않는 회색 세계에서는 바닥에 눈송이를 남겨서 지나온 길을 기억해요.', '/monochrome/'],
+				['❄', '눈 마법', '달빛 무대에서 눈 마법을 연습해요. 상대는 늘 묵묵히 맞아 주는 허수아비예요.', to('/skills/')],
+				['👣', '눈송이 발자국', '앞뒤가 맞지 않는 회색 세계에서는 바닥에 눈송이를 남겨서 지나온 길을 기억해요.', to('/monochrome/')],
 				['☃', '눈 오는 날', '눈이 오면 담요를 덮고 창가에 앉아요. 펭귄이랑 따뜻한 코코아도 함께요.', ''],
 			],
 			fileNote: '닉스쨩을 코드로 적어 보면',
@@ -99,7 +100,7 @@ const t = ko
 			license: '라이선스 보기 ↗',
 		}
 	: {
-			title: 'Nixchan — Jihoo',
+			title: 'Nixchan',
 			description: 'Meet Nixchan, a child of snow (nix).',
 			eyebrow: 'MEET NIXCHAN',
 			name: 'Nixchan',
@@ -132,8 +133,8 @@ const t = ko
 			nixEyebrow: "NIXCHAN'S SNOW MAGIC",
 			nix: 'Snow from her fingertips',
 			reasons: [
-				['❄', 'Snow magic', 'She practises her spells on a moonlit stage, on a training dummy that never complains.', '/skills/'],
-				['👣', 'A trail of snowflakes', "In the grey place, where nothing adds up, she leaves snowflakes on the floor to remember where she's been.", '/monochrome/'],
+				['❄', 'Snow magic', 'She practises her spells on a moonlit stage, on a training dummy that never complains.', to('/skills/')],
+				['👣', 'A trail of snowflakes', "In the grey place, where nothing adds up, she leaves snowflakes on the floor to remember where she's been.", to('/monochrome/')],
 				['☃', 'Snow days', 'When it snows, she sits by the window under a blanket, with her penguin and a hot cocoa.', ''],
 			],
 			fileNote: 'Nixchan, written as code',
@@ -182,7 +183,7 @@ const nixFile = [
 	['};', ''],
 ];
 ---
-<!doctype html><html lang={lang}><head><BaseHead title={t.title} description={t.description} locale={ogLocale(lang)} alternates={pairAlternates('/nixchan/')} /></head><body><Header/>
+<!doctype html><html lang={lang}><head><BaseHead title={t.title} description={t.description} locale={ogLocale(lang)} alternates={pairAlternates('/')} /></head><body><Header/>
 <main class="wrap nix-main">
 	<section class="hero">
 		<div>
@@ -191,8 +192,8 @@ const nixFile = [
 			<p class="real-name">{t.realName} <strong>{REAL_NAME}</strong> <span>· {t.secret}</span></p>
 			<p class="lead">{t.intro}</p>
 			<div class="actions">
-				<a class="button primary" href="/island/">{t.toIsland}</a>
-				<a class="button secondary" href="/experimental/">{t.to3d}</a>
+				<a class="button primary" href={to('/island/')}>{t.toIsland}</a>
+				<a class="button secondary" href={to('/experimental/')}>{t.to3d}</a>
 			</div>
 		</div>
 		<div class="art"><Image src={heroArt} alt={t.heroAlt} width={600} loading="eager" /><span class="tag">{t.heroTag}</span></div>
@@ -253,8 +254,8 @@ const nixFile = [
 			<h2 class="display">{t.three}</h2>
 			<p class="body">{t.threeText}</p>
 			<div class="actions">
-				<a class="button primary" href="/island/">{t.toIsland}</a>
-				<a class="button secondary" href="/gallery/">{t.toGallery}</a>
+				<a class="button primary" href={to('/island/')}>{t.toIsland}</a>
+				<a class="button secondary" href={to('/gallery/')}>{t.toGallery}</a>
 			</div>
 		</div>
 		<div class="art wide"><Image src={islandShot} alt={t.islandAlt} width={800} /></div>
@@ -274,8 +275,8 @@ const nixFile = [
 		<p class="body">{t.originText}</p>
 	</section>
 
-	<p class="credit">{t.credit} <strong>“Nixchan by jihoo, CC BY 4.0”</strong> · <a class="text-link" href="https://github.com/jihoo12/jihoo12.github.io/blob/main/LICENSE-ARTWORK" target="_blank" rel="noopener noreferrer">{t.license}</a></p>
-	<p class="back"><a class="text-link" href={localize('/about/', lang)}>← {ko ? '소개로 돌아가기' : 'Back to About'}</a></p>
+	<p class="credit">{t.credit} <strong>“Nixchan by jihoo, CC BY 4.0”</strong> · <a class="text-link" href="https://github.com/jihoo12/nixchan/blob/main/LICENSE-ARTWORK" target="_blank" rel="noopener noreferrer">{t.license}</a></p>
+	<p class="back"><a class="text-link" href={ko ? `${JIHOO}ko/about/` : `${JIHOO}about/`}>← {ko ? 'jihoo 소개 보기' : 'About jihoo'}</a></p>
 </main>
 <Footer/></body></html>
 <style>

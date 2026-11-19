@@ -20,6 +20,7 @@ import type { Toon } from './look';
 import { loadText, saveText } from './save';
 import { slopeUp, terrainAt } from './terrain';
 import { TAU, damp, rng } from '../nixkit/util';
+import { to as inSite } from '../base';
 
 // The sizes in tools/island-house/build.py.
 const FLOOR_TOP = 0.3;
@@ -283,7 +284,7 @@ export function createHouse(ctx: HouseContext) {
 		fade.style.cssText = 'position:fixed;inset:0;z-index:60;background:#2a1f2e;opacity:0;transition:opacity .5s;pointer-events:none';
 		document.body.append(fade);
 		requestAnimationFrame(() => (fade.style.opacity = '1'));
-		setTimeout(() => location.assign('/home/'), matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 550);
+		setTimeout(() => location.assign(inSite('/home/')), matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 550);
 	};
 	// Back here with the browser's back button, the page comes back faded out: clear it.
 	addEventListener('pageshow', (e) => {
