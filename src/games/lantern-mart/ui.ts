@@ -29,8 +29,8 @@ const copy = {
 
 export function lanternEmotes(ko: boolean) {
 	return ko
-		? { label: '표정', hint: '카메라를 돌리면 닉스쨩의 표정이 보여요.', labels: { happy: '기쁨', surprised: '놀람', sad: '슬픔', determined: '결의' } }
-		: { label: 'Expressions', labels: { happy: 'Happy', surprised: 'Surprised', sad: 'Sad', determined: 'Determined' } };
+		? { gestures: true, label: '리액션', hint: '멈춰 서서 고르면 표정과 몸짓이 함께 나와요.', labels: { happy: '폴짝!', surprised: '깜짝!', sad: '시무룩', determined: '불끈!' } }
+		: { gestures: true, label: 'Reactions', hint: 'Stand still to play both the face and the gesture.', labels: { happy: 'Little hop', surprised: 'Startled', sad: 'Droop', determined: 'Fist pump' } };
 }
 
 const css = `

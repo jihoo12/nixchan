@@ -8,6 +8,8 @@ import * as THREE from 'three';
 import { buildNixFigure, type FigureLook, type NixClip } from '../experimental/nix-figure';
 import type { Controls, Orbit } from './controls';
 import type { Toon } from './look';
+import type { Emotion } from './emotions';
+import { createGestureLayer } from './gestures';
 import { clamp, damp } from './util';
 import { within, type World } from './world';
 
@@ -34,6 +36,8 @@ const BODY_MID = 0.8;
 const HEAD = 1.7;
 
 export interface PlayerContext {
+	/** Body cues may be disabled while paused, in first person, or for reduced motion. */
+	canGesture?: () => boolean;
 	/** Where she is, and what's round her. */
 	world: World;
 	scene: THREE.Scene;
@@ -78,6 +82,7 @@ export function createPlayer(ctx: PlayerContext) {
 	const root = new THREE.Group();
 	const figure = buildNixFigure(ctx.modelUrl, ctx.look);
 	root.add(figure.group);
+	const gestures = createGestureLayer(figure);
 	ctx.scene.add(root);
 
 	// Her glider: a striped wing on two struts, which she opens in mid-air. Its stripes can be
@@ -134,6 +139,7 @@ export function createPlayer(ctx: PlayerContext) {
 	let heading = ctx.heading;
 	let turn = heading;
 	let waving = 0;
+	let bodyAvailable = false;
 	let nextBlink = 2;
 	let dashing = 0;
 	let dashRest = 0;
@@ -159,6 +165,7 @@ export function createPlayer(ctx: PlayerContext) {
 
 	/** Back to the beach (or wherever she's to go back to), should she ever fall out of the world. */
 	const respawn = () => {
+		gestures.clear();
 		const at = ctx.respawnAt?.() ?? { pos: ctx.start };
 		pos.copy(at.pos);
 		if (at.heading !== undefined) heading = turn = at.heading;
@@ -419,8 +426,13 @@ export function createPlayer(ctx: PlayerContext) {
 		waving = Math.max(0, waving - dt);
 		let clip: NixClip = swimming ? (planar > 0.3 ? 'Swim' : 'Tread') : planar > 3 ? 'Run' : planar > 0.25 ? 'Walk' : 'Idle';
 		if (waving > 0) clip = 'Wave';
-		if (!swimming && ctx.carrying?.()) clip = planar > 0.25 ? 'CarryWalk' : 'Carry';
-		clip = ctx.clip() ?? clip;
+		const carrying = ctx.carrying?.() ?? false;
+		if (!swimming && carrying) clip = planar > 0.25 ? 'CarryWalk' : 'Carry';
+		const requestedClip = ctx.clip();
+		clip = requestedClip ?? clip;
+		const gestureAllowed = held === null && !moving && grounded && !swimming && !gliding && dashing === 0
+			&& planar <= 0.2 && waving === 0 && !carrying && requestedClip === null && (ctx.canGesture?.() ?? true);
+		bodyAvailable = gestureAllowed;
 		// The clips are cut for about 1.5 (walk), 4.2 (run) and 2.4 (swim) a second.
 		const pace =
 			clip === 'Run' ? clamp(planar / 4.2, 0.8, 2.4) : clip === 'Walk' || clip === 'CarryWalk' ? clamp(planar / 1.5, 0.6, 2.6) : clip === 'Swim' ? clamp(planar / 2.4, 0.7, 1.6) : 1;
@@ -438,13 +450,24 @@ export function createPlayer(ctx: PlayerContext) {
 		// Under the glider she hangs in the middle of a jump, legs tucked.
 		const t = gliding ? 0.5 : jumped ? clamp(airTime / FLIGHT, 0, 0.97) : clamp(0.5 + airTime, 0.5, 0.97);
 		const flight = airborne ? { t, clip: 'JumpStand' as const } : null;
-		return { flight, airborne };
+		return { flight, airborne, gestureAllowed };
 	};
 
 	const zero = new THREE.Vector2();
 	return {
 		figure,
 		root,
+		/** Starts a one-shot visual body cue, or returns 0 if another activity owns her body. */
+		playGesture(name: Emotion) {
+			const input = controls.state;
+			const move = controls.move();
+			if (!bodyAvailable || !grounded || swimming || gliding || dashing > 0 || waving > 0 || Math.hypot(vel.x, vel.z) > 0.2
+				|| move.forward !== 0 || move.right !== 0 || input.jumpQueued || input.waveQueued || input.dashQueued
+				|| ctx.carrying?.() || ctx.clip() !== null || !(ctx.canGesture?.() ?? true)) return 0;
+			return gestures.play(name);
+		},
+		clearGesture: () => gestures.clear(),
+		get gesturing() { return gestures.active; },
 		/** Where her feet are. The same vector throughout, so others can hold on to it. */
 		pos,
 		vel,
@@ -453,6 +476,7 @@ export function createPlayer(ctx: PlayerContext) {
 		},
 		/** Throws her up into the air at `speed` (as a bounce pad does). */
 		launch(speed: number) {
+			gestures.clear();
 			vy = speed;
 			grounded = false;
 			swimming = false;
@@ -493,9 +517,11 @@ export function createPlayer(ctx: PlayerContext) {
 			return gliderOpen;
 		},
 		update(dt: number, time: number) {
-			const { flight, airborne } = step(dt);
+			gestures.restore();
+			const { flight, airborne, gestureAllowed } = step(dt);
 			// Dropping into the water isn't a landing, so no bending of the knees.
 			figure.tick(dt, time, { airborne, look: zero, still: false, jump: flight, landed: !swimming });
+			gestures.tick(dt, gestureAllowed);
 			nextBlink -= dt;
 			if (nextBlink < 0) {
 				const closed = nextBlink > -0.13;
