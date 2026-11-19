@@ -1,8 +1,11 @@
 // The sky gate at the end of the path: a stone arch, built in Blender by tools/experimental-portal/build.py,
-// with a swirl of sky in its opening. Walking Nixchan through it takes you to /island.
+// with a swirl of sky in its opening (TSL, for WebGPU). Walking Nixchan through it takes you to /island.
 // Its origin is the middle of the opening on the ground; the opening faces +z (and -z: it works both ways).
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshBasicNodeMaterial, type Node } from 'three/webgpu';
+import { abs, cos, float, floor, fract, length, max, min, mix, positionLocal, pow, select, sin, smoothstep, step, uniform, vec2, vec3 } from 'three/tsl';
+import { fbm2, hash2 } from '../nixkit/noise-nodes';
 
 // The arch's size, as tools/experimental-portal/build.py builds it.
 const PLINTH_TOP = 0.06;
@@ -23,73 +26,46 @@ export const PORTAL_FEET: [number, number, number, number][] = [-1, 1].map((side
 	return side < 0 ? [-b, -a, -half, half] : [a, b, -half, half];
 });
 
-const VERTEX = /* glsl */ `
-	varying vec2 vP;
-	#include <common>
-	#include <fog_pars_vertex>
-	void main() {
-		vP = position.xy;
-		vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-		gl_Position = projectionMatrix * mvPosition;
-		#include <fog_vertex>
-	}
-`;
-
-const FRAGMENT = /* glsl */ `
-	uniform float uTime;
-	uniform float uNight;
-	uniform float uSurge;
-	uniform vec3 uDeep;
-	uniform vec3 uSky;
-	uniform vec3 uBlush;
-	uniform vec3 uRim;
-	varying vec2 vP;
-	#include <common>
-	#include <fog_pars_fragment>
-
-	float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-	float noise(vec2 p) {
-		vec2 i = floor(p), f = fract(p);
-		vec2 u = f * f * (3.0 - 2.0 * f);
-		return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);
-	}
-	float fbm(vec2 p) {
-		float v = 0.0, a = 0.5;
-		for (int i = 0; i < 4; i++) { v += a * noise(p); p = p * 2.03 + 7.1; a *= 0.5; }
-		return v;
-	}
-
-	void main() {
-		vec2 p = vP - vec2(0.0, ${CENTRE_Y.toFixed(3)});
-		float r = length(p) / ${R_IN.toFixed(3)};
-		// How far in from the edge of the opening: the arc above, the feet at the sides, the plinth below.
-		float edge = min(${PORTAL_HALF_WIDTH.toFixed(3)} - abs(vP.x), vP.y - ${PLINTH_TOP.toFixed(3)});
-		if (p.y > ${(R_IN * Math.sin(FOOT)).toFixed(3)}) edge = min(edge, ${R_IN.toFixed(3)} - length(p));
-
-		// Clouds wound round into a whirl that turns slowly, tighter towards the middle.
-		float spin = uTime * (0.35 + uSurge * 1.5) + 2.2 / (r + 0.45);
-		float c = cos(spin), s = sin(spin);
-		vec2 q = mat2(c, -s, s, c) * p;
-		float n = fbm(q * 1.3 + vec2(0.0, uTime * 0.08));
-		float wisps = smoothstep(0.5, 0.78, fbm(q * 2.4 - vec2(uTime * 0.05, 0.0)));
-
-		vec3 col = mix(uDeep, uSky, smoothstep(0.15, 0.85, n + (1.0 - r) * 0.35));
-		col = mix(col, uBlush, smoothstep(0.55, 0.9, n) * 0.6);
-		col = mix(col, vec3(1.0), wisps * (0.55 - uNight * 0.3));
-		// A bright eye in the middle, and a glowing rim.
-		col += vec3(1.0, 0.97, 0.9) * pow(max(0.0, 1.0 - r), 3.0) * (0.55 + uSurge * 1.5);
-		col = mix(col, uRim, smoothstep(0.32, 0.0, edge) * 0.85);
-		// Stars twinkle in it by night.
-		vec2 cell = floor(q * 9.0);
-		float star = step(0.93, hash(cell)) * smoothstep(0.12, 0.0, length(fract(q * 9.0) - 0.5));
-		col += star * uNight * (0.6 + 0.4 * sin(uTime * 3.0 + hash(cell) * 30.0));
-		col = mix(col, vec3(1.0), uSurge * 0.5);
-
-		gl_FragColor = vec4(col, 1.0);
-		#include <colorspace_fragment>
-		#include <fog_fragment>
-	}
-`;
+/** The swirl of sky in the opening, in TSL: clouds wound into a slowly turning whirl, a bright eye in
+ * the middle, a glowing rim round the edge of the opening, and stars in it by night. */
+function veilMaterial() {
+	const u = {
+		time: uniform(0),
+		night: uniform(0),
+		surge: uniform(0),
+		deep: uniform(new THREE.Color()),
+		sky: uniform(new THREE.Color()),
+		blush: uniform(new THREE.Color()),
+		rim: uniform(new THREE.Color()),
+	};
+	const fbm = (p: Node<'vec2'>) => fbm2(p, 2.03, 7.1);
+	const material = new MeshBasicNodeMaterial({ side: THREE.DoubleSide, fog: true });
+	const vP = positionLocal.xy;
+	const p = vP.sub(vec2(0, CENTRE_Y));
+	const r = length(p).div(R_IN);
+	// How far in from the edge of the opening: the arc above, the feet at the sides, the plinth below.
+	const sides = min(abs(vP.x).negate().add(PORTAL_HALF_WIDTH), vP.y.sub(PLINTH_TOP));
+	const edge = select(p.y.greaterThan(R_IN * Math.sin(FOOT)), min(sides, length(p).negate().add(R_IN)), sides);
+	// Clouds wound round into a whirl that turns slowly, tighter towards the middle.
+	const spin = u.time.mul(u.surge.mul(1.5).add(0.35)).add(float(2.2).div(r.add(0.45)));
+	const c = cos(spin);
+	const s = sin(spin);
+	const q = vec2(c.mul(p.x).add(s.mul(p.y)), c.mul(p.y).sub(s.mul(p.x)));
+	const n = fbm(q.mul(1.3).add(vec2(0, u.time.mul(0.08))));
+	const wisps = smoothstep(0.5, 0.78, fbm(q.mul(2.4).sub(vec2(u.time.mul(0.05), 0))));
+	let col = mix(u.deep, u.sky, smoothstep(0.15, 0.85, n.add(r.oneMinus().mul(0.35))));
+	col = mix(col, u.blush, smoothstep(0.55, 0.9, n).mul(0.6));
+	col = mix(col, vec3(1), wisps.mul(u.night.mul(-0.3).add(0.55)));
+	// A bright eye in the middle, and a glowing rim.
+	col = col.add(vec3(1, 0.97, 0.9).mul(pow(max(0, r.oneMinus()), 3).mul(u.surge.mul(1.5).add(0.55))));
+	col = mix(col, u.rim, smoothstep(0, 0.32, edge).oneMinus().mul(0.85));
+	// Stars twinkle in it by night.
+	const cell = floor(q.mul(9));
+	const star = step(0.93, hash2(cell)).mul(smoothstep(0, 0.12, length(fract(q.mul(9)).sub(0.5))).oneMinus());
+	col = col.add(star.mul(u.night).mul(sin(u.time.mul(3).add(hash2(cell).mul(30))).mul(0.4).add(0.6)));
+	material.colorNode = mix(col, vec3(1), u.surge.mul(0.5));
+	return { material, u };
+}
 
 export interface Portal {
 	group: THREE.Group;
@@ -108,24 +84,7 @@ export function buildPortal(url: string, reduceMotion: boolean): Portal {
 	const pickable = new THREE.Group();
 	group.add(pickable);
 
-	const veilMat = new THREE.ShaderMaterial({
-		vertexShader: VERTEX,
-		fragmentShader: FRAGMENT,
-		side: THREE.DoubleSide,
-		fog: true,
-		uniforms: THREE.UniformsUtils.merge([
-			THREE.UniformsLib.fog,
-			{
-				uTime: { value: 0 },
-				uNight: { value: 0 },
-				uSurge: { value: 0 },
-				uDeep: { value: new THREE.Color() },
-				uSky: { value: new THREE.Color() },
-				uBlush: { value: new THREE.Color() },
-				uRim: { value: new THREE.Color() },
-			},
-		]),
-	});
+	const { material: veilMat, u } = veilMaterial();
 	const glowMat = new THREE.MeshBasicMaterial({ color: '#bfeeff' });
 
 	// A soft light spilling out of the opening, which shows by night.
@@ -184,19 +143,18 @@ export function buildPortal(url: string, reduceMotion: boolean): Portal {
 		ready,
 		surge: 0,
 		theme(night) {
-			const u = veilMat.uniforms;
-			u.uNight.value = night ? 1 : 0;
-			u.uDeep.value.set(night ? '#2a2f7a' : '#6fb6f2');
-			u.uSky.value.set(night ? '#6a63c9' : '#bfe6ff');
-			u.uBlush.value.set(night ? '#c48ae6' : '#ffc9e3');
-			u.uRim.value.set(night ? '#c9f2ff' : '#ffffff');
+			u.night.value = night ? 1 : 0;
+			u.deep.value.set(night ? '#2a2f7a' : '#6fb6f2');
+			u.sky.value.set(night ? '#6a63c9' : '#bfe6ff');
+			u.blush.value.set(night ? '#c48ae6' : '#ffc9e3');
+			u.rim.value.set(night ? '#c9f2ff' : '#ffffff');
 			glowMat.color.set(night ? '#c9f6ff' : '#e6fbff');
 			lit = night;
 		},
 		tick(time) {
 			const t = reduceMotion ? 0 : time;
-			veilMat.uniforms.uTime.value = t;
-			veilMat.uniforms.uSurge.value = this.surge;
+			u.time.value = t;
+			u.surge.value = this.surge;
 			light.intensity = (lit ? 14 : 0) + this.surge * 30;
 			for (const f of floats) {
 				f.mesh.position.set(f.base.x, f.base.y + Math.sin(t * 0.9 + f.phase) * 0.18, f.base.z);

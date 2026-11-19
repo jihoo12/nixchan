@@ -3,28 +3,12 @@
 // same by hand, so a change to one wants making to the other.
 import * as THREE from 'three';
 import { MeshBasicNodeMaterial, type Node } from 'three/webgpu';
-import { Discard, Fn, If, abs, dot, float, floor, fract, max, mix, pow, select, sin, smoothstep, sRGBTransferEOTF, uniform, uv, vec2, vec3 } from 'three/tsl';
+import { Discard, Fn, If, abs, fract, max, mix, pow, select, sin, smoothstep, sRGBTransferEOTF, uniform, uv, vec2, vec3 } from 'three/tsl';
+import { fbm2, noise2 } from '../nixkit/noise-nodes';
 import type { RiftMaterial } from './rift';
 
-type V2 = Node<'vec2'>;
-const hash = (p: V2) => fract(sin(dot(p, vec2(127.1, 311.7))).mul(43758.5453));
-const noise = (p: V2) => {
-	const i = floor(p);
-	const f = fract(p);
-	const u = f.mul(f).mul(f.mul(-2).add(3));
-	return mix(mix(hash(i), hash(i.add(vec2(1, 0))), u.x), mix(hash(i.add(vec2(0, 1))), hash(i.add(vec2(1, 1))), u.x), u.y);
-};
-const fbm = (start: V2) => {
-	let v = float(0) as Node<'float'>;
-	let p = start;
-	let a = 0.5;
-	for (let i = 0; i < 4; i++) {
-		v = v.add(noise(p).mul(a)) as Node<'float'>;
-		p = p.mul(2.07).add(3.1);
-		a *= 0.5;
-	}
-	return v;
-};
+const fbm = (p: Node<'vec2'>) => fbm2(p, 2.07, 3.1);
+const noise = noise2;
 
 export function riftNodeMaterial(): RiftMaterial {
 	const tints = [new THREE.Color('#ff7aa8'), new THREE.Color('#6fd0ff'), new THREE.Color('#ffd84d')];
