@@ -15,7 +15,9 @@ export default defineConfig({
 		optimizeDeps: {
 			include: [
 				'three',
-				...['geometries/RoundedBoxGeometry', 'loaders/GLTFLoader', 'objects/Reflector', 'postprocessing/EffectComposer', 'postprocessing/OutputPass', 'postprocessing/RenderPass', 'postprocessing/UnrealBloomPass', 'utils/BufferGeometryUtils'].map((m) => `three/examples/jsm/${m}.js`),
+				'three/webgpu',
+				'three/tsl',
+				...['geometries/RoundedBoxGeometry', 'loaders/GLTFLoader', 'postprocessing/EffectComposer', 'postprocessing/OutputPass', 'postprocessing/RenderPass', 'postprocessing/UnrealBloomPass', 'utils/BufferGeometryUtils'].map((m) => `three/examples/jsm/${m}.js`),
 			],
 		},
 	},

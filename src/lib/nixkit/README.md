@@ -194,6 +194,9 @@ so the page styles them as it likes.
   `clock.on(p => ...)` changes with it; `game.sky.clock` is the default sky's.
 - `lang`, `pick({ en, ko })`, `josa(word, '이', '가')` (`lang.ts`): the site's language, words for
   it, and Korean particles.
+- `createPictures(renderer, onDrawn)` (`thumbnail.ts`): little pictures of 3D things for the menus.
+  `pictures.get(key, build, from)` gives the picture once it's drawn (null until then, since WebGPU
+  reads pixels back in its own time), and `onDrawn` says when to draw the menus again.
 
 ## What's in the kit
 
@@ -215,4 +218,5 @@ so the page styles them as it likes.
 - `interact.ts`: "press E to …" offers
 - `talk.ts`, `inventory.ts`, `menu.ts`: conversations, the bag, and tabs over the game
 - `save.ts`, `daynight.ts`, `lang.ts`: saves, day and night, and the site's language
+- `thumbnail.ts`: pictures of 3D things for menus
 - `look.ts`, `util.ts`: toon materials, and small maths

@@ -4,6 +4,7 @@
 // something she hasn't done yet, and the market. The model and her clips (Idle, Wave, Talk, Happy)
 // are made in Blender (tools/island-otter).
 import * as THREE from 'three';
+import { nodeLook } from '../nixkit/figure-nodes';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Toon } from './look';
 import { loadText, saveText } from './save';
@@ -189,10 +190,7 @@ export function createNpc(ctx: NpcContext) {
 
 	// Toon materials in her own colours, each mesh with an ink line round it (bending with the rig,
 	// for the parts that bend).
-	const ink = new THREE.MeshBasicMaterial({ color: '#1d1b3a', side: THREE.BackSide });
-	ink.onBeforeCompile = (shader) => {
-		shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed += normal * 0.01;');
-	};
+	const ink = nodeLook.inkLine('#1d1b3a', 0.01);
 	new GLTFLoader().loadAsync(ctx.modelUrl).then(
 		(gltf) => {
 			const model = gltf.scene;

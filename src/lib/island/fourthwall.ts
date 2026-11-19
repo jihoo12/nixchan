@@ -7,10 +7,11 @@
 // The cracks and the shards are cut along the same lines: rays out from the knock, crossed by rings
 // at a few distances. A shard is the piece between two neighbouring rays and two neighbouring rings.
 import * as THREE from 'three';
+import type { WebGPURenderer } from 'three/webgpu';
 import { pick } from './lang';
 
 export interface WallContext {
-	renderer: THREE.WebGLRenderer;
+	renderer: WebGPURenderer;
 	scene: THREE.Scene;
 	camera: THREE.Camera;
 	/** Nixchan says something, in a bubble over her head. */

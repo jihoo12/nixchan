@@ -24,11 +24,12 @@ import { SHARDS } from '../monochrome/world';
 import { loadJSON, saveJSON } from './save';
 import { slopeUp, terrainAt } from './terrain';
 import type { Theme } from './theme';
-import { thumbnail } from './thumbnail';
+import { createPictures } from '../nixkit/thumbnail';
+import type { WebGPURenderer } from 'three/webgpu';
 import { TAU, closeOnBackdrop, damp, rng } from '../nixkit/util';
 
 export interface ForgeContext {
-	renderer: THREE.WebGLRenderer;
+	renderer: WebGPURenderer;
 	scene: THREE.Scene;
 	toon: Toon;
 	theme: Theme;
@@ -246,7 +247,10 @@ export function createForge(ctx: ForgeContext) {
 		return copy;
 	};
 	let hotIngot: THREE.Object3D | null = null;
-	const icons = new Map<string, string>();
+	const icons = createPictures(ctx.renderer, () => {
+		ctx.inventory.render();
+		render();
+	});
 
 	new GLTFLoader().loadAsync(ctx.modelUrl).then(
 		(gltf) => {
@@ -290,7 +294,7 @@ export function createForge(ctx: ForgeContext) {
 				[INGOT, 'Ingot'],
 			]) {
 				const o = make(name);
-				if (o) icons.set(id, thumbnail(ctx.renderer, o, new THREE.Vector3(0.6, 0.8, 1)));
+				if (o) icons.draw(id, o, new THREE.Vector3(0.6, 0.8, 1));
 			}
 			// The ashen ore and ingot are the iron ones, in grey.
 			for (const [id, name, a, b] of [
@@ -304,7 +308,7 @@ export function createForge(ctx: ForgeContext) {
 				o.traverse((m) => {
 					if (m instanceof THREE.Mesh) m.material = toon({ color: k++ % 2 ? b : a });
 				});
-				icons.set(id, thumbnail(ctx.renderer, o, new THREE.Vector3(0.6, 0.8, 1)));
+				icons.draw(id, o, new THREE.Vector3(0.6, 0.8, 1));
 			}
 			ctx.inventory.render();
 			render();

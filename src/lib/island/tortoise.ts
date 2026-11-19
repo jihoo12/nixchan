@@ -5,6 +5,7 @@
 // on /experimental. It's the island's only door out, so after the first time he'll let her straight
 // through. The model and his clips (Idle, Talk, Nod) are made in Blender (tools/island-tortoise).
 import * as THREE from 'three';
+import { nodeLook } from '../nixkit/figure-nodes';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Offer } from '../nixkit/interact';
 import type { Toon } from './look';
@@ -157,10 +158,7 @@ export function createTortoise(ctx: TortoiseContext) {
 	let clip: Clip = 'Idle';
 
 	// Toon materials in his own colours, each mesh with an ink line round it, as Pebble has.
-	const ink = new THREE.MeshBasicMaterial({ color: '#1d1b3a', side: THREE.BackSide });
-	ink.onBeforeCompile = (shader) => {
-		shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed += normal * 0.01;');
-	};
+	const ink = nodeLook.inkLine('#1d1b3a', 0.01);
 	new GLTFLoader().loadAsync(ctx.modelUrl).then(
 		(gltf) => {
 			const model = gltf.scene;

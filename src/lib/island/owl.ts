@@ -7,6 +7,7 @@
 //
 // She's built here, out of spheres and cones, rather than in Blender like Pebble: she only sits.
 import * as THREE from 'three';
+import { nodeLook } from '../nixkit/figure-nodes';
 import type { Feature } from './features';
 import type { Offer } from '../nixkit/interact';
 import type { Toon } from './look';
@@ -176,10 +177,7 @@ export function createOwl(ctx: OwlContext) {
 	root.position.set(spot.owl.x, LEDGE, spot.owl.z);
 	root.rotation.y = toward;
 	ctx.scene.add(root);
-	const ink = new THREE.MeshBasicMaterial({ color: '#1d1b3a', side: THREE.BackSide });
-	ink.onBeforeCompile = (shader) => {
-		shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed += normal * 0.018;');
-	};
+	const ink = nodeLook.inkLine('#1d1b3a', 0.018);
 	const part = (geo: THREE.BufferGeometry, mat: THREE.Material, at: [number, number, number], scale: [number, number, number] = [1, 1, 1], parent: THREE.Object3D = root, outline = true) => {
 		const m = new THREE.Mesh(geo, mat);
 		m.position.set(...at);

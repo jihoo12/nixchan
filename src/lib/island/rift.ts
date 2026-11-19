@@ -4,6 +4,7 @@
 // place. Coming back, she steps out of it here. Colour seeps into it as she brings the shards home.
 import * as THREE from 'three';
 import { createRift } from '../monochrome/rift';
+import { riftNodeMaterial } from '../monochrome/rift-nodes';
 import { SHARDS } from '../monochrome/world';
 import { groundAt } from './features';
 import type { Offer } from '../nixkit/interact';
@@ -35,7 +36,7 @@ export function riftArrival(stones: { x: number; z: number }) {
 export function createIslandRift(ctx: { scene: THREE.Scene; theme: Theme; stones: { x: number; z: number }; pos: THREE.Vector3; canAct: () => boolean }) {
 	const spot = riftSpot(ctx.stones);
 	const ground = groundAt(spot.x, spot.z);
-	const rift = createRift(2.2, 3.4);
+	const rift = createRift(2.2, 3.4, riftNodeMaterial());
 	rift.mesh.position.set(spot.x, ground + 1.75, spot.z);
 	rift.mesh.rotation.y = spot.facing;
 	ctx.scene.add(rift.mesh);

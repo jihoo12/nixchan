@@ -4,11 +4,13 @@
 // and everything she lands goes in her bag and her fish book. The fish are Blender models (tools/island-fish),
 // one body shape to a few kinds of fish, coloured here.
 import * as THREE from 'three';
+import { nodeLook } from '../nixkit/figure-nodes';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { NixClip, NixFigure } from '../experimental/nix-figure';
 import type { Toon } from './look';
 import { loadJSON, saveJSON } from './save';
-import { thumbnail } from './thumbnail';
+import { createPictures } from '../nixkit/thumbnail';
+import type { WebGPURenderer } from 'three/webgpu';
 import { clamp, damp } from '../nixkit/util';
 
 type Shape = 'Sardine' | 'Bream' | 'Puffer' | 'Moonfish';
@@ -55,7 +57,7 @@ export const SPECIES: Species[] = [
 ];
 
 export interface FishingContext {
-	renderer: THREE.WebGLRenderer;
+	renderer: WebGPURenderer;
 	scene: THREE.Scene;
 	camera: THREE.Camera;
 	figure: NixFigure;
@@ -137,18 +139,16 @@ export function createFishing(ctx: FishingContext) {
 	// ---------- the fish models ----------
 
 	const shapes = new Map<Shape, THREE.Object3D>();
-	const icons = new Map<string, string>();
-	/** A side-on picture of a fish, drawn once from its model, for the bag and the fish book. */
+	const icons = createPictures(ctx.renderer, () => {
+		renderBook();
+		ctx.onIcons();
+	});
+	/** A side-on picture of a fish, drawn once from its model, for the bag and the fish book (null
+	 * until it's drawn). */
 	function iconFor(id: string): string | null {
-		const cached = icons.get(id);
-		if (cached) return cached;
 		const s = SPECIES.find((q) => q.id === id);
-		const model = s && fishModel(s);
-		if (!model) return null;
 		// Looking at its left side, nose to the right, tipped a touch towards the camera.
-		const url = thumbnail(ctx.renderer, model, new THREE.Vector3(1, 0.2, 0));
-		icons.set(id, url);
-		return url;
+		return icons.get(id, () => (s && fishModel(s)) || null, new THREE.Vector3(1, 0.2, 0));
 	}
 	new GLTFLoader().loadAsync(ctx.modelUrl).then(
 		(gltf) => {
@@ -163,10 +163,7 @@ export function createFishing(ctx: FishingContext) {
 			// No models: she still catches them, she just can't show them off.
 		},
 	);
-	const ink = new THREE.MeshBasicMaterial({ color: '#1d1b3a', side: THREE.BackSide });
-	ink.onBeforeCompile = (shader) => {
-		shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed += normal * 0.018;');
-	};
+	const ink = nodeLook.inkLine('#1d1b3a', 0.018);
 	const fishModel = (s: Species) => {
 		const shape = shapes.get(s.shape);
 		if (!shape) return null;

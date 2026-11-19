@@ -69,9 +69,21 @@ const FRAGMENT = /* glsl */ `
 	}
 `;
 
+/** What a rift's material is told: GLSL's uniforms (riftMaterial, for the grey place's WebGL) or
+ * TSL's (riftNodeMaterial in rift-nodes.ts, for the island's WebGPU), the same names either way. */
+export interface RiftUniforms {
+	uTime: { value: number };
+	uOpen: { value: number };
+	uDark: { value: number };
+	uTint: { value: number };
+	uTints: { value: THREE.Color[] };
+}
+
+export type RiftMaterial = THREE.Material & { uniforms: RiftUniforms };
+
 export interface Rift {
 	mesh: THREE.Mesh;
-	material: THREE.ShaderMaterial;
+	material: RiftMaterial;
 	update(time: number): void;
 	/** How open it is, 0 (shut, invisible) … 1. */
 	open: number;
@@ -95,11 +107,11 @@ export function riftMaterial() {
 		},
 		side: THREE.DoubleSide,
 		fog: true,
-	});
+	}) as THREE.ShaderMaterial & { uniforms: RiftUniforms };
 }
 
 /** A rift `width` across and `height` tall, standing on y = 0, facing ±z. */
-export function createRift(width: number, height: number, material = riftMaterial()): Rift {
+export function createRift(width: number, height: number, material: RiftMaterial = riftMaterial()): Rift {
 	const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), material);
 	mesh.position.y = height / 2;
 	const u = material.uniforms;
@@ -118,8 +130,8 @@ export function createRift(width: number, height: number, material = riftMateria
 		},
 		tint(amount, colors) {
 			u.uTint.value = amount;
-			colors.slice(0, 3).forEach((c, i) => (u.uTints.value[i] as THREE.Color).set(c));
-			for (let i = colors.length; i < 3; i++) (u.uTints.value[i] as THREE.Color).set(colors[0] ?? '#ffffff');
+			colors.slice(0, 3).forEach((c, i) => u.uTints.value[i].set(c));
+			for (let i = colors.length; i < 3; i++) u.uTints.value[i].set(colors[0] ?? '#ffffff');
 		},
 		night(on) {
 			u.uDark.value = on ? 0.6 : 0;

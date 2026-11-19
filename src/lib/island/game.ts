@@ -26,6 +26,8 @@
 //                      belts that carry the ore (and the power) to a hopper by the forge
 //   save               every key the island keeps in localStorage
 import * as THREE from 'three';
+import { WebGPURenderer } from 'three/webgpu';
+import { nodeLook } from '../nixkit/figure-nodes';
 import { blockGround, createBlocks } from './blocks';
 import { createFocus, createFollowCamera } from '../nixkit/camera';
 import { createControls, createKeyRouter, type Orbit } from '../nixkit/controls';
@@ -77,13 +79,27 @@ export async function startIsland() {
 		dash: $<HTMLButtonElement>('[data-dash]'),
 	};
 
-	let renderer: THREE.WebGLRenderer;
-	try {
-		renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-	} catch {
+	// Drawn with three's WebGPURenderer, as Nixkit's games are: WebGPU where the browser has it, WebGL
+	// 2 where it doesn't (or with ?webgl on the URL, to see what that looks like). So the island's own
+	// shaders are TSL (sky.ts, water.ts, skyisle.ts, monochrome/rift-nodes.ts).
+	let renderer: WebGPURenderer;
+	const cannotDraw = () => {
 		document.documentElement.classList.add('no-3d');
+		if (ui.loading) ui.loading.textContent = 'The island needs WebGPU or WebGL 2, which this browser has turned off.';
+	};
+	try {
+		renderer = new WebGPURenderer({ canvas, antialias: true, forceWebGL: new URLSearchParams(location.search).has('webgl') });
+	} catch {
+		cannotDraw();
 		return;
 	}
+	const drawing = renderer.init().then(
+		() => true,
+		() => {
+			cannotDraw();
+			return false;
+		},
+	);
 	renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
 	renderer.shadowMap.enabled = true;
 	renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -174,6 +190,7 @@ export async function startIsland() {
 		scene,
 		toon,
 		modelUrl: canvas.dataset.model ?? '',
+		look: nodeLook,
 		start: layout.START,
 		heading,
 		controls,
@@ -608,7 +625,7 @@ export async function startIsland() {
 
 	theme.start();
 	// For trying things out in development: where she is, and Hollis's ledge.
-	if (import.meta.env.DEV) Object.assign(window, { island: { pos, player, owl, orbit, blocks, inventory, house } });
+	if (import.meta.env.DEV) Object.assign(window, { island: { pos, player, owl, orbit, blocks, inventory, house, layout, npc, skyIsle, rift, theme, renderer, scene, camera, groundAt } });
 
 	// Who the camera frames her with: whoever she's talking to, or what she's working at.
 	const focus = createFocus();
@@ -639,6 +656,8 @@ export async function startIsland() {
 	let greeted = false;
 	let held = { sprinkler: false, blocks: false, power: false };
 
+	if (!(await drawing)) return;
+	last = performance.now();
 	renderer.setAnimationLoop((now) => {
 		const dt = Math.min(0.05, (now - last) / 1000);
 		last = now;
