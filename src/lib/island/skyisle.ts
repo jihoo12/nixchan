@@ -15,6 +15,8 @@
 // falling onto) it, and `skyCeiling` the rock over the head of anyone below; features.ts folds both
 // into `groundAt` and `ceilingAt`. The ruins are Blender models (tools/island-sky).
 import * as THREE from 'three';
+import { MeshBasicNodeMaterial, type Node } from 'three/webgpu';
+import { color, floor, fract, sin, smoothstep as fade, uniform, uv } from 'three/tsl';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Feature } from './features';
@@ -271,45 +273,29 @@ const REGROW_MS = 12 * 60 * 1000;
  * v = 0 end towards v = 1 at `flow`, fading out over the first `fadeIn` and the last `fadeOut` of it,
  * over a faint sheet of `body` between the streaks. */
 function streakMaterial(
-	color: string,
+	colour: string,
 	opacity: number,
 	opts: { additive?: boolean; flow: number; stretch: number; across: number; twist: number; fadeIn: number; fadeOut: number; body: number },
 ) {
-	return new THREE.ShaderMaterial({
+	const mat = new MeshBasicNodeMaterial({
 		transparent: true,
 		depthWrite: false,
 		side: THREE.DoubleSide,
 		fog: true,
 		blending: opts.additive ? THREE.AdditiveBlending : THREE.NormalBlending,
-		uniforms: THREE.UniformsUtils.merge([
-			THREE.UniformsLib.fog,
-			{ uTime: { value: 0 }, uColor: { value: new THREE.Color(color) }, uOpacity: { value: opacity } },
-		]),
-		vertexShader: `
-			#include <fog_pars_vertex>
-			varying vec2 vUv;
-			void main() {
-				vUv = uv;
-				vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-				gl_Position = projectionMatrix * mvPosition;
-				#include <fog_vertex>
-			}`,
-		fragmentShader: `
-			#include <fog_pars_fragment>
-			uniform float uTime, uOpacity; uniform vec3 uColor; varying vec2 vUv;
-			float hash(float n) { return fract(sin(n) * 43758.5453); }
-			void main() {
-				float lane = floor(vUv.x * ${opts.across.toFixed(1)});
-				float along = vUv.y * ${opts.stretch.toFixed(1)} + vUv.x * ${opts.twist.toFixed(1)} - uTime * ${opts.flow.toFixed(2)} * (0.8 + 0.5 * hash(lane)) + hash(lane + 7.0) * 9.0;
-				// Each lane is rounded off at its sides, so the streaks are soft threads, not shards.
-				float soft = sin(3.14159 * fract(vUv.x * ${opts.across.toFixed(1)}));
-				float streak = smoothstep(0.6, 0.95, fract(along)) * (0.55 + 0.45 * hash(lane + 3.0)) * soft;
-				float edge = smoothstep(0.0, ${Math.max(opts.fadeIn, 1e-3).toFixed(3)}, vUv.y) * smoothstep(1.0, ${(1 - Math.max(opts.fadeOut, 1e-3)).toFixed(3)}, vUv.y);
-				gl_FragColor = vec4(uColor, uOpacity * edge * (${opts.body.toFixed(2)} + streak));
-				#include <colorspace_fragment>
-				#include <fog_fragment>
-			}`,
 	});
+	const time = uniform(0);
+	const hash = (n: Node<'float'>) => fract(sin(n).mul(43758.5453));
+	const p = uv();
+	const lane = floor(p.x.mul(opts.across));
+	const along = p.y.mul(opts.stretch).add(p.x.mul(opts.twist)).sub(time.mul(opts.flow).mul(hash(lane).mul(0.5).add(0.8))).add(hash(lane.add(7)).mul(9));
+	// Each lane is rounded off at its sides, so the streaks are soft threads, not shards.
+	const soft = sin(fract(p.x.mul(opts.across)).mul(Math.PI));
+	const streak = fade(0.6, 0.95, fract(along)).mul(hash(lane.add(3)).mul(0.45).add(0.55)).mul(soft);
+	const edge = fade(0, Math.max(opts.fadeIn, 1e-3), p.y).mul(fade(1 - Math.max(opts.fadeOut, 1e-3), 1, p.y).oneMinus());
+	mat.colorNode = color(colour);
+	mat.opacityNode = edge.mul(streak.add(opts.body)).mul(opacity);
+	return Object.assign(mat, { time });
 }
 
 /** A strip through `pts`, `width(s)` either side of them across the way they run (s runs 0 … 1). */
@@ -557,7 +543,7 @@ export function createSkyIsle(ctx: SkyIsleContext) {
 
 	// ---------- water ----------
 
-	const flowing: THREE.ShaderMaterial[] = [];
+	const flowing: ReturnType<typeof streakMaterial>[] = [];
 	/** A waterfall from `lip`, out over the edge the way `a` points and down `length`, widening as it
 	 * goes until it's all spray. */
 	const waterfall = (lip: THREE.Vector3, a: number, length: number, width: number) => {
@@ -590,7 +576,7 @@ export function createSkyIsle(ctx: SkyIsleContext) {
 		scene.add(m);
 	};
 	ticks.push((time) => {
-		for (const m of flowing) m.uniforms.uTime.value = time;
+		for (const m of flowing) m.time.value = time;
 	});
 
 	// The lake, and its outflows down their channels and over the edge.
@@ -954,7 +940,7 @@ export function createSkyIsle(ctx: SkyIsleContext) {
 		const v = new THREE.Vector3();
 		const size = new THREE.Vector3();
 		ticks.push((time) => {
-			for (const mat of mats) mat.uniforms.uTime.value = time;
+			for (const mat of mats) mat.time.value = time;
 			for (let i = 0; i < LEAVES; i++) {
 				const life = (time * (5 / h) + i / LEAVES) % 1;
 				const a = i * 2.4 + time * (1.4 + (i % 3) * 0.3);

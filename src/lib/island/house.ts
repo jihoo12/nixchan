@@ -1,7 +1,7 @@
 // Nixchan's house: a little cottage a short walk from her garden, with a covered porch out front
 // where her wardrobe and a tall standing mirror are. Standing at the mirror, E opens the wardrobe:
 // a panel beside her, to change the colour of her hoodie, her hat, and its colour, while the camera
-// looks over her shoulder at her in the mirror (a real one: three's Reflector, only switched on
+// looks over her shoulder at her in the mirror (a real one: three's reflector node, only switched on
 // while she's near). What she wears is saved (experimental/outfit.ts) and goes with her everywhere.
 //
 // The house itself is made in Blender (tools/island-house); the sizes it's built to are here too, to
@@ -9,7 +9,8 @@
 // own (/home, lib/home/room.ts), which brings her back out here (?from=home) when she leaves.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
+import { MeshBasicNodeMaterial } from 'three/webgpu';
+import { blendOverlay, color, reflector } from 'three/tsl';
 import type { NixFigure } from '../experimental/nix-figure';
 import { LOGOS, LOGO_COLOURS, drawLogo } from '../experimental/logos';
 import { COLOURS, HATS, loadOutfit, saveOutfit, wear, type Outfit } from '../experimental/outfit';
@@ -171,12 +172,14 @@ export function createHouse(ctx: HouseContext) {
 	);
 
 	// The mirror's glass: an oval, a hair in front of the frame's backing.
-	const glass = new Reflector(new THREE.CircleGeometry(0.5, 48), {
-		textureWidth: 512,
-		textureHeight: 1024,
-		color: 0xc9d2e4,
-		clipBias: 0.003,
-	});
+	// What's in it is the scene drawn again from behind the glass (three's reflector), tinted by the
+	// glass's colour the way WebGL's Reflector did it (an overlay blend).
+	const reflection = reflector({ resolutionScale: 0.6 });
+	const glassMat = new MeshBasicNodeMaterial();
+	glassMat.colorNode = blendOverlay(reflection.rgb, color(0xc9d2e4));
+	const glass = new THREE.Mesh(new THREE.CircleGeometry(0.5, 48), glassMat);
+	// The mirror's plane is the glass's own: facing out of it (+z), through its middle.
+	glass.add(reflection.target);
 	glass.scale.set(MIRROR.w, MIRROR.h, 1);
 	glass.position.set(MIRROR.x + Math.sin(MIRROR.yaw) * 0.01, FLOOR_TOP + MIRROR.y, MIRROR.z + Math.cos(MIRROR.yaw) * 0.01);
 	glass.rotation.y = MIRROR.yaw;

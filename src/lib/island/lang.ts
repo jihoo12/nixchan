@@ -1,7 +1,5 @@
-// Which language the island (and the 3D home's prologue into it) speaks: the site's. Reading a
-// Korean page (/ko/…) or pressing the site's language sign remembers it (components/BaseHead.astro,
-// components/Header.astro); the island has no /ko/ address of its own, so it reads what was
-// remembered. ?lang=ko or ?lang=en on the URL tries one without changing it.
+// Which language the island (and the 3D home's prologue into it) speaks: the site's, as Nixkit
+// works it out (nixkit/lang.ts: what was remembered, or ?lang=ko / ?lang=en to try one).
 //
 // So far it's the people Nixchan talks to, the prologue and the help that speak Korean; the rest is
 // to come.
@@ -15,28 +13,4 @@
 //   sky rod 하늘 낚싯대 · sky glider 하늘 글라이더 · the grey place 잿빛 세계 · ashen ore 잿빛 광석
 //   the Threshold 문턱 · Rift Compass 틈새 나침반 · Grey Lantern 잿빛 등불 · Prism Glider 프리즘 글라이더
 //   colour shards 색 조각 · the action button 액션 버튼
-import type { Lang } from '../../i18n';
-
-export type { Lang };
-
-export const lang: Lang = (() => {
-	try {
-		const asked = new URLSearchParams(location.search).get('lang');
-		if (asked === 'ko' || asked === 'en') return asked;
-		return localStorage.getItem('lang') === 'ko' ? 'ko' : 'en';
-	} catch {
-		return 'en';
-	}
-})();
-
-/** Pick the words for the island's language. */
-export const pick = <T>(words: Record<Lang, T>): T => words[lang];
-
-/** Whether a Korean word ends in a final consonant (받침); anything not Hangul counts as not. */
-const closed = (word: string) => {
-	const code = word.charCodeAt(word.length - 1) - 0xac00;
-	return code >= 0 && code <= 11171 && code % 28 !== 0;
-};
-
-/** A Korean word with the particle that fits it: josa('당근', '이', '가') is 당근이, josa('순무', '이', '가') is 순무가. */
-export const josa = (word: string, afterClosed: string, afterOpen: string) => word + (closed(word) ? afterClosed : afterOpen);
+export { josa, lang, pick, type Lang } from '../nixkit/lang';

@@ -3,6 +3,7 @@
 // gallery), and a game.ts that starts it (run in the browser, on its page at /play/<id>/).
 // See CONTRIBUTING.md.
 import type { GameOptions, createGame } from './game';
+import { readJSON, writeJSON } from './save';
 
 export type { BodyAction, NixClip } from './game';
 export type { Emotion } from './emotions';
@@ -37,21 +38,8 @@ export interface GameStore {
 export function createStore(id: string): GameStore {
 	const name = (key: string) => `game-${id}-${key}`;
 	return {
-		get(key) {
-			try {
-				const text = localStorage.getItem(name(key));
-				return text === null ? undefined : JSON.parse(text);
-			} catch {
-				return undefined;
-			}
-		},
-		set(key, value) {
-			try {
-				localStorage.setItem(name(key), JSON.stringify(value));
-			} catch {
-				// Too full, or not allowed: it just won't be remembered.
-			}
-		},
+		get: (key) => readJSON(name(key)),
+		set: (key, value) => writeJSON(name(key), value),
 	};
 }
 

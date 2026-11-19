@@ -12,7 +12,7 @@
 //
 // Where there's no WebGPU, the renderer works it out with WebGL 2 instead; there's less of it then.
 import * as THREE from 'three';
-import { SpriteNodeMaterial } from 'three/webgpu';
+import { SpriteNodeMaterial, type Node } from 'three/webgpu';
 import { Fn, If, cameraPosition, float, hash, instanceIndex, instancedArray, length, max, mix, mx_noise_vec3, smoothstep, uint, uniform, uv, vec3, vec4 } from 'three/tsl';
 import type { Game } from './game';
 
@@ -96,10 +96,10 @@ export function addSnow(game: Game, opts: SnowOptions = {}) {
 	};
 
 	/** A random number from 0 to 1, for this snowflake and this `salt`. */
-	const rand = (i: ReturnType<typeof uint>, salt: number) => hash(i.add(uint(salt)));
+	const rand = (i: Node<'uint'>, salt: number) => hash(i.add(uint(salt)));
 
 	/** Puts snowflake `i` somewhere in the snowfall: anywhere up the column (`spread`), or along the top. */
-	const settleFalling = (i: ReturnType<typeof uint>, column: boolean) => {
+	const settleFalling = (i: Node<'uint'>, column: boolean) => {
 		const a = rand(i, 11).add(u.time.mul(0.37)).fract().mul(Math.PI * 2);
 		const r = rand(i, 23).add(u.time.mul(0.13)).fract().sqrt().mul(u.area);
 		const up = column ? rand(i, 37).mul(u.height) : u.height.sub(rand(i, 41).mul(2));

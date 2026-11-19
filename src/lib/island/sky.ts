@@ -1,6 +1,8 @@
 // The light and the sky: sun, ambient and sky light, a gradient dome with the sun (or the moon)
 // in it, stars that come out at night, fog, and clouds drifting slowly round the island.
 import * as THREE from 'three';
+import { MeshBasicNodeMaterial, PointsNodeMaterial } from 'three/webgpu';
+import { dot, instancedBufferAttribute, max, mix, normalize, pow, positionLocal, smoothstep, uniform } from 'three/tsl';
 import type { Toon } from './look';
 import type { Theme } from './theme';
 import { TAU, rng } from '../nixkit/util';
@@ -22,32 +24,23 @@ export function createSky(scene: THREE.Scene, toon: Toon, theme: Theme) {
 	const lantern = new THREE.PointLight('#ffd38a', 0, 12, 1.4);
 	scene.add(ambient, hemi, sun, sun.target, lantern);
 
-	const skyMat = new THREE.ShaderMaterial({
-		side: THREE.BackSide,
-		depthWrite: false,
-		fog: false,
-		uniforms: {
-			uTop: { value: new THREE.Color() },
-			uHorizon: { value: new THREE.Color() },
-			uSunCol: { value: new THREE.Color() },
-			uSunDir: { value: SUN_DIR },
-		},
-		vertexShader: `varying vec3 vDir; void main() { vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-		fragmentShader: `
-			uniform vec3 uTop, uHorizon, uSunCol, uSunDir; varying vec3 vDir;
-			void main() {
-				vec3 d = normalize(vDir);
-				vec3 col = mix(uHorizon, uTop, smoothstep(-0.02, 0.55, d.y));
-				float s = dot(d, uSunDir);
-				col = mix(col, uSunCol, smoothstep(0.9975, 0.998, s));
-				col += uSunCol * 0.22 * pow(max(s, 0.0), 48.0);
-				gl_FragColor = vec4(col, 1.0);
-				#include <colorspace_fragment>
-			}`,
-	});
-	const sky = new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), skyMat);
-	sky.renderOrder = -2;
-	scene.add(sky);
+	// The dome: from the horizon's colour up to the top's, with the sun (or the moon) a disc in it and
+	// a glow round it. Worked out in linear colour, like everything else, and converted on the way out.
+	const sky = {
+		top: uniform(new THREE.Color()),
+		horizon: uniform(new THREE.Color()),
+		sunColor: uniform(new THREE.Color()),
+	};
+	const skyMat = new MeshBasicNodeMaterial({ side: THREE.BackSide, depthWrite: false, fog: false });
+	{
+		const d = normalize(positionLocal);
+		const s = dot(d, uniform(SUN_DIR));
+		const col = mix(sky.horizon, sky.top, smoothstep(-0.02, 0.55, d.y));
+		skyMat.colorNode = mix(col, sky.sunColor, smoothstep(0.9975, 0.998, s)).add(sky.sunColor.mul(pow(max(s, 0), 48).mul(0.22)));
+	}
+	const dome = new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), skyMat);
+	dome.renderOrder = -2;
+	scene.add(dome);
 	const stars = (() => {
 		const rand = rng(99);
 		const pos = new Float32Array(900 * 3);
@@ -57,9 +50,14 @@ export function createSky(scene: THREE.Scene, toon: Toon, theme: Theme) {
 			const r = Math.sqrt(1 - y * y);
 			pos.set([Math.cos(a) * r * 850, y * 850, Math.sin(a) * r * 850], i * 3);
 		}
-		const geo = new THREE.BufferGeometry();
-		geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-		return new THREE.Points(geo, new THREE.PointsMaterial({ color: '#fdfbff', size: 2, sizeAttenuation: false, fog: false, depthWrite: false }));
+		// Each star a little square two pixels across, as WebGL drew points (a sprite each: WebGPU's
+		// own points are only ever one pixel).
+		const mat = new PointsNodeMaterial({ color: '#fdfbff', size: 2 / Math.min(devicePixelRatio, 1.75), sizeAttenuation: false, fog: false, depthWrite: false });
+		mat.positionNode = instancedBufferAttribute(new THREE.InstancedBufferAttribute(pos, 3));
+		const points = new THREE.Sprite(mat as unknown as THREE.SpriteMaterial);
+		points.count = 900;
+		points.frustumCulled = false;
+		return points;
 	})();
 	scene.add(stars);
 
@@ -86,9 +84,9 @@ export function createSky(scene: THREE.Scene, toon: Toon, theme: Theme) {
 	scene.add(clouds);
 
 	theme.on((p) => {
-		skyMat.uniforms.uTop.value.set(p.top);
-		skyMat.uniforms.uHorizon.value.set(p.horizon);
-		skyMat.uniforms.uSunCol.value.set(p.sunColor);
+		sky.top.value.set(p.top);
+		sky.horizon.value.set(p.horizon);
+		sky.sunColor.value.set(p.sunColor);
 		fog.color.set(p.horizon);
 		sun.color.set(p.sunColor);
 		sun.intensity = p.sun;
@@ -105,7 +103,7 @@ export function createSky(scene: THREE.Scene, toon: Toon, theme: Theme) {
 		fog,
 		/** Keeps the sky round the camera, and the sun's shadows and her lantern on her. */
 		update(time: number, camera: THREE.Camera, her: THREE.Vector3) {
-			sky.position.copy(camera.position);
+			dome.position.copy(camera.position);
 			stars.position.copy(camera.position);
 			sun.position.copy(her).addScaledVector(SUN_DIR, 80);
 			sun.target.position.copy(her);

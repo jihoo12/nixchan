@@ -34,7 +34,8 @@ import type { Inventory } from './inventory';
 import type { Toon } from './look';
 import { loadJSON, saveJSON } from './save';
 import { slopeUp, terrainAt } from './terrain';
-import { thumbnail } from './thumbnail';
+import { createPictures } from '../nixkit/thumbnail';
+import type { WebGPURenderer } from 'three/webgpu';
 import { TAU, damp } from '../nixkit/util';
 
 export const WINDMILL = 'windmill';
@@ -97,7 +98,7 @@ export interface VeinSource {
 }
 
 export interface PowerContext {
-	renderer: THREE.WebGLRenderer;
+	renderer: WebGPURenderer;
 	scene: THREE.Scene;
 	toon: Toon;
 	inventory: Inventory;
@@ -447,7 +448,7 @@ export function createPower(ctx: PowerContext) {
 	const pending: (() => void)[] = [];
 	let loaded = false;
 	const onModels = (f: () => void) => (loaded ? f() : pending.push(f));
-	const icons = new Map<string, string>();
+	const icons = createPictures(ctx.renderer, () => inventory.render());
 	new GLTFLoader().loadAsync(ctx.modelUrl).then(
 		(gltf) => {
 			for (const child of [...gltf.scene.children]) models.set(child.name, child);
@@ -455,9 +456,9 @@ export function createPower(ctx: PowerContext) {
 			for (const f of pending.splice(0)) f();
 			for (const kind of ['windmill', 'drill'] as const) {
 				const o = whole(kind);
-				if (o) icons.set(kind, thumbnail(ctx.renderer, o, new THREE.Vector3(0.7, 0.45, 1)));
+				if (o) icons.draw(kind, o, new THREE.Vector3(0.7, 0.45, 1));
 			}
-			icons.set('belt', thumbnail(ctx.renderer, beltPiece(), new THREE.Vector3(0.8, 0.9, 1)));
+			icons.draw('belt', beltPiece(), new THREE.Vector3(0.8, 0.9, 1));
 			inventory.render();
 		},
 		() => {

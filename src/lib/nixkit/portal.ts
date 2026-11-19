@@ -4,7 +4,7 @@
 //
 //   addPortal(game, { at: [0, 0, 10], facing: Math.PI, title: 'Cloud Hop', note: 'An obstacle course in the sky', href: '/cloudhop/' });
 import * as THREE from 'three';
-import { MeshBasicNodeMaterial } from 'three/webgpu';
+import { MeshBasicNodeMaterial, type Node } from 'three/webgpu';
 import { atan, color, dot, length, mix, sin, smoothstep, sRGBTransferEOTF, uniform, uv, vec3 } from 'three/tsl';
 import type { Game } from './game';
 
@@ -38,7 +38,7 @@ function swirl(lit: number, a: string, b: string) {
 	const material = new MeshBasicNodeMaterial({ transparent: true, side: THREE.DoubleSide, depthWrite: false });
 	// The old GLSL swirl wrote its colours out as they were, unconverted; decoding them here keeps
 	// them as deep as they were, through the renderer's conversion back.
-	material.colorNode = sRGBTransferEOTF(mix(vec3(dot(bright, vec3(0.33))), bright, 0.25 + 0.75 * lit));
+	material.colorNode = sRGBTransferEOTF(mix(vec3(dot(bright, vec3(0.33))), bright, 0.25 + 0.75 * lit)) as Node<'vec3'>; // (typed as a bare Node)
 	material.opacityNode = smoothstep(0.82, 1, r).mul(0.6).oneMinus().mul(0.35 + 0.57 * lit);
 	return { material, time };
 }

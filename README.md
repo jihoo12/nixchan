@@ -36,9 +36,14 @@ Tools come from the Nix flake (`nix develop`), which provides Node.js:
 nix develop
 npm ci
 astro dev --background   # then open http://localhost:4321/nixchan/ ; stop with `astro dev stop`
+npm run check            # types (astro check)
 npm run check:games
+npm test                 # Nixkit's unit tests (tools/test-nixkit-*.mjs)
 npm run build
 ```
+
+To look at the 3D pages, use a real browser on a real GPU. Headless Chromium draws them with a
+software renderer, which neither looks nor runs like the real thing.
 
 ## Nixchan's Island
 
@@ -54,18 +59,34 @@ The page is `src/pages/island/index.astro` (HTML/CSS for the menus and prompts),
 | `sky.ts`, `water.ts`, `theme.ts` | Light, sky, sea, and day/night (parts register with `theme.on`) |
 | `landmarks.ts` | Lighthouse, campfire, standing stones, chest, buoy |
 | `skyisle.ts` | Cloudrest, the islands in the sky, and the Windspouts that lift her up to them |
-| `player.ts`, `camera.ts`, `controls.ts` | Nixchan's movement, the follow camera, keys and touch |
-| `interact.ts` | What E does: sources register offers |
+| `look.ts` | The little geometries trees and rocks are made of (the toon shading is Nixkit's) |
 | `explore.ts`, `menu.ts` | Places found, the maps, the menu |
 | `fishing.ts`, `farm.ts`, `npc.ts`, `inventory.ts` | Things to do, and her bag |
+| `house.ts` | Her cottage: the porch, the wardrobe and mirror, and the front door into `/nixchan/home/` |
 | `talk.ts` | The conversation box and speech bubble everyone she talks to shares |
 | `owl.ts` | Somebody who lives somewhere hard to find (spoilers inside) |
+| `tortoise.ts`, `fourthwall.ts` | Parmen on the Lonely Islet, and the island's only door out: through the screen to `/nixchan/experimental/` |
 | `forge.ts` | The smithy: ore veins, smelting (iron, and ashen ore from the grey place), and the upgrades made at the anvil |
 | `machines.ts` | Sprinklers and Sprocket the clockwork helper, looking after the garden |
 | `rift.ts` | The grey rift at the standing stones, through to `/nixchan/monochrome/` |
 | `lantern.ts` | The Grey Lantern at her shoulder, made at the forge |
+| `blocks.ts` | Stone blocks, made at the forge, that she builds with on a one-metre grid |
 | `power.ts` | Windmills, the drills they power on the ore veins, and belts that carry ore (and power) to the hopper by the forge: power is only ever on or off, what's on a belt is worked out from when it set off, and a belt with power carries her too |
+| `lang.ts` | Which language the island speaks (the site's; `?lang=ko` to try one), and the names to keep the same in both |
 | `save.ts` | Every localStorage key the island uses |
+
+Nixchan herself, how she moves, the follow camera, the keys and touch controls, and what E does
+(`interact.ts`: sources register offers) are Nixkit's (`src/lib/nixkit/`), shared with the games.
+So are the workings of `talk.ts`, `inventory.ts`, `menu.ts`, `save.ts`, `theme.ts` and `lang.ts`:
+the island's files say only what's the island's own (its save keys, its palettes, its kinds of
+thing, where its page keeps the box and the bag). Keys go through Nixkit's key router in layers
+(the fourth wall, then a conversation, the menu, a shop, the wardrobe), and the camera's framing
+through its focus. It draws with three's WebGPURenderer, as the games do (WebGPU, or WebGL 2
+without it; `?webgl` on the URL forces that), so its own shaders are TSL: the sky, the sea, Cloudrest's
+waterfalls and wind, the rift (`monochrome/rift-nodes.ts`), the mirror (three's reflector node) and
+the ink lines round Pebble, Hollis, Parmen, the fish and the garden. And its frame is Nixkit's
+engine's: `game.ts` makes an engine, puts Nixchan in it with `createNixchan` on the island's terrain,
+and adds each part of the island to it as a system, in the engine's order.
 
 To add something she can do, register it with `interactions.add(() => ({ label, go }))`. To add a landmark, add a function to `landmarks.ts`.
 
@@ -84,7 +105,7 @@ The page is `src/pages/monochrome/index.astro`, and the code is in `src/lib/mono
 | `world.ts` | The cells and how they're joined, and `place`, which lays them out round her |
 | `blocks.ts` | What each cell looks like (merged from the Blender pieces) and what in it is solid |
 | `game.ts` | Walking her from cell to cell, the camera, the shards, ashen ore, snowflakes and the compass |
-| `rift.ts` | The rift's shader, shared with the island |
+| `rift.ts`, `rift-nodes.ts` | The rift's shader, shared with the island: GLSL here (the grey place draws with WebGL), TSL for the island |
 
 ## Deployment
 

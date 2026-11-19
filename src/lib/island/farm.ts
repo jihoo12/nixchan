@@ -10,6 +10,7 @@
 // same again. Growing is worked out event by event from the clock, so all of it carries on while
 // the page is closed too, and catches up when it's opened.
 import * as THREE from 'three';
+import { nodeLook } from '../nixkit/figure-nodes';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { NixClip, NixFigure } from '../experimental/nix-figure';
 import type { Inventory } from './inventory';
@@ -17,7 +18,8 @@ import type { Offer } from '../nixkit/interact';
 import type { Toon } from './look';
 import { loadJSON, saveJSON } from './save';
 import { isNight } from './theme';
-import { thumbnail } from './thumbnail';
+import { createPictures } from '../nixkit/thumbnail';
+import type { WebGPURenderer } from 'three/webgpu';
 import { clamp, closeOnBackdrop, damp } from '../nixkit/util';
 
 export interface Crop {
@@ -153,7 +155,7 @@ interface Saved {
 }
 
 export interface FarmContext {
-	renderer: THREE.WebGLRenderer;
+	renderer: WebGPURenderer;
 	scene: THREE.Scene;
 	figure: NixFigure;
 	toon: Toon;
@@ -247,10 +249,7 @@ export function createFarm(ctx: FarmContext) {
 	const models = new Map<string, THREE.Object3D>();
 	/** Who's waiting for the models (the machines, to put theirs out). */
 	const onModels: (() => void)[] = [];
-	const ink = new THREE.MeshBasicMaterial({ color: '#1d1b3a', side: THREE.BackSide });
-	ink.onBeforeCompile = (shader) => {
-		shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed += normal * 0.012;');
-	};
+	const ink = nodeLook.inkLine('#1d1b3a', 0.012);
 	const toonCache = new Map<string, THREE.Material>();
 	const greyed = new THREE.Color();
 	/** A copy of one of the garden's models, in toon materials of its own colours (or `tint` for the
@@ -281,16 +280,11 @@ export function createFarm(ctx: FarmContext) {
 		return copy;
 	};
 
-	const icons = new Map<string, string>();
-	const iconOf = (key: string, build: () => THREE.Object3D | null, from: THREE.Vector3) => {
-		const cached = icons.get(key);
-		if (cached) return cached;
-		const object = build();
-		if (!object) return null;
-		const url = thumbnail(ctx.renderer, object, from);
-		icons.set(key, url);
-		return url;
-	};
+	const icons = createPictures(ctx.renderer, () => {
+		ctx.inventory.render();
+		if (shopOpen) renderShop();
+	});
+	const iconOf = (key: string, build: () => THREE.Object3D | null, from: THREE.Vector3) => icons.get(key, build, from);
 	const seedPacket = (c: Crop) => {
 		const packet = make('Packet', { tint: c.color });
 		const item = make(c.item);

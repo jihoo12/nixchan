@@ -2,6 +2,8 @@
 // shallows glow turquoise and foam laps at the shore without any depth buffer tricks. And ripples
 // that spread out on it wherever she swims or wades.
 import * as THREE from 'three';
+import { MeshBasicNodeMaterial, type Node } from 'three/webgpu';
+import { cameraPosition, distance, float, fract, length, max, mix, positionWorld, select, sin, smoothstep, step, texture, uniform, vec2 } from 'three/tsl';
 import { HALF, N, SIZE, STEP, heights } from './terrain';
 import type { Theme } from './theme';
 
@@ -12,62 +14,58 @@ export function createWater(scene: THREE.Scene, fog: THREE.Fog, theme: Theme) {
 	const depthTex = new THREE.DataTexture(data, N + 1, N + 1, THREE.RedFormat, THREE.HalfFloatType);
 	depthTex.magFilter = depthTex.minFilter = THREE.LinearFilter;
 	depthTex.needsUpdate = true;
-	const waterMat = new THREE.ShaderMaterial({
+	const u = {
+		time: uniform(0),
+		shallow: uniform(new THREE.Color()),
+		deep: uniform(new THREE.Color()),
+		foam: uniform(new THREE.Color()),
+		fogColor: uniform(fog.color),
+	};
+	const waterMat = new MeshBasicNodeMaterial({
 		transparent: true,
+		// The sea does its own fog, below.
+		fog: false,
 		// Where the beach runs almost level with the sea the two would fight over every pixel; nudge
 		// the water back a hair so the sand always wins there.
 		polygonOffset: true,
 		polygonOffsetFactor: 1,
 		polygonOffsetUnits: 4,
-		uniforms: {
-			uTime: { value: 0 },
-			uHeight: { value: depthTex },
-			// The texel centres sit on the grid's vertices.
-			uBounds: { value: new THREE.Vector3(-HALF - STEP / 2, -HALF - STEP / 2, SIZE + STEP) },
-			uTexel: { value: 1 / (N + 1) },
-			uStep: { value: STEP },
-			uShallow: { value: new THREE.Color() },
-			uDeep: { value: new THREE.Color() },
-			uFoam: { value: new THREE.Color() },
-			uFogColor: { value: fog.color },
-			uFogNear: { value: fog.near },
-			uFogFar: { value: fog.far },
-		},
-		vertexShader: `varying vec3 vWorld; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vWorld = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
-		fragmentShader: `
-			uniform float uTime, uFogNear, uFogFar, uTexel, uStep; uniform sampler2D uHeight; uniform vec3 uBounds, uShallow, uDeep, uFoam, uFogColor;
-			varying vec3 vWorld;
-			void main() {
-				vec2 uv = (vWorld.xz - uBounds.xy) / uBounds.z;
-				float h = -6.0;
-				if (uv.x > 0.0 && uv.y > 0.0 && uv.x < 1.0 && uv.y < 1.0) h = texture2D(uHeight, uv).r;
-				float depth = max(-h, 0.0);
-				float dist = distance(cameraPosition, vWorld);
-				float w = sin(vWorld.x * 0.35 + uTime * 1.1) * sin(vWorld.z * 0.3 - uTime * 0.9) + 0.5 * sin((vWorld.x + vWorld.z) * 0.6 + uTime * 1.7);
-				vec3 col = mix(uShallow, uDeep, smoothstep(0.0, 4.5, depth));
-				col += step(1.1, w) * 0.07 * (1.0 - smoothstep(30.0, 140.0, dist));
-				// How steeply the sea floor shelves here, in metres down per metre out.
-				vec2 dx = vec2(uTexel, 0.0), dz = vec2(0.0, uTexel);
-				float slope = length(vec2(texture2D(uHeight, uv + dx).r - texture2D(uHeight, uv - dx).r, texture2D(uHeight, uv + dz).r - texture2D(uHeight, uv - dz).r)) / (2.0 * uStep);
-				// A band of foam right at the water's edge, measured in depth scaled by the slope so it's
-				// about half a metre wide and laps a few tens of centimetres whether the beach is steep or flat.
-				float s = max(slope, 0.04);
-				float foam = 1.0 - smoothstep(0.25 * s, 0.6 * s, depth + 0.2 * s * sin(uTime * 1.6 + vWorld.x * 0.2 + vWorld.z * 0.15));
-				// Rings of it rolling in over the shallows. They follow the depth, so over a near-level
-				// shelf a whole stretch of sea would flash white at once; keep them to where the sea
-				// floor shelves enough to make lines.
-				float ring = step(0.9, fract(depth * 2.2 - uTime * 0.35)) * (1.0 - smoothstep(0.2, 0.9, depth));
-				ring *= smoothstep(0.05, 0.11, slope);
-				foam = max(foam, ring * 0.7);
-				col = mix(col, uFoam, foam);
-				// The deep sea is opaque, so nothing shows past the edge of the sea floor.
-				float alpha = max(mix(0.5, 1.0, smoothstep(0.0, 5.0, depth)), foam);
-				col = mix(col, uFogColor, smoothstep(uFogNear, uFogFar, dist));
-				alpha = mix(alpha, 1.0, smoothstep(uFogNear, uFogFar, dist));
-				gl_FragColor = vec4(col, alpha);
-				#include <colorspace_fragment>
-			}`,
 	});
+	{
+		const world = positionWorld;
+		const t = u.time;
+		// The texel centres sit on the grid's vertices.
+		const lo = -HALF - STEP / 2;
+		const uv = world.xz.sub(lo).div(SIZE + STEP);
+		const height = (at: Node<'vec2'>) => texture(depthTex, at).r;
+		const onMap = uv.x.greaterThan(0).and(uv.y.greaterThan(0)).and(uv.x.lessThan(1)).and(uv.y.lessThan(1));
+		const h = select(onMap, height(uv), float(-6));
+		const depth = max(h.negate(), 0);
+		const dist = distance(cameraPosition, world);
+		const w = sin(world.x.mul(0.35).add(t.mul(1.1))).mul(sin(world.z.mul(0.3).sub(t.mul(0.9)))).add(sin(world.x.add(world.z).mul(0.6).add(t.mul(1.7))).mul(0.5));
+		const shine = step(1.1, w).mul(0.07).mul(smoothstep(30, 140, dist).oneMinus());
+		const col = mix(u.shallow, u.deep, smoothstep(0, 4.5, depth)).add(shine);
+		// How steeply the sea floor shelves here, in metres down per metre out.
+		const texel = 1 / (N + 1);
+		const dx = vec2(texel, 0);
+		const dz = vec2(0, texel);
+		const slope = length(vec2(height(uv.add(dx)).sub(height(uv.sub(dx))), height(uv.add(dz)).sub(height(uv.sub(dz))))).div(2 * STEP);
+		// A band of foam right at the water's edge, measured in depth scaled by the slope so it's
+		// about half a metre wide and laps a few tens of centimetres whether the beach is steep or flat.
+		const sl = max(slope, 0.04);
+		const lap = depth.add(sl.mul(0.2).mul(sin(t.mul(1.6).add(world.x.mul(0.2)).add(world.z.mul(0.15)))));
+		const edge = smoothstep(sl.mul(0.25), sl.mul(0.6), lap).oneMinus();
+		// Rings of it rolling in over the shallows. They follow the depth, so over a near-level
+		// shelf a whole stretch of sea would flash white at once; keep them to where the sea
+		// floor shelves enough to make lines.
+		const ring = step(0.9, fract(depth.mul(2.2).sub(t.mul(0.35)))).mul(smoothstep(0.2, 0.9, depth).oneMinus()).mul(smoothstep(0.05, 0.11, slope));
+		const foam = max(edge, ring.mul(0.7));
+		// The deep sea is opaque, so nothing shows past the edge of the sea floor.
+		const alpha = max(mix(0.5, 1, smoothstep(0, 5, depth)), foam);
+		const fogged = smoothstep(fog.near, fog.far, dist);
+		waterMat.colorNode = mix(mix(col, u.foam, foam), u.fogColor, fogged);
+		waterMat.opacityNode = mix(alpha, 1, fogged);
+	}
 	{
 		const geo = new THREE.PlaneGeometry(4000, 4000);
 		geo.rotateX(-Math.PI / 2);
@@ -87,9 +85,9 @@ export function createWater(scene: THREE.Scene, fog: THREE.Fog, theme: Theme) {
 	let nextRipple = 0;
 
 	theme.on((p) => {
-		waterMat.uniforms.uShallow.value.set(p.shallow);
-		waterMat.uniforms.uDeep.value.set(p.deep);
-		waterMat.uniforms.uFoam.value.set(p.foam);
+		u.shallow.value.set(p.shallow);
+		u.deep.value.set(p.deep);
+		u.foam.value.set(p.foam);
 		for (const r of ripples) r.mat.color.set(p.foam);
 	});
 
@@ -115,7 +113,7 @@ export function createWater(scene: THREE.Scene, fog: THREE.Fog, theme: Theme) {
 				r.mesh.scale.setScalar(r.size * (0.6 + t * 2.2));
 				r.mat.opacity = 0.75 * (1 - t) * (1 - t);
 			}
-			waterMat.uniforms.uTime.value = time;
+			u.time.value = time;
 		},
 	};
 }

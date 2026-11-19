@@ -1,4 +1,4 @@
-// Runs a game from src/games/<id>/ on its page (pages/games/[id].astro): finds its game.ts, gives it
+// Runs a game from src/games/<id>/ on its page (pages/play/[id].astro): finds its game.ts, gives it
 // what it needs, and looks after the loading screen.
 import { createGame } from './game';
 import { createStore, type StartGame } from './meta';
