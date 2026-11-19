@@ -6,6 +6,9 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { drawLogo, type LogoId } from './logos';
 import { loadOutfit, wear, type HatId } from './outfit';
+import { createFace, type FaceEmotion } from './nix-face';
+
+export type { FaceEmotion } from './nix-face';
 
 const NAVY = '#2c2a52';
 const NAVY_DEEP = '#22203f';
@@ -32,121 +35,6 @@ function canvasTexture(width: number, height: number, paint: (ctx: CanvasRenderi
 	texture.colorSpace = THREE.SRGBColorSpace;
 	texture.anisotropy = 4;
 	return texture;
-}
-
-/** The head's skin, with the face painted where an equirectangular map puts the front (+z). */
-function faceTexture(eyesClosed: boolean) {
-	return canvasTexture(2048, 1024, (ctx) => {
-		ctx.fillStyle = SKIN;
-		ctx.fillRect(0, 0, 2048, 1024);
-		// Work in radians around the front of the face: x along the equator, y down from it.
-		const k = 1024 / Math.PI;
-		ctx.translate(512, 512);
-		ctx.scale(k, k);
-		ctx.lineCap = ctx.lineJoin = 'round';
-
-		for (const side of [-1, 1]) {
-			const blush = ctx.createRadialGradient(side * 0.57, 0.47, 0, side * 0.57, 0.47, 0.14);
-			blush.addColorStop(0, 'rgba(244, 146, 158, 0.6)');
-			blush.addColorStop(1, 'rgba(244, 146, 158, 0)');
-			ctx.fillStyle = blush;
-			ctx.beginPath();
-			ctx.ellipse(side * 0.57, 0.47, 0.15, 0.09, 0, 0, Math.PI * 2);
-			ctx.fill();
-			// The little hatch lines over the blush.
-			ctx.strokeStyle = 'rgba(226, 112, 128, 0.75)';
-			ctx.lineWidth = 0.012;
-			for (const dx of [-0.05, 0, 0.05]) {
-				ctx.beginPath();
-				ctx.moveTo(side * 0.57 + dx + 0.015, 0.44);
-				ctx.lineTo(side * 0.57 + dx - 0.015, 0.5);
-				ctx.stroke();
-			}
-		}
-
-		for (const side of [-1, 1]) {
-			const cx = side * 0.4;
-			const cy = 0.2;
-			// Drawn at the size the numbers below read naturally, then enlarged about the eye's centre.
-			ctx.save();
-			ctx.translate(cx, cy);
-			ctx.scale(1.16, 1.16);
-			ctx.translate(-cx, -cy);
-			if (eyesClosed) {
-				ctx.strokeStyle = INK;
-				ctx.lineWidth = 0.04;
-				ctx.beginPath();
-				ctx.moveTo(cx - 0.16, cy + 0.01);
-				ctx.quadraticCurveTo(cx, cy + 0.09, cx + 0.16, cy + 0.01);
-				ctx.stroke();
-				ctx.restore();
-				continue;
-			}
-			ctx.save();
-			ctx.beginPath();
-			ctx.ellipse(cx, cy, 0.165, 0.2, 0, 0, Math.PI * 2);
-			ctx.clip();
-			const iris = ctx.createLinearGradient(0, cy - 0.19, 0, cy + 0.19);
-			iris.addColorStop(0, '#1f2a72');
-			iris.addColorStop(0.55, '#3d5ccc');
-			iris.addColorStop(1, '#8db4f5');
-			ctx.fillStyle = iris;
-			ctx.fillRect(cx - 0.2, cy - 0.2, 0.4, 0.4);
-			// A lighter crescent low in the iris, the pupil, and a dark rim round the edge.
-			ctx.fillStyle = 'rgba(176, 210, 255, 0.85)';
-			ctx.beginPath();
-			ctx.ellipse(cx, cy + 0.13, 0.11, 0.07, 0, 0, Math.PI * 2);
-			ctx.fill();
-			ctx.fillStyle = '#141a50';
-			ctx.beginPath();
-			ctx.ellipse(cx, cy - 0.01, 0.075, 0.105, 0, 0, Math.PI * 2);
-			ctx.fill();
-			ctx.strokeStyle = '#1a2160';
-			ctx.lineWidth = 0.025;
-			ctx.beginPath();
-			ctx.ellipse(cx, cy, 0.165, 0.2, 0, 0, Math.PI * 2);
-			ctx.stroke();
-			ctx.restore();
-			// Highlights, both on the same side like the 2D art.
-			ctx.fillStyle = '#ffffff';
-			ctx.beginPath();
-			ctx.arc(cx + 0.055, cy - 0.08, 0.05, 0, Math.PI * 2);
-			ctx.fill();
-			ctx.beginPath();
-			ctx.arc(cx - 0.06, cy + 0.09, 0.022, 0, Math.PI * 2);
-			ctx.fill();
-			ctx.beginPath();
-			ctx.arc(cx + 0.075, cy + 0.06, 0.012, 0, Math.PI * 2);
-			ctx.fill();
-			// The heavy upper lash, with a little flick at the outer corner.
-			ctx.strokeStyle = INK;
-			ctx.lineWidth = 0.05;
-			ctx.beginPath();
-			ctx.ellipse(cx, cy + 0.01, 0.18, 0.215, 0, Math.PI * 1.12, Math.PI * 1.88);
-			ctx.stroke();
-			ctx.fillStyle = INK;
-			ctx.beginPath();
-			ctx.moveTo(cx + side * 0.12, cy - 0.15);
-			ctx.lineTo(cx + side * 0.235, cy - 0.135);
-			ctx.lineTo(cx + side * 0.17, cy - 0.04);
-			ctx.fill();
-			// A soft lower lash along the outer half.
-			ctx.lineWidth = 0.016;
-			ctx.beginPath();
-			ctx.ellipse(cx, cy - 0.01, 0.17, 0.225, 0, Math.PI * (side > 0 ? 0.08 : 0.62), Math.PI * (side > 0 ? 0.38 : 0.92));
-			ctx.stroke();
-			ctx.restore();
-		}
-
-		// The ":3" mouth.
-		ctx.strokeStyle = '#6b3a40';
-		ctx.lineWidth = 0.02;
-		ctx.beginPath();
-		ctx.arc(-0.042, 0.46, 0.042, 0.1, Math.PI);
-		ctx.moveTo(0.084, 0.46);
-		ctx.arc(0.042, 0.46, 0.042, 0, Math.PI - 0.1);
-		ctx.stroke();
-	});
 }
 
 export function snowflakeTexture() {
@@ -244,6 +132,8 @@ export interface NixFigure {
 	/** Resolves once the model is in, or rejects if it could not be loaded. */
 	ready: Promise<void>;
 	setBlink(closed: boolean): void;
+	/** Change the painted expression on her face; strength 0 keeps the original neutral art. */
+	setEmotion(emotion: FaceEmotion, strength?: number): void;
 	/** Show or hide something in her right hand: the fishing rod, the watering can or the hammer. */
 	setProp(prop: NixProp, shown: boolean): void;
 	/** Which hat she wears (the outfit's in outfit.ts). */
@@ -299,10 +189,9 @@ export function buildNixFigure(url: string, made: FigureLook = glslLook): NixFig
 	const ramp = toonRamp();
 	// Toon shading plus a soft rim of light along the silhouette, so she lifts off the wall.
 	const toon = (hex: string, extra: THREE.MeshToonMaterialParameters = {}) => made.toon({ color: hex, gradientMap: ramp, ...extra });
-	const openFace = faceTexture(false);
-	const closedFace = faceTexture(true);
+	const face = createFace();
 	// Her face keeps a gentler shadow than her clothes, so it never cuts across her cheeks.
-	const faceMat = toon('#ffffff', { map: openFace, gradientMap: toonRamp([226, 244, 255]) });
+	const faceMat = toon('#ffffff', { map: face.map, gradientMap: toonRamp([226, 244, 255]) });
 	const materials: Record<string, THREE.Material> = {
 		Navy: toon(NAVY),
 		NavyDeep: toon(NAVY_DEEP),
@@ -471,7 +360,10 @@ export function buildNixFigure(url: string, made: FigureLook = glslLook): NixFig
 		group,
 		ready,
 		setBlink(closed) {
-			faceMat.map = closed ? closedFace : openFace;
+			faceMat.map = face.blink(closed);
+		},
+		setEmotion(emotion, strength = 1) {
+			faceMat.map = face.emote(emotion, strength);
 		},
 		setHat(next) {
 			hat = next;

@@ -5,6 +5,7 @@
 import type { GameOptions, createGame } from './game';
 
 export type { NixClip } from './game';
+export type { Emotion } from './emotions';
 
 export interface GameMeta {
 	/** Its name, on its portal and its page. */

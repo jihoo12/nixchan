@@ -21,6 +21,7 @@ import { nodeLook } from './figure-nodes';
 import { createFollowCamera } from './camera';
 import { createControls, type Orbit } from './controls';
 import { createHud } from './hud';
+import { createEmotionPlayer, type Emotion, type EmoteMenu } from './emotions';
 import { makeToon } from './look';
 import { createParts } from './parts';
 import { aimFirstPerson, createViewMode } from './view-mode';
@@ -50,6 +51,8 @@ export interface GameOptions {
 		/** Temporarily show the avatar for a cutscene without losing the player's preference. */
 		forceThirdPerson?: () => boolean;
 	};
+	/** Opt in to a player expression menu (B / HUD). Scripted cues work without it. */
+	emotes?: EmoteMenu;
 	/** Something for her to be doing instead of walking about (a clip: 'Shot', 'Slam', 'Summon',
 	 * 'Dash', 'Cast', 'Wave' …), asked every frame; null for her own. */
 	clip?: () => NixClip | null;
@@ -176,11 +179,21 @@ export function createGame(opts: GameOptions) {
 		viewButton.setAttribute('aria-pressed', 'false');
 		viewButton.title = 'V';
 	}
+	const motion = matchMedia('(prefers-reduced-motion: reduce)');
+	const emotions = createEmotionPlayer((name, strength) => player.figure.setEmotion(name, strength), () => motion.matches);
+	const emoteMenu = opts.emotes && hud.emotes(opts.emotes, (name) => emotions.play(name, 3.6));
+	emoteMenu?.setVisible(false);
 	const controls = createControls(canvas, hud.touch, orbit, {
 		intercept(key, e) {
-			if (!first || key !== 'v') return false;
-			if (!e.repeat) toggleView();
-			return true;
+			if (first && key === 'v') {
+				if (!e.repeat) toggleView();
+				return true;
+			}
+			if (emoteMenu && key === 'b') {
+				if (!e.repeat && !isFirstPerson()) emoteMenu.toggle(true);
+				return true;
+			}
+			return false;
 		},
 		adjustLook(dx, dy) {
 			if (!isFirstPerson()) return false;
@@ -266,6 +279,13 @@ export function createGame(opts: GameOptions) {
 		get firstPerson() {
 			return isFirstPerson();
 		},
+		/** A timed face reaction, independent of the body animation. A newer cue replaces it. */
+		emote(name: Emotion, seconds?: number) {
+			emotions.play(name, seconds);
+		},
+		clearEmote() {
+			emotions.clear();
+		},
 		player,
 		parts,
 		world,
@@ -320,6 +340,7 @@ export function createGame(opts: GameOptions) {
 					player.update(dt, time);
 					parts.touch(player, dt, time);
 					for (const fn of updates) fn(dt, time);
+					emotions.tick(dt);
 				}
 				follow.update(dt, player, null);
 				// The sun's shadows follow her about.
@@ -327,6 +348,7 @@ export function createGame(opts: GameOptions) {
 				sun.position.set(p.x + 24, p.y + 50, p.z + 16);
 				sun.target.position.copy(p);
 				const atEye = syncView();
+				emoteMenu?.setVisible(ready && !atEye);
 				if (atEye !== framedInFirstPerson) frameView(atEye);
 				if (!atEye) {
 					renderer.render(scene, camera);

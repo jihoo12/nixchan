@@ -2,6 +2,8 @@
 // a toast for small ones, and a row of counters (coins, a clock…). It makes its own elements and
 // styles, so a game needs no markup of its own beyond a canvas.
 
+import { EMOTIONS, type Emotion, type EmoteMenu } from './emotions';
+
 const STYLE = `
 .nk-hud { position: fixed; inset: 0; pointer-events: none; z-index: 20; font-family: var(--sans, system-ui, sans-serif); -webkit-user-select: none; user-select: none; }
 .nk-hud > * { pointer-events: auto; }
@@ -28,6 +30,15 @@ const STYLE = `
 .nk-actions { position: fixed; top: 64px; right: 16px; display: flex; gap: 8px; }
 .nk-action { border: 0; border-radius: 9px; padding: 7px 13px; background: var(--surface, #fff); color: var(--ink, #1c1a3e); font: 800 14px var(--sans, system-ui); box-shadow: 0 4px 0 var(--edge, #c9c6e6); cursor: pointer; }
 .nk-action:hover { transform: translateY(-2px); }
+.nk-emotes { position:relative; }
+.nk-emotes[hidden], .nk-emote-panel[hidden] { display:none; }
+.nk-emote-panel { position:absolute; inset:calc(100% + 10px) 0 auto auto; width:max-content; max-width:min(260px,calc(100vw - 32px)); box-sizing:border-box;
+  padding:9px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; border:1px solid var(--edge,#c9c6e6); border-radius:13px;
+  box-shadow:0 8px 25px #14142538; background:var(--surface,#fff); color:var(--ink,#1c1a3e); }
+.nk-emote-panel button { min-height:44px; padding:6px 9px; border:0; border-radius:8px; background:var(--accent-soft,#e6e3ff);
+  color:inherit; cursor:pointer; font:700 13px var(--sans,system-ui); touch-action:manipulation; }
+.nk-emote-panel button:focus-visible, .nk-emote-panel button:hover { outline:2px solid var(--ink,#1c1a3e); outline-offset:-2px; }
+.nk-emote-panel p { grid-column:1/-1; margin:3px 3px 0; max-width:24ch; font-size:11px; }
 @media (max-width: 560px) { .nk-actions { top: 104px; } }
 .nk-skills { position: fixed; left: 50%; bottom: 58px; transform: translateX(-50%); display: flex; gap: 10px; }
 .nk-skill { position: relative; overflow: hidden; display: flex; align-items: center; gap: 8px; border: 0; border-radius: 12px; padding: 9px 14px 9px 10px; background: var(--surface, #fff); color: var(--ink, #1c1a3e); font: 800 14px var(--sans, system-ui); box-shadow: 0 4px 0 var(--edge, #c9c6e6); cursor: pointer; touch-action: manipulation; }
@@ -110,6 +121,57 @@ export function createHud() {
 				b.blur();
 			});
 			return b;
+		},
+		/** Optional, keyboard- and touch-friendly disclosure for facial reactions. */
+		emotes(opts: EmoteMenu, play: (emotion: Emotion) => void) {
+			const holder = el('div', 'nk-emotes', actions);
+			const button = el('button', 'nk-action', holder);
+			const panel = el('div', 'nk-emote-panel', holder);
+			const label = opts.label ?? 'Expressions';
+			button.textContent = label;
+			button.type = 'button';
+			button.setAttribute('aria-keyshortcuts', 'B');
+			panel.setAttribute('role', 'group');
+			panel.setAttribute('aria-label', label);
+			const labelDefaults = { happy: 'Happy', surprised: 'Surprised', sad: 'Sad', determined: 'Determined' };
+			for (const emotion of EMOTIONS) {
+				const choice = el('button', 'nk-emote-choice', panel);
+				choice.type = 'button';
+				choice.textContent = opts.labels?.[emotion] ?? labelDefaults[emotion];
+				choice.addEventListener('click', () => {
+					close(true);
+					play(emotion);
+				});
+			}
+			const hint = opts.hint ?? 'Drag the camera around to see her face.';
+			if (hint) el('p', '', panel).textContent = hint;
+			function close(focus = false) {
+				panel.hidden = true;
+				button.setAttribute('aria-expanded', 'false');
+				if (focus && !holder.hidden) button.focus();
+			}
+			const toggle = (focus = false) => {
+				if (holder.hidden) return;
+				if (!panel.hidden) return close(focus);
+				panel.hidden = false;
+				button.setAttribute('aria-expanded', 'true');
+				if (focus) panel.querySelector('button')?.focus();
+			};
+			holder.addEventListener('keydown', (e) => {
+				if (e.key !== 'Escape' || panel.hidden) return;
+				e.preventDefault();
+				close(true);
+			});
+			button.addEventListener('click', () => toggle());
+			close();
+			return {
+				toggle,
+				setVisible(visible: boolean) {
+					if (holder.hidden === !visible) return;
+					holder.hidden = !visible;
+					if (!visible) close();
+				},
+			};
 		},
 		/** A button in the row along the bottom for something she can do (a skill), with the key
 		 * that does it too. `use` is called by either; `cool(f)` greys `f` (1 … 0) of it over while
