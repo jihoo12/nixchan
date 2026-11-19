@@ -60,9 +60,13 @@ const css = `
 }
 `;
 
-export function createLanternHud(activate: () => void) {
+export function lanternKorean() {
 	const lang = new URLSearchParams(location.search).get('lang');
-	const ko = lang === 'ko' || (lang !== 'en' && (document.documentElement.lang === 'ko' || navigator.language.startsWith('ko')));
+	return lang === 'ko' || (lang !== 'en' && (document.documentElement.lang === 'ko' || navigator.language.startsWith('ko')));
+}
+
+export function createLanternHud(activate: () => void) {
+	const ko = lanternKorean();
 	const text = ko ? copy.ko : copy.en;
 	const style = document.createElement('style');
 	style.textContent = css;

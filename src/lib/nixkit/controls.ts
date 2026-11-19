@@ -15,6 +15,10 @@ export interface KeyRoute {
 	/** Gets the first say on every key press, before movement: returns true if it took the key
 	 * (as a conversation or an open menu does), so nothing else happens. */
 	intercept(key: string, e: KeyboardEvent): boolean;
+	/** A mode can handle a look drag instead of changing the third-person orbit pitch. */
+	adjustLook?(dx: number, dy: number): boolean;
+	/** An eye-level camera has no orbit distance to zoom. */
+	blockZoom?(): boolean;
 	/** Any key that isn't for moving or jumping. */
 	command(key: string, e: KeyboardEvent): void;
 	release(key: string): void;
@@ -76,8 +80,12 @@ export function createControls(
 		const p = pointers.get(e.pointerId);
 		if (!p) return;
 		if (p.kind === 'look') {
-			orbit.yaw -= (e.clientX - p.x) * 0.006;
-			orbit.pitch = clamp(orbit.pitch + (e.clientY - p.y) * 0.004, -0.3, 1.2);
+			const dx = e.clientX - p.x;
+			const dy = e.clientY - p.y;
+			if (!route.adjustLook?.(dx, dy)) {
+				orbit.yaw -= dx * 0.006;
+				orbit.pitch = clamp(orbit.pitch + dy * 0.004, -0.3, 1.2);
+			}
 		} else {
 			stick.set(e.clientX - p.ox, e.clientY - p.oy);
 			if (stick.length() > 60) stick.setLength(60);
@@ -102,6 +110,7 @@ export function createControls(
 		'wheel',
 		(e) => {
 			e.preventDefault();
+			if (route.blockZoom?.()) return;
 			orbit.distance = clamp(orbit.distance * Math.exp(e.deltaY * 0.0012), 3.5, 26);
 		},
 		{ passive: false },

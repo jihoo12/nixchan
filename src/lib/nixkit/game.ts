@@ -23,6 +23,7 @@ import { createControls, type Orbit } from './controls';
 import { createHud } from './hud';
 import { makeToon } from './look';
 import { createParts } from './parts';
+import { aimFirstPerson, createViewMode } from './view-mode';
 import { createPlayer, type Player } from './player';
 import type { World } from './world';
 import type { NixClip } from '../experimental/nix-figure';
@@ -41,6 +42,14 @@ export interface GameOptions {
 	canGlide?: () => boolean;
 	/** Whether she can dash. */
 	canDash?: () => boolean;
+	/** Opt in to an eye-level view (V / HUD button). Third person remains the default. */
+	firstPerson?: {
+		label?: string;
+		lockedLabel?: string;
+		eyeHeight?: number;
+		/** Temporarily show the avatar for a cutscene without losing the player's preference. */
+		forceThirdPerson?: () => boolean;
+	};
 	/** Something for her to be doing instead of walking about (a clip: 'Shot', 'Slam', 'Summon',
 	 * 'Dash', 'Cast', 'Wave' …), asked every frame; null for her own. */
 	clip?: () => NixClip | null;
@@ -132,8 +141,54 @@ export function createGame(opts: GameOptions) {
 	parts.setSpawn(opts.spawn.pos, opts.spawn.heading);
 
 	const orbit: Orbit = { yaw: opts.spawn.heading + Math.PI, pitch: 0.32, distance: 9 };
+	const view = createViewMode();
+	const first = opts.firstPerson;
+	const viewLocked = () => !!first?.forceThirdPerson?.();
+	const isFirstPerson = () => view.resolve(viewLocked());
+	let eyePitch = 0;
+	let resumeYaw: number | undefined;
+	const toggleView = () => view.toggle(viewLocked());
+	const viewButton = first && hud.button(first.label ?? 'First person', toggleView);
+	let shownView: boolean | undefined;
+	let shownLock: boolean | undefined;
+	const syncView = () => {
+		if (!viewButton) return false;
+		const locked = viewLocked();
+		const active = view.resolve(locked);
+		if (locked && view.active && resumeYaw === undefined) resumeYaw = orbit.yaw;
+		if (!locked && resumeYaw !== undefined) {
+			orbit.yaw = resumeYaw;
+			resumeYaw = undefined;
+		}
+		if (shownView !== active) {
+			viewButton.setAttribute('aria-pressed', String(active));
+			shownView = active;
+		}
+		if (shownLock !== locked) {
+			viewButton.disabled = locked;
+			viewButton.title = locked ? (first?.lockedLabel ?? 'Third-person scene') : 'V';
+			shownLock = locked;
+		}
+		return active;
+	};
+	if (viewButton) {
+		viewButton.setAttribute('aria-keyshortcuts', 'V');
+		viewButton.setAttribute('aria-pressed', 'false');
+		viewButton.title = 'V';
+	}
 	const controls = createControls(canvas, hud.touch, orbit, {
-		intercept: () => false,
+		intercept(key, e) {
+			if (!first || key !== 'v') return false;
+			if (!e.repeat) toggleView();
+			return true;
+		},
+		adjustLook(dx, dy) {
+			if (!isFirstPerson()) return false;
+			orbit.yaw -= dx * 0.006;
+			eyePitch = THREE.MathUtils.clamp(eyePitch + dy * 0.004, -1.20, 1.20);
+			return true;
+		},
+		blockZoom: isFirstPerson,
 		command(key, e) {
 			if (e.repeat) return;
 			if (key === 'q') controls.state.dashQueued = true;
@@ -183,11 +238,18 @@ export function createGame(opts: GameOptions) {
 	// ---------- the loop ----------
 
 	const updates: ((dt: number, time: number) => void)[] = [];
+	let framedInFirstPerson = false;
+	const frameView = (active: boolean) => {
+		framedInFirstPerson = active;
+		const portrait = innerWidth < innerHeight;
+		camera.fov = active ? (portrait ? 76 : 64) : (portrait ? 62 : 48);
+		camera.near = active ? 0.08 : 0.3;
+		camera.updateProjectionMatrix();
+	};
 	const resize = () => {
 		renderer.setSize(innerWidth, innerHeight, false);
 		camera.aspect = innerWidth / innerHeight;
-		camera.fov = innerWidth < innerHeight ? 62 : 48;
-		camera.updateProjectionMatrix();
+		frameView(isFirstPerson());
 	};
 	let time = 0;
 	let paused = false;
@@ -200,6 +262,10 @@ export function createGame(opts: GameOptions) {
 		hud,
 		controls,
 		orbit,
+		/** The currently effective view. It can temporarily differ from the selected view. */
+		get firstPerson() {
+			return isFirstPerson();
+		},
 		player,
 		parts,
 		world,
@@ -247,6 +313,7 @@ export function createGame(opts: GameOptions) {
 				const dt = Math.min(0.05, (now - last) / 1000);
 				last = now;
 				meter?.(now);
+				syncView(); // capture pre-cutscene yaw before game hooks can change it
 				if (ready && !paused) {
 					time += dt;
 					parts.move(dt, time);
@@ -259,7 +326,19 @@ export function createGame(opts: GameOptions) {
 				const p = player.pos;
 				sun.position.set(p.x + 24, p.y + 50, p.z + 16);
 				sun.target.position.copy(p);
-				renderer.render(scene, camera);
+				const atEye = syncView();
+				if (atEye !== framedInFirstPerson) frameView(atEye);
+				if (!atEye) {
+					renderer.render(scene, camera);
+				} else {
+					aimFirstPerson(camera, p, orbit.yaw, eyePitch, first?.eyeHeight);
+					// Hide the body and glider only while drawing. Animation and bone world poses
+					// are still available to the game and don't reset when the view switches back.
+					const wasVisible = player.root.visible;
+					player.root.visible = false;
+					try { renderer.render(scene, camera); }
+					finally { player.root.visible = wasVisible; }
+				}
 			});
 		},
 	};
