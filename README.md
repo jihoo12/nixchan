@@ -25,6 +25,11 @@ All under `/nixchan/`:
 - **Gallery** (`/gallery/`) — a plaza where Nixchan walks into portals to her games.
 - **Games** (`/play/<id>/`) — games made with Nixkit (`src/lib/nixkit/`), one folder each in `src/games/`. Anyone can add one: see [CONTRIBUTING.md](CONTRIBUTING.md).
 
+Every 3D page is drawn with three's WebGPURenderer (WebGPU, or WebGL 2 without it; `?webgl` on the
+URL forces that) in Nixkit's engine, so their shaders are TSL. Nixchan walks the island, her house
+and the grey place as Nixkit's player, told how each place has her move (`moves`, and the world's
+`collide` for its walls); the 3D path moves her itself, as it scrolls.
+
 Links to pages of this site go through `src/lib/base.ts` (`to('/island/')` is `/nixchan/island/`).
 Saves are in `localStorage`, which this site shares with jihoo's (the same origin).
 
@@ -104,8 +109,9 @@ The page is `src/pages/monochrome/index.astro`, and the code is in `src/lib/mono
 | --- | --- |
 | `world.ts` | The cells and how they're joined, and `place`, which lays them out round her |
 | `blocks.ts` | What each cell looks like (merged from the Blender pieces) and what in it is solid |
-| `game.ts` | Walking her from cell to cell, the camera, the shards, ashen ore, snowflakes and the compass |
-| `rift.ts`, `rift-nodes.ts` | The rift's shader, shared with the island: GLSL here (the grey place draws with WebGL), TSL for the island |
+| `game.ts` | Stepping her from cell to cell, the camera, the shards, ashen ore, snowflakes and the compass |
+| `moves.ts` | How she moves here, as Nixkit's player is told it: the walls, boxes and columns round her push her out as they always have (`tools/test-nixkit-grey-feel.mjs` keeps it feeling the same) |
+| `rift.ts` | The rift, shared with the island: its shader (TSL) and its uniforms |
 
 ## Deployment
 

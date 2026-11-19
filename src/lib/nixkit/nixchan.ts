@@ -49,7 +49,7 @@ export interface NixchanOptions {
 	/** Where she is: what she stands on, bumps into and swims in. */
 	world: World;
 	toon: Toon;
-	/** How her materials are made: WebGL's without it, nixkit/figure-nodes.ts's on WebGPU. */
+	/** How her materials are made (nixkit/figure-nodes.ts's nodeLook without it). */
 	look?: FigureLook;
 	/** The on-screen stick, knob and jump (and dash) buttons, for touch. */
 	touch: Parameters<typeof createControls>[1];
@@ -76,8 +76,15 @@ export interface NixchanOptions {
 	onKey?: (key: string, e: KeyboardEvent) => void;
 	/** Whether E waves and Q dashes (both, without these). */
 	keys?: { wave?: boolean; dash?: boolean };
-	/** The rest of what player.ts can be told: ripples, carrying, the glider, belts, respawning. */
-	player?: Pick<PlayerContext, 'ripple' | 'carrying' | 'glider' | 'carriedBy' | 'respawnAt'>;
+	/** The rest of what player.ts can be told: how she moves, jumping, walking to a spot, ripples,
+	 * carrying, the glider, belts, respawning. */
+	player?: Pick<PlayerContext, 'moves' | 'canJump' | 'autoSteer' | 'ripple' | 'carrying' | 'glider' | 'carriedBy' | 'respawnAt'>;
+	/** Whether the camera follows her (it does, unless this is false): a game with a camera of its
+	 * own (a room seen from the front, say) moves `engine.camera` itself. */
+	camera?: boolean;
+	/** Whether she's moving herself each frame (yes, without it). While it says no, the game has her:
+	 * where she is and what she's doing (as when she's lying asleep in bed), and `player.figure.tick`. */
+	active?: () => boolean;
 	/** Her model couldn't be loaded. */
 	onModelFail?: (err: unknown) => void;
 }
@@ -226,10 +233,13 @@ export function createNixchan(engine: Engine, opts: NixchanOptions) {
 		camera.updateProjectionMatrix();
 	};
 	// Before anything else: catch the yaw from before a cutscene, before the game can change it.
-	engine.add({ order: ORDER.input - 100, always: true, update: syncView, resize: () => frameView(isFirstPerson()) });
-	engine.add({ order: ORDER.player, update: (dt, time) => player.update(dt, time) });
+	// (A game with a camera of its own frames it itself, unless she's at eye level.)
+	const ownsCamera = opts.camera !== false;
+	engine.add({ order: ORDER.input - 100, always: true, update: syncView, resize: () => (ownsCamera || isFirstPerson()) && frameView(isFirstPerson()) });
+	const active = opts.active ?? (() => true);
+	engine.add({ order: ORDER.player, update: (dt, time) => active() && player.update(dt, time) });
 	engine.add({ order: ORDER.effects, update: (dt) => emotions.tick(dt) });
-	engine.add({ order: ORDER.camera, always: true, update: (dt) => follow.update(dt, player, focus.current()) });
+	if (opts.camera !== false) engine.add({ order: ORDER.camera, always: true, update: (dt) => follow.update(dt, player, focus.current()) });
 	let atEye = false;
 	engine.add({
 		order: ORDER.hud,

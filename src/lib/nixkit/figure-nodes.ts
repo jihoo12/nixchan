@@ -1,6 +1,6 @@
-// Nixchan's look for WebGPU (nixkit/game.ts draws with three's WebGPURenderer): the same toon
-// shading, rim light and ink line as experimental/nix-figure.ts's WebGL look, written in TSL, so
-// it runs on WebGPU and on the WebGL 2 the renderer falls back to.
+// Nixchan's look (every page with her in it draws with three's WebGPURenderer): toon shading, a rim
+// of light and an ink line, written in TSL, so it runs on WebGPU and on the WebGL 2 the renderer
+// falls back to. (It was a WebGL look once, patching three's GLSL; this draws it the same.)
 //
 // (Before three r186, WebGPU toon shading lit by the wrong normal and looked dull: mrdoob/three.js
 // #34246. Keep three at 0.187 or later.)

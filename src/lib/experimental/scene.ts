@@ -3,6 +3,9 @@
 // planks or hanging from strings like the 2D site. Stations further down the path fade into the haze.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { WebGPURenderer } from 'three/webgpu';
+import { createEngine } from '../nixkit/engine';
+import { nodeLook } from '../nixkit/figure-nodes';
 import { buildNixFigure, type NixClip, type NixJump } from './nix-figure';
 import { buildPortal, PORTAL_FEET, PORTAL_HALF_WIDTH, PORTAL_RADIUS } from './portal';
 import { loadText, saveText } from '../island/save';
@@ -156,13 +159,16 @@ export async function start() {
 	if (!canvas || !dataNode) return;
 	const data: SceneData = JSON.parse(dataNode.textContent || '{}');
 
-	let renderer: THREE.WebGLRenderer;
-	try {
-		renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-	} catch {
-		document.documentElement.classList.add('no-3d');
-		return;
-	}
+	// Drawn with three's WebGPURenderer, as the rest of Nixchan's world is (WebGL 2 without WebGPU, or
+	// with ?webgl), in Nixkit's engine. (Without either, the page is its 2D self: the engine marks it
+	// no-3d.)
+	const engine = createEngine({
+		canvas,
+		renderer: (c) => new WebGPURenderer({ canvas: c, antialias: true, forceWebGL: new URLSearchParams(location.search).has('webgl') }),
+		camera: { fov: 38, near: 0.1, far: 200 },
+		maxPixelRatio: 2,
+	});
+	if (!engine) return;
 	document.documentElement.classList.add('has-3d');
 
 	// Canvas text needs the site's fonts, but never wait on them for long.
@@ -172,12 +178,7 @@ export async function start() {
 	]).catch(() => {});
 
 	const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-	renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-	renderer.shadowMap.enabled = true;
-	renderer.shadowMap.type = THREE.PCFShadowMap;
-
-	const scene = new THREE.Scene();
-	const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 200);
+	const { scene, camera } = engine;
 	const loader = new THREE.TextureLoader();
 	const repaints: (() => void)[] = [];
 	const themed: (() => void)[] = [];
@@ -912,7 +913,7 @@ export async function start() {
 		shadowCaster.scale.y = 1.35;
 		shadowCaster.castShadow = true;
 		flat.add(shadowCaster);
-		const figure = buildNixFigure(data.art.nix.model);
+		const figure = buildNixFigure(data.art.nix.model, nodeLook);
 		squash.add(figure.group);
 		scene.add(root);
 		// Without the model there is only the sprite to show.
@@ -1627,13 +1628,11 @@ export async function start() {
 		viewShift = { x: THREE.MathUtils.lerp(fa.shiftX, fb.shiftX, f), y: THREE.MathUtils.lerp(fa.shiftY, fb.shiftY, f) };
 	};
 
+	// (The engine sizes the renderer and the camera to the window; this is what the page needs to know.)
 	const resize = () => {
 		width = innerWidth;
 		height = innerHeight;
 		narrow = width < 850;
-		renderer.setSize(width, height, false);
-		camera.aspect = width / height;
-		camera.updateProjectionMatrix();
 	};
 
 	const pick = () => {
@@ -1680,7 +1679,6 @@ export async function start() {
 		repaints.forEach((f) => f());
 	};
 	addEventListener('site-time', applyTheme);
-	addEventListener('resize', resize);
 	resize();
 	applyTheme();
 
@@ -1688,55 +1686,53 @@ export async function start() {
 	camPos.copy(wantPos);
 	camLook.copy(wantLook);
 
-	const timer = new THREE.Timer();
-	timer.connect(document);
-	renderer.setAnimationLoop((now) => {
-		timer.update(now);
-		const dt = Math.min(timer.getDelta(), 0.05);
-		const time = timer.getElapsed();
-		if (roam && !roamable()) setRoam(false, false);
-		if (roam) {
-			roamFrame(dt);
-		} else {
-			const p = progress();
-			target(p);
-			const rate = reduceMotion ? 30 : 5;
-			const sway = new THREE.Vector3(parallax.x * 0.8, parallax.y * 0.45, 0);
-			camPos.x = damp(camPos.x, wantPos.x + sway.x, rate, dt);
-			camPos.y = damp(camPos.y, wantPos.y + sway.y, rate, dt);
-			camPos.z = damp(camPos.z, wantPos.z, rate, dt);
-			camLook.x = damp(camLook.x, wantLook.x, rate, dt);
-			camLook.y = damp(camLook.y, wantLook.y, rate, dt);
-			camLook.z = damp(camLook.z, wantLook.z, rate, dt);
-			nix.follow(p);
-		}
-		camera.position.copy(camPos);
-		camera.lookAt(camLook);
-		camera.setViewOffset(width, height, viewShift.x * width, viewShift.y * height, width, height);
+	// The frame: one system in the engine, everything in the order it always has been.
+	engine.add({
+		resize,
+		update(dt, time) {
+			if (roam && !roamable()) setRoam(false, false);
+			if (roam) {
+				roamFrame(dt);
+			} else {
+				const p = progress();
+				target(p);
+				const rate = reduceMotion ? 30 : 5;
+				const sway = new THREE.Vector3(parallax.x * 0.8, parallax.y * 0.45, 0);
+				camPos.x = damp(camPos.x, wantPos.x + sway.x, rate, dt);
+				camPos.y = damp(camPos.y, wantPos.y + sway.y, rate, dt);
+				camPos.z = damp(camPos.z, wantPos.z, rate, dt);
+				camLook.x = damp(camLook.x, wantLook.x, rate, dt);
+				camLook.y = damp(camLook.y, wantLook.y, rate, dt);
+				camLook.z = damp(camLook.z, wantLook.z, rate, dt);
+				nix.follow(p);
+			}
+			camera.position.copy(camPos);
+			camera.lookAt(camLook);
+			camera.setViewOffset(width, height, viewShift.x * width, viewShift.y * height, width, height);
 
-		sun.target.position.copy(camLook);
-		sun.position.copy(camLook).add(new THREE.Vector3(-7, 13, 12));
+			sun.target.position.copy(camLook);
+			sun.position.copy(camLook).add(new THREE.Vector3(-7, 13, 12));
 
-		sky.position.copy(camera.position);
-		// She looks from where she is on screen towards the pointer.
-		if (pointer.x <= 1) {
-			nixHead.copy(nix.root.position).y += 1.3;
-			nixHead.project(camera);
-			nixLook.set((pointer.x - nixHead.x) * 2, (pointer.y - nixHead.y) * 2);
-		} else nixLook.set(0, 0);
-		nix.tick(dt, time, nixLook);
-		tickers.forEach((f) => f(dt, time));
+			sky.position.copy(camera.position);
+			// She looks from where she is on screen towards the pointer.
+			if (pointer.x <= 1) {
+				nixHead.copy(nix.root.position).y += 1.3;
+				nixHead.project(camera);
+				nixLook.set((pointer.x - nixHead.x) * 2, (pointer.y - nixHead.y) * 2);
+			} else nixLook.set(0, 0);
+			nix.tick(dt, time, nixLook);
+			tickers.forEach((f) => f(dt, time));
 
-		const hit = pointer.x <= 1 ? pick() : null;
-		if (hit !== hovered) {
-			hovered = hit;
-			hit?.onHover?.();
-			canvas.style.cursor = document.body.style.cursor = hit ? 'pointer' : '';
-			tip.hidden = !hit?.label;
-			if (hit) tip.textContent = hit.label;
-		}
-		if (hit) tip.style.transform = `translate(${lastPointer.x + 14}px, ${lastPointer.y + 16}px)`;
-
-		renderer.render(scene, camera);
+			const hit = pointer.x <= 1 ? pick() : null;
+			if (hit !== hovered) {
+				hovered = hit;
+				hit?.onHover?.();
+				canvas.style.cursor = document.body.style.cursor = hit ? 'pointer' : '';
+				tip.hidden = !hit?.label;
+				if (hit) tip.textContent = hit.label;
+			}
+			if (hit) tip.style.transform = `translate(${lastPointer.x + 14}px, ${lastPointer.y + 16}px)`;
+		},
 	});
+	void engine.start();
 }

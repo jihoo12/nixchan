@@ -34,7 +34,30 @@ const STEP_MAX = 0.3;
 const BODY_MID = 0.8;
 const HEAD = 1.7;
 
+/** How she moves, where a game wants it different (each is the island's without it). */
+export interface Moves {
+	/** Walking and running speeds, in metres a second (3 and 7.5). */
+	walk?: number;
+	run?: number;
+	/** How quickly she gets up to speed and stops on her feet (10; Infinity for at once). */
+	grip?: number;
+	/** How quickly she turns to face the way she's going (10). */
+	turn?: number;
+	/** How far round her she keeps from what she walks round (0.45 m). */
+	body?: number;
+	/** How fast she's going when her walking and running clips play at their own pace, in metres a
+	 * second (1.5 and 4.2, which is how they're cut: her feet keep to the ground). */
+	stride?: { walk?: number; run?: number };
+}
+
 export interface PlayerContext {
+	/** How she moves, where it isn't as on the island. */
+	moves?: Moves;
+	/** Whether she can jump (she always can, unless this says otherwise). */
+	canJump?: () => boolean;
+	/** Where to walk when nothing's being pressed, as a direction on the ground (x, z), at most 1
+	 * long: towards a spot clicked on, say. Null to stand still. */
+	autoSteer?: () => { x: number; z: number } | null;
 	/** Body cues may be disabled while paused, in first person, or for reduced motion. */
 	canGesture?: () => boolean;
 	/** Where she is, and what's round her. */
@@ -42,7 +65,7 @@ export interface PlayerContext {
 	scene: THREE.Scene;
 	toon: Toon;
 	modelUrl: string;
-	/** How her materials are made: WebGL's by default, or nixkit/figure-nodes.ts's on WebGPU. */
+	/** How her materials are made (nixkit/figure-nodes.ts's nodeLook without it). */
 	look?: FigureLook;
 	start: THREE.Vector3;
 	heading: number;
@@ -78,6 +101,13 @@ export function createPlayer(ctx: PlayerContext) {
 	const wadeDepth = world.wadeDepth ?? (() => 0);
 	const windLift = world.windLift ?? (() => 0);
 	const ripple = ctx.ripple ?? (() => {});
+	const walkSpeed = ctx.moves?.walk ?? WALK;
+	const runSpeed = ctx.moves?.run ?? RUN;
+	const grip = ctx.moves?.grip ?? 10;
+	const turnRate = ctx.moves?.turn ?? 10;
+	const bodyR = ctx.moves?.body ?? BODY_R;
+	const walkStride = ctx.moves?.stride?.walk ?? 1.5;
+	const runStride = ctx.moves?.stride?.run ?? 4.2;
 	const root = new THREE.Group();
 	const figure = buildNixFigure(ctx.modelUrl, ctx.look);
 	root.add(figure.group);
@@ -213,15 +243,17 @@ export function createPlayer(ctx: PlayerContext) {
 		};
 		for (const f of nearby(p.x, p.z)) {
 			if (f.dome || f.pad !== undefined || !within(f, p.y)) continue;
-			if (f.top === undefined || p.y < f.top) out(f.x, f.z, f.r + BODY_R);
+			if (f.top === undefined || p.y < f.top) out(f.x, f.z, f.r + bodyR);
 			// On her feet she only meets trunks, as she always has; the leaves are for the air.
 			const c = f.crown;
 			if (!c || grounded) continue;
 			// Her middle against the ball of leaves: at this height, how far out round it she has to be.
 			const dy = p.y + BODY_MID - c.y;
-			const reach = c.r + BODY_R;
+			const reach = c.r + bodyR;
 			if (Math.abs(dy) < reach) out(c.x, c.z, Math.sqrt(reach * reach - dy * dy));
 		}
+		// Anything else the world has her walk round, as it likes (walls, boxes).
+		world.collide?.(p, bodyR, vel);
 	};
 
 	const steer = new THREE.Vector3();
@@ -230,7 +262,12 @@ export function createPlayer(ctx: PlayerContext) {
 		const { forward, right, running } = controls.move();
 		const yaw = ctx.orbit.yaw;
 		steer.set(-Math.sin(yaw) * forward + Math.cos(yaw) * right, 0, -Math.cos(yaw) * forward - Math.sin(yaw) * right);
+		if (steer.lengthSq() < 1e-6 && ctx.autoSteer) {
+			const auto = ctx.autoSteer();
+			if (auto) steer.set(auto.x, 0, auto.z);
+		}
 		if (steer.lengthSq() > 1) steer.normalize();
+		if (input.jumpQueued && !(ctx.canJump?.() ?? true)) input.jumpQueued = false;
 		let moving = steer.lengthSq() > 0.01;
 		// Busy at something, she stays on the spot facing it (and moving off may put it down).
 		const held = ctx.hold(moving || input.jumpQueued);
@@ -270,9 +307,9 @@ export function createPlayer(ctx: PlayerContext) {
 
 		const wading = !!sea && grounded && pos.y < 0.05;
 		const wing = ctx.glider?.() ?? { speed: GLIDE, sink: GLIDE_SINK };
-		const speed = gliding ? wing.speed : swimming ? (running ? SWIM_FAST : SWIM) : (running ? RUN : WALK) * (wading ? 0.6 : 1);
+		const speed = gliding ? wing.speed : swimming ? (running ? SWIM_FAST : SWIM) : (running ? runSpeed : walkSpeed) * (wading ? 0.6 : 1);
 		// In the water she glides, and in the air she can only steer a little (more so under the wing).
-		const control = grounded ? 10 : swimming ? 4 : gliding ? 2.2 : 3;
+		const control = grounded ? grip : swimming ? 4 : gliding ? 2.2 : 3;
 		if (dashing > 0) {
 			// Mid-dash she goes flat out, and afterwards eases back to her own pace (slowly, in the
 			// air, so a dash off a jump carries her a long way).
@@ -285,8 +322,9 @@ export function createPlayer(ctx: PlayerContext) {
 				puffClock = 0.05;
 			}
 		} else {
-			vel.x = damp(vel.x, steer.x * speed, control, dt);
-			vel.z = damp(vel.z, steer.z * speed, control, dt);
+			// (A grip of Infinity is at once, even on a frame that took no time.)
+			vel.x = control === Infinity ? steer.x * speed : damp(vel.x, steer.x * speed, control, dt);
+			vel.z = control === Infinity ? steer.z * speed : damp(vel.z, steer.z * speed, control, dt);
 		}
 
 		// Move, sliding along whatever stops her rather than sticking to it. Standing on something
@@ -408,8 +446,9 @@ export function createPlayer(ctx: PlayerContext) {
 		root.position.copy(pos);
 
 		const planar = Math.hypot(vel.x, vel.z);
-		if (planar > 0.2) heading = Math.atan2(vel.x, vel.z);
-		turn += Math.atan2(Math.sin(heading - turn), Math.cos(heading - turn)) * (1 - Math.exp(-10 * dt));
+		// (Held, she faces what's holding her, even while she's still slowing down.)
+		if (planar > 0.2 && held === null) heading = Math.atan2(vel.x, vel.z);
+		turn += Math.atan2(Math.sin(heading - turn), Math.cos(heading - turn)) * (1 - Math.exp(-turnRate * dt));
 		figure.group.rotation.y = turn;
 
 		// The glider opens out over her head, and banks a little into her turns.
@@ -434,7 +473,7 @@ export function createPlayer(ctx: PlayerContext) {
 		bodyAvailable = gestureAllowed;
 		// The clips are cut for about 1.5 (walk), 4.2 (run) and 2.4 (swim) a second.
 		const pace =
-			clip === 'Run' ? clamp(planar / 4.2, 0.8, 2.4) : clip === 'Walk' || clip === 'CarryWalk' ? clamp(planar / 1.5, 0.6, 2.6) : clip === 'Swim' ? clamp(planar / 2.4, 0.7, 1.6) : 1;
+			clip === 'Run' ? clamp(planar / runStride, 0.8, 2.4) : clip === 'Walk' || clip === 'CarryWalk' ? clamp(planar / walkStride, 0.6, 2.6) : clip === 'Swim' ? clamp(planar / 2.4, 0.7, 1.6) : 1;
 		figure.play(clip, pace);
 
 		// Rings on the water: steadily as she swims, now and then as she treads water or wades.

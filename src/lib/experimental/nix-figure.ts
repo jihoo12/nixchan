@@ -3,6 +3,7 @@
 // her face on, plays the clips baked into her rig, and turns her head and long hair on top of them.
 // Her origin is where she sits: y = 0 is the surface, z = 0 is its front edge, and she faces +z.
 import * as THREE from 'three';
+import { nodeLook } from '../nixkit/figure-nodes';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { drawLogo, type LogoId } from './logos';
 import { loadOutfit, wear, type HatId } from './outfit';
@@ -153,8 +154,8 @@ export interface NixFigure {
 	tick(dt: number, time: number, state: { airborne: boolean; look: THREE.Vector2; still: boolean; jump: { t: number; clip: NixJump } | null; landed?: boolean }): void;
 }
 
-/** How her materials are made. The ones here patch three's WebGL shaders (onBeforeCompile); a page
- * drawn with WebGPU passes its own, written in TSL (nixkit/figure-nodes.ts), the same look. */
+/** How her materials are made: nixkit/figure-nodes.ts's nodeLook (TSL, for WebGPU) unless a page
+ * brings its own. */
 export interface FigureLook {
 	/** Toon shading, plus a soft rim of light along the silhouette. */
 	toon(params: THREE.MeshToonMaterialParameters): THREE.MeshToonMaterial;
@@ -162,30 +163,7 @@ export interface FigureLook {
 	inkLine(hex: string, width: number): THREE.Material;
 }
 
-/** Her look for pages drawn with WebGL. */
-export const glslLook: FigureLook = {
-	toon(params) {
-		const mat = new THREE.MeshToonMaterial(params);
-		mat.onBeforeCompile = (shader) => {
-			shader.fragmentShader = shader.fragmentShader.replace(
-				'#include <opaque_fragment>',
-				`float rim = pow(1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0), 3.0);
-				outgoingLight += smoothstep(0.45, 0.75, rim) * 0.22 * vec3(1.0, 0.97, 1.0);
-				#include <opaque_fragment>`,
-			);
-		};
-		return mat;
-	},
-	inkLine(hex, width) {
-		const line = new THREE.MeshBasicMaterial({ color: hex, side: THREE.BackSide });
-		line.onBeforeCompile = (shader) => {
-			shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>\ntransformed += normal * ${width.toFixed(4)};`);
-		};
-		return line;
-	},
-};
-
-export function buildNixFigure(url: string, made: FigureLook = glslLook): NixFigure {
+export function buildNixFigure(url: string, made: FigureLook = nodeLook): NixFigure {
 	const ramp = toonRamp();
 	// Toon shading plus a soft rim of light along the silhouette, so she lifts off the wall.
 	const toon = (hex: string, extra: THREE.MeshToonMaterialParameters = {}) => made.toon({ color: hex, gradientMap: ramp, ...extra });
@@ -229,7 +207,11 @@ export function buildNixFigure(url: string, made: FigureLook = glslLook): NixFig
 	// Hair gets a finer lavender line, so the thin tips don't turn into black spikes.
 	const inkLine = (hex: string, width: number) => made.inkLine(hex, width);
 	const outline = inkLine(INK, 0.012);
-	const hairLine = inkLine('#8a85c4', 0.006);
+	// Her hair's line is half as wide again as it once was: a few millimetres out, much of what WebGL
+	// drew of it was the shell showing through where the hair turns away, which WebGPU's finer depth
+	// buffer doesn't let it do. (Her body's line stays as it was: any wider, and it shows through in
+	// the crook of her arm when it bends.)
+	const hairLine = inkLine('#8a85c4', 0.009);
 	// Too fine to carry a line of their own.
 	const uninked = /^(Cords|Pin)$|Laces$|^Rod/;
 

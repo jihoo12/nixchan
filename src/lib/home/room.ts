@@ -6,9 +6,13 @@
 // and everywhere on the site. The room is made in Blender (tools/home-room); its sizes are here too.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { buildNixFigure } from '../experimental/nix-figure';
+import { WebGPURenderer } from 'three/webgpu';
+import { createEngine, ORDER } from '../nixkit/engine';
+import { nodeLook } from '../nixkit/figure-nodes';
 import { makeToon } from '../nixkit/look';
+import { createNixchan } from '../nixkit/nixchan';
 import { clamp, damp } from '../nixkit/util';
+import type { World } from '../nixkit/world';
 import { to as inSite } from '../base';
 
 // The sizes in tools/home-room/build.py.
@@ -37,6 +41,10 @@ const SOLID: [number, number, number][] = [
 const BODY = 0.38;
 const WALK = 2.6;
 const RUN = 5.2;
+/** How she moves in here (nixkit/player.ts): at once, not easing up to speed, and turning a touch
+ * quicker than outside; her walk plays at 1.1 times its own pace, her run at its own. */
+const MOVES = { walk: WALK, run: RUN, grip: Infinity, turn: 12, body: BODY, stride: { walk: WALK / 1.1, run: RUN } };
+const MOVE_KEYS = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift', ' '];
 
 export function startRoom() {
 	const canvas = document.querySelector<HTMLCanvasElement>('[data-room]');
@@ -51,20 +59,19 @@ export function startRoom() {
 		zzz: $('[data-zzz]'),
 		toast: $('[data-toast]'),
 	};
-	let renderer: THREE.WebGLRenderer;
-	try {
-		renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-	} catch {
-		if (ui.loading) ui.loading.textContent = "This room needs WebGL, which this browser doesn't have on.";
-		return;
-	}
-	renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
-	renderer.shadowMap.enabled = true;
-	renderer.shadowMap.type = THREE.PCFShadowMap;
+	// Drawn with three's WebGPURenderer, as the rest of Nixchan's world is (WebGL 2 without WebGPU, or
+	// with ?webgl), in Nixkit's engine: each thing below that happens every frame is a system in it.
+	const engine = createEngine({
+		canvas,
+		renderer: (c) => new WebGPURenderer({ canvas: c, antialias: true, forceWebGL: new URLSearchParams(location.search).has('webgl') }),
+		camera: { fov: 36, near: 0.1, far: 80 },
+		onFail: () => {
+			if (ui.loading) ui.loading.textContent = "This room needs WebGPU or WebGL 2, which this browser doesn't have on.";
+		},
+	});
+	if (!engine) return;
+	const { scene, camera } = engine;
 	const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-	const scene = new THREE.Scene();
-	const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 80);
 	const toon = makeToon();
 
 	// ---------- light, and the time of day ----------
@@ -138,51 +145,110 @@ export function startRoom() {
 
 	// ---------- Nixchan ----------
 
-	const figure = buildNixFigure(canvas.dataset.model ?? '');
-	const her = new THREE.Group();
-	her.add(figure.group);
-	scene.add(her);
-	figure.group.traverse((o) => (o.castShadow = true));
-	// In from the door, facing into the room.
-	const pos = new THREE.Vector3(DOOR.x + 1.1, 0, DOOR.z);
-	let heading = Math.PI / 2;
-	let turn = heading;
-	let ready = false;
-	figure.ready.then(
-		() => {
-			ready = true;
-			figure.group.traverse((o) => (o.castShadow = true));
-			ui.loading?.setAttribute('hidden', '');
-		},
-		() => {
-			if (ui.loading) ui.loading.textContent = "Nixchan couldn't make it home just now. Try reloading?";
-		},
-	);
+	/** Keeps (x, z) out of the walls, the bed and the furniture. */
+	const keepOut = (p: THREE.Vector3) => {
+		p.x = clamp(p.x, -W / 2 + BODY, W / 2 - BODY);
+		p.z = clamp(p.z, BACK + BODY, D / 2 - 0.3);
+		// The bed: a box she walks round.
+		if (p.x > BED.x0 - BODY && p.x < BED.x1 + BODY && p.z < BED.z1 + BODY) {
+			const out = [
+				[BED.x0 - BODY - p.x, 0],
+				[BED.x1 + BODY - p.x, 0],
+				[0, BED.z1 + BODY - p.z],
+			].sort((a, b) => Math.hypot(a[0], a[1]) - Math.hypot(b[0], b[1]))[0];
+			p.x += out[0];
+			p.z += out[1];
+		}
+		for (const [x, z, r] of SOLID) {
+			const dx = p.x - x;
+			const dz = p.z - z;
+			const d = Math.hypot(dx, dz);
+			if (d < r + BODY && d > 1e-4) {
+				p.x = x + (dx / d) * (r + BODY);
+				p.z = z + (dz / d) * (r + BODY);
+			}
+		}
+	};
 
-	// ---------- moving about ----------
+	// The room, as Nixkit's player sees it: a flat floor, and walls, a bed and furniture that keep her
+	// out just as they always have (keepOut).
+	const roomWorld: World = {
+		groundAt: () => 0,
+		ceilingAt: () => Infinity,
+		nearby: () => [],
+		inside: () => true,
+		collide: (p) => keepOut(p),
+	};
 
-	const keys = new Set<string>();
 	/** A spot on the floor she's walking to (from a click or a tap), and what to do when she's there. */
 	let target: { x: number; z: number; then?: () => void } | null = null;
 	/** How long she's been walking without getting anywhere. */
 	let stuck = 0;
-	addEventListener('keydown', (e) => {
-		if (e.ctrlKey || e.metaKey || e.altKey) return;
-		const k = e.key.toLowerCase();
+	/** What she went to do, once she's there: done after she's moved this frame, so it can start a
+	 * clip of its own (lying down) without her own walking clip taking over again. */
+	let arrived: (() => void) | undefined;
+	// In from the door, facing into the room. The camera looks straight in, so the keys are the
+	// room's own directions (the orbit's yaw stays at 0, and a drag doesn't turn it).
+	const nix = createNixchan(engine, {
+		canvas,
+		modelUrl: canvas.dataset.model ?? '',
+		spawn: { pos: new THREE.Vector3(DOOR.x + 1.1, 0, DOOR.z), heading: Math.PI / 2 },
+		world: roomWorld,
+		toon,
+		look: nodeLook,
+		touch: { stick: null, knob: null, jump: null },
+		orbit: { yaw: 0 },
+		camera: false,
+		keys: { wave: false, dash: false },
+		// Asleep, she's in bed, not walking about (the frame below has her).
+		active: () => !asleep,
+		hold: () => (leaving ? player.heading : null),
+		player: {
+			moves: MOVES,
+			canJump: () => false,
+			// With nothing pressed, she walks to where she was sent, and does what she went for.
+			autoSteer: () => {
+				if (!target || leaving) return null;
+				const dx = target.x - pos.x;
+				const dz = target.z - pos.z;
+				const d = Math.hypot(dx, dz);
+				if (d >= 0.15) return { x: dx / d, z: dz / d };
+				arrived = target.then;
+				target = null;
+				return null;
+			},
+		},
+		onModelFail: () => {
+			if (ui.loading) ui.loading.textContent = "Nixchan couldn't make it home just now. Try reloading?";
+		},
+	});
+	const { player, keys } = nix;
+	const { figure, pos } = player;
+	let ready = false;
+	nix.loaded.then(
+		() => {
+			ready = true;
+			ui.loading?.setAttribute('hidden', '');
+		},
+		() => {},
+	);
+
+	// ---------- moving about ----------
+
+	// Asleep, any key wakes her (once she's properly asleep) and does nothing else; a key to move
+	// stops her walking to wherever she was going.
+	keys.intercept((k, e) => {
 		if (asleep) {
-			// Any key wakes her (once she's properly asleep).
 			if (asleepFor > 1.2 && !e.repeat) wake();
-			return;
+			return true;
 		}
-		if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift', ' '].includes(k)) {
-			keys.add(k);
-			target = null;
-			if (k.startsWith('arrow') || k === ' ') e.preventDefault();
-		}
+		if (MOVE_KEYS.includes(k)) target = null;
+		return false;
+	}, 100);
+	keys.command((k, e) => {
 		if (k === 'e' && !e.repeat) act();
 	});
-	addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
-	addEventListener('blur', () => keys.clear());
+	keys.look(() => true);
 
 	/** Where she is in relation to what's in the room. */
 	const nearBed = () => pos.x > BED.x0 - 0.3 && pos.x < BED.x1 + 0.2 && pos.z < BED.z1 + 1.0;
@@ -219,31 +285,6 @@ export function startRoom() {
 		target = atDoor ? { x: DOOR.x + 0.8, z: DOOR.z, then: leave } : { x: hit.x, z: hit.z };
 	});
 
-	/** Keeps (x, z) out of the walls, the bed and the furniture. */
-	const keepOut = (p: THREE.Vector3) => {
-		p.x = clamp(p.x, -W / 2 + BODY, W / 2 - BODY);
-		p.z = clamp(p.z, BACK + BODY, D / 2 - 0.3);
-		// The bed: a box she walks round.
-		if (p.x > BED.x0 - BODY && p.x < BED.x1 + BODY && p.z < BED.z1 + BODY) {
-			const out = [
-				[BED.x0 - BODY - p.x, 0],
-				[BED.x1 + BODY - p.x, 0],
-				[0, BED.z1 + BODY - p.z],
-			].sort((a, b) => Math.hypot(a[0], a[1]) - Math.hypot(b[0], b[1]))[0];
-			p.x += out[0];
-			p.z += out[1];
-		}
-		for (const [x, z, r] of SOLID) {
-			const dx = p.x - x;
-			const dz = p.z - z;
-			const d = Math.hypot(dx, dz);
-			if (d < r + BODY && d > 1e-4) {
-				p.x = x + (dx / d) * (r + BODY);
-				p.z = z + (dz / d) * (r + BODY);
-			}
-		}
-	};
-
 	// ---------- sleeping ----------
 
 	let asleep = false;
@@ -265,7 +306,7 @@ export function startRoom() {
 		asleepFor = 0;
 		slept = false;
 		target = null;
-		keys.clear();
+		nix.controls.clearKeys();
 		figure.play('Sleep');
 		figure.setBlink(true);
 		if (ui.zzz) ui.zzz.hidden = false;
@@ -277,7 +318,7 @@ export function startRoom() {
 		if (ui.zzz) ui.zzz.hidden = true;
 		// Up and standing beside the bed, facing out into the room.
 		pos.set(clamp(pos.x, BED.x0 + 0.6, BED.x1 - 0.6), 0, BED.z1 + 0.55);
-		heading = turn = 0;
+		player.face(0);
 		if (slept) toast(night() ? 'Good evening! She slept the day away.' : 'Good morning! She slept the night through.');
 	};
 
@@ -299,126 +340,105 @@ export function startRoom() {
 
 	// ---------- every frame ----------
 
-	const resize = () => {
-		const w = canvas.clientWidth;
-		const h = canvas.clientHeight;
-		renderer.setSize(w, h, false);
-		camera.aspect = w / h;
-		// Narrow screens step back, so the whole room still fits across.
-		const fit = Math.max(1, 1.55 / camera.aspect);
-		camera.fov = 36 * Math.min(fit, 1.7);
-		camera.updateProjectionMatrix();
-	};
-	addEventListener('resize', resize);
-	resize();
+	// Narrow screens step back, so the whole room still fits across.
+	engine.add({
+		resize() {
+			const fit = Math.max(1, 1.55 / camera.aspect);
+			camera.fov = 36 * Math.min(fit, 1.7);
+			camera.updateProjectionMatrix();
+		},
+	});
+
+	// Pressed up against something (sliding round it is fine), for a while, she gives up on where
+	// she was going.
+	const before = new THREE.Vector3();
+	engine.add({ order: ORDER.player - 1, update: () => void before.copy(pos) });
+	engine.add({
+		order: ORDER.contact,
+		update(dt) {
+			const then = arrived;
+			arrived = undefined;
+			then?.();
+			if (!target || asleep) return;
+			const speed = nix.controls.move().running ? RUN : WALK;
+			stuck = pos.distanceTo(before) < speed * dt * 0.2 ? stuck + dt : 0;
+			if (stuck > 0.6) target = null;
+		},
+	});
 
 	const look = new THREE.Vector3(0, 1.2, -0.3);
 	const camAt = new THREE.Vector3(0, 5.4, 11.5);
 	const zero = new THREE.Vector2();
 	const sleepAt = new THREE.Vector3();
 	const headAt = new THREE.Vector3();
-	let last = performance.now();
-	const frame = (now: number) => {
-		const dt = Math.min((now - last) / 1000, 0.05);
-		last = now;
-		const time = now / 1000;
+	const her = player.root;
+	engine.add({
+		order: ORDER.game,
+		always: true,
+		update(dt, time) {
+			if (asleep) {
+				asleepFor += dt;
+				// Laid on the bed: her head on the pillow, curled up facing out. (Her figure's origin is at her
+				// hips, and asleep her head lies SLEEP_HEAD towards -x of it: tools/nixchan-3d.)
+				sleepAt.set(PILLOW.x + SLEEP_HEAD, BED.top + 0.17, PILLOW.z + 0.05);
+				her.position.lerp(sleepAt, 1 - Math.exp(-10 * dt));
+				figure.group.rotation.y = damp(figure.group.rotation.y, 0, 8, dt);
+				figure.tick(dt, time, { airborne: false, look: zero, still: false, jump: null });
+				// The room dims, and she sleeps until it's the other time of day.
+				if (asleepFor > 1.6 && !slept) {
+					dimming = Math.min(1, dimming + dt / 1.2);
+					if (dimming === 1) {
+						slept = true;
+						setTime(night() ? 'day' : 'night');
+					}
+				} else if (slept) dimming = Math.max(0, dimming - dt / 1.4);
+			} else dimming = Math.max(0, dimming - dt / 0.8);
 
-		if (asleep) {
-			asleepFor += dt;
-			// Laid on the bed: her head on the pillow, curled up facing out. (Her figure's origin is at her
-			// hips, and asleep her head lies SLEEP_HEAD towards -x of it: tools/nixchan-3d.)
-			sleepAt.set(PILLOW.x + SLEEP_HEAD, BED.top + 0.17, PILLOW.z + 0.05);
-			her.position.lerp(sleepAt, 1 - Math.exp(-10 * dt));
-			her.rotation.y = damp(her.rotation.y, 0, 8, dt);
-			// The room dims, and she sleeps until it's the other time of day.
-			if (asleepFor > 1.6 && !slept) {
-				dimming = Math.min(1, dimming + dt / 1.2);
-				if (dimming === 1) {
-					slept = true;
-					setTime(night() ? 'day' : 'night');
-				}
-			} else if (slept) dimming = Math.max(0, dimming - dt / 1.4);
-		} else {
-			dimming = Math.max(0, dimming - dt / 0.8);
-			// Steering: the keys, relative to the room (the camera looks straight in), or a target.
-			let mx = 0;
-			let mz = 0;
-			if (keys.has('a') || keys.has('arrowleft')) mx -= 1;
-			if (keys.has('d') || keys.has('arrowright')) mx += 1;
-			if (keys.has('w') || keys.has('arrowup')) mz -= 1;
-			if (keys.has('s') || keys.has('arrowdown')) mz += 1;
-			if (target && !mx && !mz) {
-				const dx = target.x - pos.x;
-				const dz = target.z - pos.z;
-				const d = Math.hypot(dx, dz);
-				if (d < 0.15) {
-					const then = target.then;
-					target = null;
-					then?.();
-				} else {
-					mx = dx / d;
-					mz = dz / d;
-				}
+			// The time of day eases in (after a sleep, under the dimming, so it's done by the time she wakes).
+			nightness = damp(nightness, night() ? 1 : 0, 3, dt);
+			applyTime(nightness);
+			if (ui.dim) ui.dim.style.opacity = String(0.85 * dimming);
+		},
+	});
+
+	// The camera: in front of the open side, drifting a little after her, and closer while she's
+	// asleep, to look at her in bed.
+	engine.add({
+		order: ORDER.camera,
+		always: true,
+		update(dt) {
+			const wantX = asleep ? PILLOW.x + 0.6 : clamp(her.position.x * 0.35, -1.2, 1.2);
+			camAt.x = damp(camAt.x, wantX, 2, dt);
+			camAt.y = damp(camAt.y, asleep ? 3.6 : 5.4, 2, dt);
+			camAt.z = damp(camAt.z, asleep ? 5.5 : 11.5, 2, dt);
+			look.x = damp(look.x, asleep ? PILLOW.x + 0.7 : clamp(her.position.x * 0.5, -2, 2), 2, dt);
+			look.y = damp(look.y, asleep ? 0.9 : 1.2, 2, dt);
+			look.z = damp(look.z, asleep ? BED.z0 + 0.9 : -0.3, 2, dt);
+			camera.position.copy(camAt);
+			camera.lookAt(look);
+		},
+	});
+
+	engine.add({
+		order: ORDER.hud,
+		always: true,
+		update() {
+			// The Zzz over her head while she sleeps.
+			if (ui.zzz && asleep) {
+				headAt.set(her.position.x - 0.2, her.position.y + 1.3, her.position.z).project(camera);
+				ui.zzz.style.transform = `translate(${((headAt.x + 1) / 2) * innerWidth}px, ${((1 - headAt.y) / 2) * innerHeight}px)`;
 			}
-			const moving = ready && !leaving && (mx || mz);
-			const running = keys.has('shift');
-			if (moving) {
-				const len = Math.hypot(mx, mz);
-				const speed = running ? RUN : WALK;
-				const before = pos.clone();
-				pos.x += (mx / len) * speed * dt;
-				pos.z += (mz / len) * speed * dt;
-				keepOut(pos);
-				// Pressed up against something (sliding round it is fine), for a while, she gives up on where
-				// she was going.
-				stuck = pos.distanceTo(before) < speed * dt * 0.2 ? stuck + dt : 0;
-				if (target && stuck > 0.6) target = null;
-				heading = Math.atan2(mx, mz);
+			// What E would do here.
+			const o = offer();
+			ui.prompt?.toggleAttribute('hidden', !o);
+			if (ui.promptText) ui.promptText.textContent = o?.label ?? '';
+			if (ui.act) {
+				ui.act.hidden = !o;
+				ui.act.textContent = o?.label.split(' ').slice(0, 2).join(' ') ?? '';
 			}
-			let dTurn = heading - turn;
-			dTurn = Math.atan2(Math.sin(dTurn), Math.cos(dTurn));
-			turn += dTurn * (1 - Math.exp(-12 * dt));
-			her.position.copy(pos);
-			her.rotation.y = turn;
-			figure.play(moving ? (running ? 'Run' : 'Walk') : 'Idle', moving && !running ? 1.1 : 1);
-		}
-		figure.tick(dt, time, { airborne: false, look: zero, still: false, jump: null });
+		},
+	});
 
-		// The time of day eases in (after a sleep, under the dimming, so it's done by the time she wakes).
-		nightness = damp(nightness, night() ? 1 : 0, 3, dt);
-		applyTime(nightness);
-		if (ui.dim) ui.dim.style.opacity = String(0.85 * dimming);
-
-		// The camera: in front of the open side, drifting a little after her, and closer while she's
-		// asleep, to look at her in bed.
-		const wantX = asleep ? PILLOW.x + 0.6 : clamp(her.position.x * 0.35, -1.2, 1.2);
-		camAt.x = damp(camAt.x, wantX, 2, dt);
-		camAt.y = damp(camAt.y, asleep ? 3.6 : 5.4, 2, dt);
-		camAt.z = damp(camAt.z, asleep ? 5.5 : 11.5, 2, dt);
-		look.x = damp(look.x, asleep ? PILLOW.x + 0.7 : clamp(her.position.x * 0.5, -2, 2), 2, dt);
-		look.y = damp(look.y, asleep ? 0.9 : 1.2, 2, dt);
-		look.z = damp(look.z, asleep ? BED.z0 + 0.9 : -0.3, 2, dt);
-		camera.position.copy(camAt);
-		camera.lookAt(look);
-
-		// The Zzz over her head while she sleeps.
-		if (ui.zzz && asleep) {
-			headAt.set(her.position.x - 0.2, her.position.y + 1.3, her.position.z).project(camera);
-			ui.zzz.style.transform = `translate(${((headAt.x + 1) / 2) * innerWidth}px, ${((1 - headAt.y) / 2) * innerHeight}px)`;
-		}
-
-		// What E would do here.
-		const o = offer();
-		ui.prompt?.toggleAttribute('hidden', !o);
-		if (ui.promptText) ui.promptText.textContent = o?.label ?? '';
-		if (ui.act) {
-			ui.act.hidden = !o;
-			ui.act.textContent = o?.label.split(' ').slice(0, 2).join(' ') ?? '';
-		}
-
-		renderer.render(scene, camera);
-		requestAnimationFrame(frame);
-	};
-	requestAnimationFrame(frame);
-	if (import.meta.env.DEV) Object.assign(window, { room: { pos, keys, get ready() { return ready; }, get target() { return target; }, get asleep() { return asleep; } } });
+	void engine.start();
+	if (import.meta.env.DEV) Object.assign(window, { room: { engine, nix, pos, get ready() { return ready; }, get target() { return target; }, get asleep() { return asleep; } } });
 }
