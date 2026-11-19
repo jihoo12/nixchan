@@ -231,10 +231,13 @@ export function createGame(opts: GameOptions) {
 			resize();
 			addEventListener('resize', resize);
 			if (!(await drawing)) return;
+			// ?fps on the URL shows how many frames a second it's drawing, and with what.
+			const meter = new URLSearchParams(location.search).has('fps') ? fpsMeter(this.webgpu) : null;
 			let last = performance.now();
 			renderer.setAnimationLoop((now) => {
 				const dt = Math.min(0.05, (now - last) / 1000);
 				last = now;
+				meter?.(now);
 				if (ready && !paused) {
 					time += dt;
 					parts.move(dt, time);
@@ -254,3 +257,19 @@ export function createGame(opts: GameOptions) {
 }
 
 export type Game = NonNullable<ReturnType<typeof createGame>>;
+
+/** A little readout in the corner: frames a second, over the last half second. */
+function fpsMeter(webgpu: boolean) {
+	const el = document.createElement('div');
+	el.style.cssText = 'position:fixed;left:8px;bottom:48px;z-index:9;padding:3px 8px;border-radius:6px;background:rgba(20,18,50,.75);color:#fff;font:700 12px ui-monospace,monospace;pointer-events:none';
+	document.body.append(el);
+	let frames = 0;
+	let since = performance.now();
+	return (now: number) => {
+		frames++;
+		if (now - since < 500) return;
+		el.textContent = `${Math.round((frames * 1000) / (now - since))} fps · ${webgpu ? 'WebGPU' : 'WebGL 2'}`;
+		frames = 0;
+		since = now;
+	};
+}

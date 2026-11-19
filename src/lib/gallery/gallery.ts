@@ -9,6 +9,7 @@ import { createGame } from '../nixkit/game';
 import { addPortal, type Portal, type PortalSpec } from '../nixkit/portal';
 import type { GameMeta } from '../nixkit/meta';
 import { cloud, cloudSea } from '../nixkit/scenery';
+import { addSnow } from '../nixkit/snow';
 import { to as inSite } from '../base';
 
 const GAMES = Object.entries(import.meta.glob<{ default: GameMeta }>('../../games/*/meta.ts', { eager: true }))
@@ -97,6 +98,9 @@ export function startGallery() {
 		},
 		() => {},
 	);
+	// A little snow over the plaza.
+	const snow = addSnow(game, { fall: 0.25 });
+
 	game.start();
-	if (import.meta.env.DEV) Object.assign(window, { gallery: game });
+	if (import.meta.env.DEV) Object.assign(window, { gallery: game, snow, THREE });
 }

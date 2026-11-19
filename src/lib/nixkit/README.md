@@ -83,6 +83,22 @@ is at a point, how low the ceiling, what obstacles stand near, whether there's a
 The parts are one world; the island's terrain, rocks, trees and sky island are another
 (`island/features.ts`, `islandWorld`). A game can bring its own by passing `world` to `createGame`.
 
+## Snow
+
+`addSnow(game, { fall })` (`snow.ts`) is snow worked out on the GPU by a compute shader, so there
+can be a great many snowflakes (160,000 on WebGPU, a fifth of that on WebGL 2):
+
+```ts
+const snow = addSnow(game, { fall: 0.3 });   // snowfall round Nixchan, 0 (none) to 1
+snow.wind.set(1, 0, 0.4);                     // which way it drifts
+snow.burst(at, { count: 3000, dir, speed: 9, spread: 0.3, color: '#9fd4ff', size: 1.4 });
+snow.vortex.set(at, { radius: 6, swirl: 14, pull: 3, lift: 4 });   // a blizzard; snow.vortex.off()
+```
+
+A burst is thrown from `at` along `dir`, scattered as far as `spread` says, then slows and falls
+as snow. The vortex spins whatever's near it round, pulls it in and lifts it. Add `?fps` to the
+page's address to see how fast it's drawing.
+
 ## What's in the kit
 
 - `game.ts`: `createGame`, which sets up the renderer (three's `WebGPURenderer`: WebGPU, or WebGL 2 without it; `?webgl` forces that), sky and light, Nixchan, the camera, controls, HUD and parts, and runs the loop
@@ -95,5 +111,7 @@ The parts are one world; the island's terrain, rocks, trees and sky island are a
 - `hud.ts`: what's shown over the game
 - `portal.ts`: portals to other pages
 - `scenery.ts`: clouds
+- `snow.ts`: snow on the GPU: snowfall, bursts and a vortex
+- `figure-nodes.ts`: Nixchan's look in TSL, for WebGPU
 - `interact.ts`: "press E to …" offers
 - `look.ts`, `util.ts`: toon materials, and small maths
