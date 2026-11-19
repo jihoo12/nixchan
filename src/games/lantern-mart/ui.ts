@@ -29,8 +29,8 @@ const copy = {
 
 export function lanternEmotes(ko: boolean) {
 	return ko
-		? { gestures: true, label: '리액션', hint: '멈춰 서서 고르면 표정과 몸짓이 함께 나와요.', labels: { happy: '폴짝!', surprised: '깜짝!', sad: '시무룩', determined: '불끈!' } }
-		: { gestures: true, label: 'Reactions', hint: 'Stand still to play both the face and the gesture.', labels: { happy: 'Little hop', surprised: 'Startled', sad: 'Droop', determined: 'Fist pump' } };
+		? { gestures: true, label: '리액션', danceLabel: '별빛 스텝 (춤)', hint: '멈춰 서서 고르면 표정과 몸짓이 함께 나와요.', labels: { happy: '폴짝!', surprised: '깜짝!', sad: '시무룩', determined: '불끈!' } }
+		: { gestures: true, label: 'Reactions', danceLabel: 'Starlight Step', hint: 'Stand still to play both the face and the gesture.', labels: { happy: 'Little hop', surprised: 'Startled', sad: 'Droop', determined: 'Fist pump' } };
 }
 
 const css = `

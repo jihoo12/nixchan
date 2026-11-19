@@ -83,3 +83,19 @@ test('E still starts Wave, carry callback is read once per frame, launch/respawn
 		assert.equal(player.figure.group.position.y, 0);
 	}
 });
+
+test('dance retains physics and stops on locomotion or activity with no later resume', () => {
+	for (const interrupt of [s => s.move.forward = 1, s => s.state.jumpQueued = true, s => s.state.waveQueued = true,
+		s => s.state.dashQueued = true, s => s.held(0), s => s.clip('Sit'), s => s.carry(true), s => s.permit(false)]) {
+		const s = setup();
+		assert.equal(s.player.playGesture('dance'), 3.6);
+		s.player.update(.225, .225);
+		assert.equal(s.player.grounded, true);
+		assert.deepEqual(s.player.pos.toArray(), [0, 0, 0]);
+		assert.deepEqual(s.player.vel.toArray(), [0, 0, 0]);
+		interrupt(s); s.player.update(.01, .235);
+		assert.equal(s.player.gesturing, false);
+		s.player.update(.01, .245);
+		assert.equal(s.player.gesturing, false);
+	}
+});

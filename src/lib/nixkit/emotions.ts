@@ -5,6 +5,8 @@ export type Emotion = (typeof EMOTIONS)[number];
 export interface EmoteMenu {
 	/** Pair player-selected faces with a body gesture when it is safe to animate. */
 	gestures?: boolean;
+	/** With gestures enabled, add a dance choice with this visible, localized label. */
+	danceLabel?: string;
 	label?: string;
 	labels?: Readonly<Record<Emotion, string>>;
 	hint?: string;

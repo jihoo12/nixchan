@@ -37,6 +37,7 @@ const STYLE = `
   box-shadow:0 8px 25px #14142538; background:var(--surface,#fff); color:var(--ink,#1c1a3e); }
 .nk-emote-panel button { min-height:44px; padding:6px 9px; border:0; border-radius:8px; background:var(--accent-soft,#e6e3ff);
   color:inherit; cursor:pointer; font:700 13px var(--sans,system-ui); touch-action:manipulation; }
+.nk-emote-panel .nk-emote-dance { grid-column:1/-1; }
 .nk-emote-panel button:focus-visible, .nk-emote-panel button:hover { outline:2px solid var(--ink,#1c1a3e); outline-offset:-2px; }
 .nk-emote-panel p { grid-column:1/-1; margin:3px 3px 0; max-width:24ch; font-size:11px; }
 @media (max-width: 560px) { .nk-actions { top: 104px; } }
@@ -123,7 +124,7 @@ export function createHud() {
 			return b;
 		},
 		/** Optional, keyboard- and touch-friendly disclosure for reactions. */
-		emotes(opts: EmoteMenu, play: (emotion: Emotion) => void) {
+		emotes(opts: EmoteMenu, play: (emotion: Emotion) => void, dance?: () => void) {
 			const holder = el('div', 'nk-emotes', actions);
 			const button = el('button', 'nk-action', holder);
 			const panel = el('div', 'nk-emote-panel', holder);
@@ -134,15 +135,19 @@ export function createHud() {
 			panel.setAttribute('role', 'group');
 			panel.setAttribute('aria-label', label);
 			const labelDefaults = { happy: 'Happy', surprised: 'Surprised', sad: 'Sad', determined: 'Determined' };
-			for (const emotion of EMOTIONS) {
-				const choice = el('button', 'nk-emote-choice', panel);
+			const addChoice = (label: string, activate: () => void, cls = 'nk-emote-choice') => {
+				const choice = el('button', cls, panel);
 				choice.type = 'button';
-				choice.textContent = opts.labels?.[emotion] ?? labelDefaults[emotion];
+				choice.textContent = label;
 				choice.addEventListener('click', () => {
 					close(true);
-					play(emotion);
+					activate();
 				});
+			};
+			for (const emotion of EMOTIONS) {
+				addChoice(opts.labels?.[emotion] ?? labelDefaults[emotion], () => play(emotion));
 			}
+			if (dance && opts.danceLabel) addChoice(opts.danceLabel, dance, 'nk-emote-dance');
 			const hint = opts.hint ?? 'Drag the camera around to see her face.';
 			if (hint) el('p', '', panel).textContent = hint;
 			function close(focus = false) {
