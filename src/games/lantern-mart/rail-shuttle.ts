@@ -1,11 +1,13 @@
 /** One source of truth for the moving body, platform doors and passenger position. */
 export const RAIL = {
-	z: 62.2, floor: .45, halfLength: 6.12, halfDepth: 1.42, roof: 3.10,
-	platformZ: 59.85, dwell: 12, travel: 12, doorSeconds: .85,
+	z: 62.2, floor: .45*1.16, halfLength: 14.9+6.12*1.19, halfDepth: 1.42*1.13, roof: 3.10*1.16,
+	carOffsets: [-14.9, 0, 14.9] as const, carScale: {x:1.19,y:1.16,z:1.13},
+	trackMin: -153, trackMax: 54,
+	platformZ: 59.85, dwell: 14, travel: 29, doorSeconds: .85,
 } as const;
 export const RAIL_STOPS = [
 	{ x: 29.5, ko: '등불역', en: 'Lantern Station' },
-	{ x: -27, ko: '물빛시장 정류장', en: 'Moonwater Halt' },
+	{ x: -128, ko: '물빛시장 건너편 정류장', en: 'Moonwater West' },
 ] as const;
 
 type Direction = 0 | 1;

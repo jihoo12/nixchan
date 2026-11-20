@@ -4,8 +4,9 @@ import { RAIL } from './rail-shuttle';
 
 export function buildRailcar(scene: THREE.Scene): { setPose(x: number, door: number): void } {
 	const car = new THREE.Group();
-	car.name = 'Lantern Town • Last train railcar';
+	car.name = 'Lantern Town • Last train (three-car consist)';
 	car.position.z = RAIL.z;
+	car.scale.set(RAIL.carScale.x, RAIL.carScale.y, RAIL.carScale.z);
 	scene.add(car);
 	const material = (color: string, metalness = 0) =>
 		new THREE.MeshStandardMaterial({ color, metalness, roughness: metalness ? .58 : .85 });
@@ -106,27 +107,70 @@ export function buildRailcar(scene: THREE.Scene): { setPose(x: number, door: num
 		box(plaque, x, .957, z, .58, .241, .026);
 		for (const d of [-.17, 0, .17]) box(brass, x + d, .957, z * 1.012, .076, .042, .021);
 	}
+	// Repeat the common coach body in the same instanced batches. Offsets are expressed in
+	// unscaled local coordinates so world car spacing stays exactly the route's spacing.
+	const offsets = RAIL.carOffsets.map(x => x / RAIL.carScale.x);
+	const translation = new THREE.Matrix4();
+	for (const materials of batches.values()) for (const transforms of materials.values()) {
+		const original = transforms.slice();
+		transforms.length = 0;
+		for (const offset of offsets) {
+			translation.makeTranslation(offset, 0, 0);
+			for (const matrix of original) transforms.push(matrix.clone().premultiply(translation));
+		}
+	}
+	// Short flexible black bellows (stacked ribs) and low couplers link the cars visually.
+	for (let i = 1; i < offsets.length; i++) {
+		const x = (offsets[i - 1] + offsets[i]) * .5;
+		box(iron, x, .395, 0, .61, .139, .29);
+		for (let j = -2; j <= 2; j++) {
+			box(iron, x + j * .117, 1.42, 0, .073, 1.91, 1.08);
+			box(dark, x + j * .117, 2.365, 0, .078, .1, 1.18);
+		}
+	}
+	// The outward ends get mirrored driver desks, headcode panels and side cab badges.
+	// Their exact same open window holes keep the vintage look instead of using painted glass.
+	for (const side of [-1, 1]) {
+		const offset = side < 0 ? offsets[0] : offsets[offsets.length - 1];
+		box(wood, offset + side * 5.49, 1.122, 0, .5, .31, 1.62);
+		box(brass, offset + side * 5.43, 1.291, -.28, .18, .05, .31);
+		box(lamp, offset + side * 5.43, 1.323, -.28, .11, .016, .22);
+		box(velour, offset + side * 4.93, .883, 0, .48, .12, .52);
+		box(dark, offset + side * 4.93, .669, 0, .19, .325, .19);
+		const exterior = offset + side * 5.939;
+		box(iron, exterior, 2.562, 0, .052, .199, .75);
+		for (const z of [-.215, 0, .215]) box(lamp, exterior + side * .029, 2.562, z, .018, .090, .091);
+		for (const z of [-1.248, 1.248]) {
+			box(plaque, offset + side * 4.84, 1.015, z, .46, .22, .027);
+			box(brass, offset + side * 4.84, 1.015, z * 1.013, .081, .13, .022);
+		}
+	}
+
+	// The end cars keep closed doors. Only the middle leaves are separate moving meshes.
+	const doorParts = (side: number, part: (m: THREE.Material, x: number, y: number, z: number, w: number, h: number, d: number) => void) => {
+		part(enamel, 0, .875, 0, .888, .839, .065);
+		part(brass, 0, 1.319, 0, .888, .05, .071);
+		part(ivory, 0, 2.322, 0, .888, .195, .065);
+		for (const x of [-.394, .394]) part(ivory, x, 1.79, 0, .1, .903, .065);
+		part(brass, -side * .327, 1.165, -.059, .056, .206, .058);
+	};
+	for (const offset of offsets) if (offset !== 0) for (const side of [-1, 1]) {
+		doorParts(side, (m,x,y,z,w,h,d) => box(m, x + offset + side * .45, y, z - 1.318, w,h,d));
+	}
 	for (const [g, materials] of batches) for (const [m, transforms] of materials) {
 		const instances = new THREE.InstancedMesh(g, m, transforms.length);
 		transforms.forEach((transform, i) => instances.setMatrixAt(i, transform));
 		instances.instanceMatrix.needsUpdate = true;
 		instances.receiveShadow = true; car.add(instances);
 	}
-
-	// Separate leaves retract outside the aperture; their windows are genuine cutouts as well.
 	const leaves = [-1, 1].map(side => {
 		const leaf = new THREE.Group();
 		leaf.name = side < 0 ? 'Sliding door • left' : 'Sliding door • right';
 		leaf.position.z = -1.318;
 		car.add(leaf);
-		const part = (m: THREE.Material, x: number, y: number, z: number, w: number, h: number, d: number) => {
+		doorParts(side, (m,x,y,z,w,h,d) => {
 			const mesh = new THREE.Mesh(geom, m); mesh.scale.set(w, h, d); mesh.position.set(x, y, z); leaf.add(mesh);
-		};
-		part(enamel, 0, .875, 0, .888, .839, .065);
-		part(brass, 0, 1.319, 0, .888, .05, .071);
-		part(ivory, 0, 2.322, 0, .888, .195, .065);
-		for (const x of [-.394, .394]) part(ivory, x, 1.79, 0, .1, .903, .065);
-		part(brass, -side * .327, 1.165, -.059, .056, .206, .058);
+		});
 		return leaf;
 	});
 	const setPose = (x: number, door: number) => {

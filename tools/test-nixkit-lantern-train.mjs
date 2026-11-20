@@ -6,6 +6,17 @@ const half=RAIL.dwell+RAIL.travel;
 const east={x:RAIL_STOPS[0].x,z:RAIL.platformZ,y:0,grounded:true};
 const west={...east,x:RAIL_STOPS[1].x};
 
+test('the longer line has room to stop all three coaches and leaves the east crossing clear', () => {
+	assert.equal(RAIL.carOffsets.length,3);
+	assert.ok(RAIL.halfLength*2>44);
+	assert.ok(RAIL_STOPS[0].x-RAIL_STOPS[1].x>150);
+	for (const stop of RAIL_STOPS) {
+		assert.ok(stop.x-RAIL.halfLength>=RAIL.trackMin);
+		assert.ok(stop.x+RAIL.halfLength<=RAIL.trackMax);
+	}
+	assert.ok(RAIL_STOPS[0].x+RAIL.halfLength+.45<53.5);
+});
+
 test('the shuttle stops twice, closes doors before movement, and loops without jumping', () => {
 	for (const [i, stop] of RAIL_STOPS.entries()) {
 		const d=i*half;

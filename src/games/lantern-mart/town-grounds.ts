@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TOWN, trails, townGround, type TownBlock } from './town-layout';
+import { TOWN, WEST_BANK, trails, townGround, type TownBlock } from './town-layout';
 
 export function buildTownGrounds(scene:THREE.Scene) {
 	const group=new THREE.Group();
@@ -10,9 +10,9 @@ export function buildTownGrounds(scene:THREE.Scene) {
 		prop:new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.89}),
 		glow:new THREE.MeshBasicMaterial({color:'#ffffff'}),
 	};
-	const geo = new THREE.PlaneGeometry(125,136,125,136);
+	const geo = new THREE.PlaneGeometry(118,136,118,136);
 	geo.rotateX(-Math.PI/2);
-	geo.translate(0,0,49);
+	geo.translate(3,0,49);
 	const attr=geo.attributes.position;
 	const low=new THREE.Color('#363d55'), park=new THREE.Color('#35434d'), shade=new THREE.Color('#262c43');
 	const color=new THREE.Color(), colors=new Float32Array(attr.count*3);
@@ -26,6 +26,9 @@ export function buildTownGrounds(scene:THREE.Scene) {
 	}
 	geo.setAttribute('color', new THREE.BufferAttribute(colors,3));geo.computeVertexNormals();
 	const terrain=new THREE.Mesh(geo,mats.stone);terrain.receiveShadow=true;group.add(terrain);
+	const west = new THREE.Mesh(new THREE.PlaneGeometry(64,42), new THREE.MeshStandardMaterial({color:'#384a51',roughness:.98}));
+	west.rotation.x=-Math.PI/2;west.position.set((TOWN.west+WEST_BANK.east)/2-2,-.018,61);
+	west.receiveShadow=true;group.add(west);
 	function strip(a:readonly[number,number],b:readonly[number,number],w:number,y:number,palette:string[]) {
 		const dx=b[0]-a[0],dz=b[1]-a[1],length=Math.hypot(dx,dz),steps=Math.ceil(length/.9), vs=[],cs=[],indices=[];
 		const nX=-dz/length,nZ=dx/length;
@@ -44,7 +47,7 @@ export function buildTownGrounds(scene:THREE.Scene) {
 		const m=new THREE.Mesh(g,mats.stone);m.receiveShadow=true;group.add(m);
 	}
 	for (const [i,[a,b]] of trails.entries()){
-		const w=i===0?7.2:i===1||i===4?4.75:3.5;
+		const w=i===0?7.2:i===1||i===4?4.75:i===trails.length-1?2.1:3.5;
 		// Give the paved centre a visible edge; all junctions are level and crossable.
 		strip(a,b,w+.48,.012,['#40425a','#50506a']);
 		strip(a,b,w,.024+i*.001,['#454a62','#545672','#4c4f67']);

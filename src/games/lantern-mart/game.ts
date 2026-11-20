@@ -15,6 +15,7 @@ import { townArea, townCameraClear, townPhysics } from './town-layout';
 import { townMap } from './town-map';
 import { createTownHelp } from './town-help';
 import { buildRailcar } from './railcar';
+import { buildWestBank } from './west-bank';
 import { clearRailcar, createRailShuttle, RAIL } from './rail-shuttle';
 
 const SHELF = new THREE.Vector3(-2.72, 0, -4.54);
@@ -88,6 +89,7 @@ export default function start({ createGame, store }: GameContext) {
 		...buildRiverDistrict(districts),
 		...buildStationDistrict(districts),
 		...buildHillDistrict(districts),
+		...buildWestBank(districts),
 	]);
 	const car = buildRailcar(districts);
 	car.setPose(shuttle.pose.x, shuttle.pose.door);
