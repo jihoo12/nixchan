@@ -1,12 +1,19 @@
-// A small playable scene, not a new site route: Nixkit adds its Gallery portal automatically.
+// Lantern Town keeps the original shop, controls and save key on the existing play route.
 import * as THREE from 'three';
 import type { GameContext, NixClip } from '../../lib/nixkit/meta';
-import type { World } from '../../lib/nixkit/world';
-import { buildShop, shopSolids } from './art';
+import { ORDER } from '../../lib/nixkit/engine';
+import { buildShop } from './art';
 import { buildStreet } from './street';
 import { createRamen } from './ramen';
-import { createLanternHud, lanternEmotes, lanternKorean } from './ui';
-import { createErrand, STEEP_SECONDS, EAT_SECONDS } from './errand';
+import { createLanternHud, lanternEmotes, lanternKorean, ramenAction } from './ui';
+import { createErrand, EAT_SECONDS } from './errand';
+import { buildTownGrounds } from './town-grounds';
+import { buildRiverDistrict } from './river-district';
+import { buildStationDistrict } from './station-district';
+import { buildHillDistrict } from './hill-district';
+import { townArea, townCameraClear, townPhysics } from './town-layout';
+import { townMap } from './town-map';
+import { createTownHelp } from './town-help';
 
 const SHELF = new THREE.Vector3(-2.72, 0, -4.54);
 const KETTLE = new THREE.Vector3(2.70, 0, -6.05);
@@ -18,23 +25,6 @@ const FIRST_BITE = 1.30;
 const STREET_CAMERA_DISTANCE = 8.2;
 const indoors = (x: number, z: number) => Math.abs(x) < 4.6 && z < -0.32 && z > -8.05;
 const damp = (a: number, b: number, k: number, dt: number) => a + (b - a) * (1 - Math.exp(-k * dt));
-type Bounds = readonly [number, number, number, number];
-const outdoorSolids: Bounds[] = [
-	[-12, -6.4, -9.1, -2.3], [6.4, 12, -9.1, -2.3],
-	[-9.15, -6.0, 1.68, 2.2], [7.35, 9.15, 2.66, 3.43],
-];
-const solids = [...shopSolids, ...outdoorSolids];
-const map: World = {
-	groundAt: () => 0,
-	ceilingAt: () => Infinity,
-	nearby: () => [],
-	inside(x, z) {
-		if (Math.abs(x) > 10.8 || z < -8.95 || z > 12.7) return false;
-		return !solids.some(([left, right, back, front]) =>
-			x > left - 0.24 && x < right + 0.24 && z > back - 0.24 && z < front + 0.24);
-	},
-};
-
 /** Where a follow camera would run into the shop shell; the door is the one gap. */
 function cameraClear(x: number, z: number, yaw: number, requested: number) {
 	const dx = Math.sin(yaw), dz = Math.cos(yaw);
@@ -52,24 +42,6 @@ function cameraClear(x: number, z: number, yaw: number, requested: number) {
 		return a > 1.0 && a < 4.6;
 	});
 	return Math.max(1.55, Math.min(requested, ...candidates.map((t) => t - 0.22)));
-}
-
-function makeMarker(scene: THREE.Scene) {
-	const root = new THREE.Group();
-	const gold = new THREE.MeshBasicMaterial({ color: '#ffd390', transparent: true, opacity: 0.63, depthWrite: false });
-	const ring = new THREE.Mesh(new THREE.RingGeometry(0.39, 0.43, 32), gold);
-	ring.rotation.x = -Math.PI / 2;
-	const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.105), new THREE.MeshBasicMaterial({ color: '#ffd99c' }));
-	root.add(ring, gem);
-	scene.add(root);
-	return (target: THREE.Vector3 | null, t: number, reduced: boolean, near: boolean) => {
-		root.visible = !!target;
-		if (!target) return;
-		root.position.copy(target).setY(0.057);
-		gem.position.y = 0.40 + (reduced ? 0 : Math.sin(t * 2.8) * 0.09);
-		gem.rotation.y = reduced ? 0.6 : t * 1.3;
-		gold.opacity = near ? 0.92 : 0.56;
-	};
 }
 
 function driftingSnow(scene: THREE.Scene) {
@@ -107,15 +79,23 @@ export default function start({ createGame, store }: GameContext) {
 	const errand = createErrand();
 	const ko = lanternKorean();
 	const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+	const districts = new THREE.Scene();
+	const {world,blocks} = townPhysics([
+		...buildTownGrounds(districts),
+		...buildRiverDistrict(districts),
+		...buildStationDistrict(districts),
+		...buildHillDistrict(districts),
+	]);
 	const game = createGame({
 		spawn: { pos: SPAWN.clone(), heading: Math.PI },
-		world: map,
+		world,
 		firstPerson: {
+			showButton: false,
 			label: ko ? '1인칭' : 'First person',
 			lockedLabel: ko ? '식사 중에는 3인칭으로 보여요' : 'Third person while eating',
 			forceThirdPerson: () => errand.phase === 'eat',
 		},
-		emotes: lanternEmotes(ko),
+		emotes: { ...lanternEmotes(ko), showButton: false },
 		clip: (): NixClip | null => {
 			if (errand.phase === 'eat') return errand.elapsed < 4.28 ? 'Sit' : 'Carry';
 			if (errand.phase === 'water' || errand.phase === 'wait' || errand.phase === 'seat') {
@@ -133,9 +113,71 @@ export default function start({ createGame, store }: GameContext) {
 	if (!game) return;
 
 	const { scene, player, orbit } = game;
+	scene.add(...[...districts.children]);
+	const tour = townMap(ko);
+	const panel = createLanternHud(interact, ko);
+	const focusMapButton = document.querySelector<HTMLButtonElement>('[data-town-map]');
+	const helpButton = document.querySelector<HTMLButtonElement>('[data-town-help]');
+	const showMap=(show:boolean)=>{
+		tour.panel.hidden=!show;
+		game.paused=show;
+		if(show)panel.update(null);
+		focusMapButton?.setAttribute('aria-expanded',String(show));
+		if(show){
+			const l=townArea(player.pos.x,player.pos.z);
+			tour.update(player.pos.x,player.pos.z,l?(ko?l.ko:l.en):(ko?'등불마을':'Lantern Town'));
+			tour.close.focus();
+		}else focusMapButton?.focus();
+	};
+	tour.close.onclick=()=>showMap(false);
+	focusMapButton?.addEventListener('click', () => showMap(Boolean(tour.panel.hidden)));
+	if (focusMapButton && ko) {
+		focusMapButton.textContent = '지도';
+		focusMapButton.setAttribute('aria-label', '마을 지도 (M)');
+	}
+	const help = createTownHelp(ko);
+	helpButton?.addEventListener('click', () => {
+		if (help.dialog.open) return;
+		if (!tour.panel.hidden) showMap(false);
+		panel.update(null);
+		game.paused = true;
+		help.dialog.showModal();
+		help.close.focus();
+	});
+	const closeHelp = () => {
+		help.dialog.close();
+		game.paused = false;
+		helpButton?.focus();
+	};
+	help.close.onclick = closeHelp;
+	help.dialog.addEventListener('cancel', (e) => { e.preventDefault(); closeHelp(); });
+	game.keys.intercept((key,e)=>{
+		if(help.dialog.open){
+			// Keep modal Tab/Enter/Space working. Nixkit's window listener must not move Nixchan.
+			if(key==='escape'){e.preventDefault();closeHelp();}
+			return true;
+		}
+		if(e.altKey||e.ctrlKey||e.metaKey)return false;
+		if(key==='m'||(key==='escape'&&!tour.panel.hidden)){
+			e.preventDefault();if(!e.repeat)showMap(key!=='escape'&&Boolean(tour.panel.hidden));
+			return true;
+		}
+		return !tour.panel.hidden;
+	},50);
+	// Trim the camera against new facades after Nixkit's usual follow camera; the original shop
+	// keeps its own window-seat framing. Restore slowly after a wall leaves the line of sight.
+	const eye=new THREE.Vector3();
+	let cameraReach=1;
+	game.engine.add({order:ORDER.camera+1,always:true,update(dt){
+		if(game.firstPerson||indoors(player.pos.x,player.pos.z)){cameraReach=1;return;}
+		eye.copy(player.pos);eye.y+=1.2;
+		const clear=townCameraClear(eye,game.camera.position,blocks);
+		cameraReach=clear<cameraReach?clear:damp(cameraReach,clear,5,dt);
+		if(cameraReach<.999){game.camera.position.lerpVectors(eye,game.camera.position,cameraReach);game.camera.lookAt(eye);}
+	}});
 	orbit.distance = STREET_CAMERA_DISTANCE;
 	orbit.pitch = 0.23;
-	const fog = new THREE.FogExp2('#192139', 0.046);
+	const fog = new THREE.Fog('#252d49', 29, 157);
 	const sky = new THREE.Color('#1e2542');
 	const fill = scene.children.find((light) => light instanceof THREE.HemisphereLight) as THREE.HemisphereLight | undefined;
 	const key = scene.children.find((light) => light instanceof THREE.DirectionalLight) as THREE.DirectionalLight | undefined;
@@ -159,9 +201,7 @@ export default function start({ createGame, store }: GameContext) {
 	buildShop(scene);
 	const street = buildStreet(scene);
 	const ramen = createRamen(scene, player);
-	const mark = makeMarker(scene);
 	const snow = driftingSnow(scene);
-	const panel = createLanternHud(interact);
 	let snowFade = 0;
 	let snowStarted = false;
 	let elapsed = 0;
@@ -184,7 +224,7 @@ export default function start({ createGame, store }: GameContext) {
 			Math.hypot(player.pos.x - at.x, player.pos.z - at.z) <= 1.10;
 	}
 	function interact() {
-		if (!game?.ready || !canReach()) return false;
+		if (!game?.ready || game.paused || !canReach()) return false;
 		const previous = errand.phase;
 		if (!errand.act()) return false;
 		if (previous === 'water') game.emote('surprised', 1.05); // The first puff of steam.
@@ -243,14 +283,11 @@ export default function start({ createGame, store }: GameContext) {
 		ramen.update(phase === 'water' ? 'dry' : phase === 'wait' || phase === 'seat' ? 'hot' :
 			phase === 'eat' ? 'eating' : phase === 'after' ? 'done' : 'empty', phase === 'eat' ? errand.elapsed : elapsed, reduced.matches);
 
-		const near = canReach();
-		mark(phase === 'after' ? null : target(), time, reduced.matches, near);
-		const c = panel.text;
-		const action = !near ? null : phase === 'shelf' ? c.cup : phase === 'water' ? c.pour :
-			phase === 'seat' ? c.sit : phase === 'after' ? c.again : null;
-		panel.update(phase, action, phase === 'wait' ? errand.elapsed / STEEP_SECONDS :
-			phase === 'eat' ? errand.elapsed / EAT_SECONDS : 0);
+		panel.update(ramenAction(phase, canReach(), ko));
 	});
-	game.loaded.then(panel.reveal, () => {});
+	game.loaded.then(() => {
+		if (focusMapButton) focusMapButton.disabled = false;
+		if (helpButton) helpButton.disabled = false;
+	}, () => {});
 	void game.start();
 }

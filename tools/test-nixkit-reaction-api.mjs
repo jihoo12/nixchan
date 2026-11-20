@@ -188,4 +188,32 @@ assert.equal(menu.hidden, true);
 dance.listeners.click(); next();
 assert.equal(gestures.length, beforeDance);
 
+// Keyboard-only opt-ins should not leave empty launchers, but V and B must still work.
+game = createGame({canvas:new Element('canvas'),modelUrl:'mock',
+	spawn:{pos:new THREE.Vector3(),heading:0},firstPerson:{showButton:false},
+	emotes:{showButton:false,gestures:true}});
+await load(game);
+const newestKey = k => events.get('keydown').at(-1)({key:k,target:focus,preventDefault(){}});
+const actions = all(document.body,'nk-actions').at(-1);
+assert.equal(all(actions, 'nk-action').length, 0);
+const keyboardMenu = all(actions,'nk-emotes')[0];
+assert.equal(keyboardMenu.children.length, 1);
+const palette = keyboardMenu.children[0];
+assert.equal(palette.hidden, true);
+newestKey('b');
+assert.equal(palette.hidden, false);
+newestKey('b');
+assert.equal(palette.hidden, true);
+newestKey('b');
+palette.children[0].listeners.click();
+assert.equal(palette.hidden, true);
+newestKey('v'); next();
+assert.equal(game.firstPerson, true);
+newestKey('b'); next();
+assert.equal(palette.hidden, true);
+newestKey('v'); next();
+assert.equal(game.firstPerson, false);
+newestKey('b');
+assert.equal(palette.hidden, false);
+
 console.log('react/action API: body-only mappings and face isolation, no-HUD use, readiness/invalid/pause guards, duration matching, first-person/reduced-motion/activity fallback, face-only compatibility, and B menu integration passed.');

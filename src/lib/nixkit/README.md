@@ -44,7 +44,7 @@ aren't for moving: `e` waves and `q` dashes unless the game uses them).
 
 Games can opt in to `firstPerson: {}`. The view still starts in third person; **V** or the
 on-screen button switches to and from the eye-level camera, and mouse or touch drags still
-control looking. An optional `forceThirdPerson` predicate can hold the orbit view during
+control looking. Set `firstPerson: { showButton: false }` to keep V without a HUD button. An optional `forceThirdPerson` predicate can hold the orbit view during
 a scene and then restore the player's selection. `game.firstPerson` reports the effective view.
 
 Use these from a game event (for example, after completing a quest), without setting up a menu:
@@ -63,6 +63,7 @@ No body cue is queued for later. A face cue returns to neutral when it ends; use
 
 To let players choose, opt in with `emotes: {}`;
 the **B** key and a touch-friendly expression button open the palette in third person only.
+Set `emotes: { showButton: false }` to keep the palette accessible only via B.
 Set `emotes: { gestures: true }` to pair each menu choice with a body gesture on stationary,
 grounded Nixchan. Movement, jumping and game-owned poses take priority; with reduced motion
 the menu stays face-only. The **E** wave and scripted `game.emote()` cues keep their existing

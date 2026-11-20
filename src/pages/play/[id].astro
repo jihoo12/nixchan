@@ -18,6 +18,7 @@ export function getStaticPaths() {
 
 const { id } = Astro.params;
 const { meta } = Astro.props;
+const quietTown = id === 'lantern-mart';
 const title = `${meta.title} (experimental)`;
 ---
 <!doctype html>
@@ -29,15 +30,25 @@ const title = `${meta.title} (experimental)`;
 	<body class="play">
 		<canvas class="stage" data-stage data-model={nixModel} data-game={id} aria-label={`${meta.title}, a game with Nixchan`}></canvas>
 
-		<header class="bar">
+		<header class:list={['bar', { 'town-bar': quietTown }]}>
 			<a class="brand" href={to('/')}>nixchan<span class="period">.</span></a>
-			<span class="badge">{meta.title.toLowerCase()} · by {meta.github ? <a href={`https://github.com/${meta.github}`} target="_blank" rel="noopener noreferrer">{meta.author}</a> : meta.author}</span>
+			<span class:list={['badge', { quiet: quietTown }]}>{meta.title.toLowerCase()} · by {meta.github ? <a href={`https://github.com/${meta.github}`} target="_blank" rel="noopener noreferrer">{meta.author}</a> : meta.author}</span>
 			<span class="spacer"></span>
-			<a class="pill" href={to(`/gallery/?from=${id}`)}>Gallery</a>
-			<button class="pill clock" type="button" data-clock aria-label="Switch between day and night"><span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span></button>
+			{quietTown ? (
+				<nav class="town-controls" aria-label="Lantern Town">
+					<a class="pill" href={to(`/gallery/?from=${id}`)}>Gallery</a>
+					<button class="pill" type="button" data-town-map aria-keyshortcuts="M" aria-controls="lantern-town-map" aria-expanded="false" disabled>Map</button>
+					<button class="pill" type="button" data-town-help aria-haspopup="dialog" aria-controls="lantern-town-help" disabled>Help</button>
+				</nav>
+			) : (
+				<>
+					<a class="pill" href={to(`/gallery/?from=${id}`)}>Gallery</a>
+					<button class="pill clock" type="button" data-clock aria-label="Switch between day and night"><span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span></button>
+				</>
+			)}
 		</header>
 
-		<p class="keys-hint"><kbd>WASD</kbd> move · <kbd>Shift</kbd> run · <kbd>Space</kbd> jump · drag to look{meta.keys && ` · ${meta.keys}`}</p>
+		{!quietTown && <p class="keys-hint"><kbd>WASD</kbd> move · <kbd>Shift</kbd> run · <kbd>Space</kbd> jump · drag to look{meta.keys && ` · ${meta.keys}`}</p>}
 		<p class="loading" data-loading>Nixchan is on her way…</p>
 		<noscript><p class="loading">{meta.title} needs JavaScript to run.</p></noscript>
 	</body>
@@ -80,12 +91,20 @@ const title = `${meta.title} (experimental)`;
 	.bar > * { pointer-events: auto; }
 	.brand { font-family: var(--display); font-size: 28px; line-height: 1; color: var(--ink); }
 	.badge { background: var(--star); color: #1c1a3e; font-size: 12px; font-weight: 900; padding: 3px 10px; border-radius: 999px; transform: rotate(-3deg); white-space: nowrap; }
+	.badge.quiet { transform: none; background: color-mix(in srgb, var(--surface) 86%, transparent); color: var(--ink); }
 	.badge a { color: inherit; }
 	.spacer { flex: 1; }
 	.pill {
 		border: 0; border-radius: 9px; padding: 8px 13px; background: var(--surface); color: var(--ink);
 		font: 800 15px var(--sans); box-shadow: 0 4px 0 var(--edge); cursor: pointer; text-decoration: none;
 	}
+	.town-bar { flex-wrap: nowrap; gap: 8px; }
+	.town-bar .brand { flex: 0 0 auto; }
+	.town-bar .badge { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+	.town-bar .spacer { min-width: 0; }
+	.town-controls { display: flex; flex: none; flex-wrap: nowrap; align-items: center; gap: 8px; }
+	.town-controls .pill { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; box-sizing: border-box; white-space: nowrap; }
+	.town-controls .pill:disabled { cursor: default; transform: none; }
 	.pill:hover { transform: translateY(-2px); }
 	.clock .moon, :global([data-time='night']) .clock .sun { display: none; }
 	:global([data-time='night']) .clock .moon { display: inline; }
@@ -107,5 +126,8 @@ const title = `${meta.title} (experimental)`;
 	@media (max-width: 560px) {
 		.badge { display: none; }
 		.pill { padding: 7px 10px; font-size: 14px; }
+		.town-bar { gap: 5px; padding: 12px max(8px, env(safe-area-inset-right)) 12px max(8px, env(safe-area-inset-left)); }
+		.town-bar .brand { font-size: clamp(18px, 6vw, 24px); }
+		.town-controls { gap: 5px; }
 	}
 </style>

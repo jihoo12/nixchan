@@ -3,6 +3,8 @@ export const EMOTIONS = ['happy', 'surprised', 'sad', 'determined'] as const;
 export type Emotion = (typeof EMOTIONS)[number];
 
 export interface EmoteMenu {
+	/** Set false for a B-only menu with no permanent HUD launcher. */
+	showButton?: boolean;
 	/** Pair player-selected faces with a body gesture when it is safe to animate. */
 	gestures?: boolean;
 	/** With gestures enabled, add a dance choice with this visible, localized label. */

@@ -32,6 +32,8 @@ export type BodyAction = keyof typeof ACTION_GESTURES;
 type Hud = ReturnType<typeof createHud>;
 
 export interface FirstPersonOptions {
+	/** Set false to keep the V shortcut without adding a HUD button. */
+	showButton?: boolean;
 	label?: string;
 	lockedLabel?: string;
 	eyeHeight?: number;
@@ -105,11 +107,10 @@ export function createNixchan(engine: Engine, opts: NixchanOptions) {
 	let eyePitch = 0;
 	let resumeYaw: number | undefined;
 	const toggleView = () => view.toggle(viewLocked());
-	const viewButton = first && hud?.button(first.label ?? 'First person', toggleView);
+	const viewButton = first && first.showButton !== false && hud?.button(first.label ?? 'First person', toggleView);
 	let shownView: boolean | undefined;
 	let shownLock: boolean | undefined;
 	const syncView = () => {
-		if (!viewButton) return false;
 		const locked = viewLocked();
 		const active = view.resolve(locked);
 		if (locked && view.active && resumeYaw === undefined) resumeYaw = orbit.yaw;
@@ -117,11 +118,11 @@ export function createNixchan(engine: Engine, opts: NixchanOptions) {
 			orbit.yaw = resumeYaw;
 			resumeYaw = undefined;
 		}
-		if (shownView !== active) {
+		if (viewButton && shownView !== active) {
 			viewButton.setAttribute('aria-pressed', String(active));
 			shownView = active;
 		}
-		if (shownLock !== locked) {
+		if (viewButton && shownLock !== locked) {
 			viewButton.disabled = locked;
 			viewButton.title = locked ? (first?.lockedLabel ?? 'Third-person scene') : 'V';
 			shownLock = locked;
