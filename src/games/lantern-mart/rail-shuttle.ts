@@ -17,19 +17,36 @@ type Vector = { x:number; y:number; z:number };
 export type RailAction = 'board' | 'leave' | 'sit' | 'stand';
 const SEAT_X = [-4.10,-2.51,2.51,4.10].map(x=>x*RAIL.carScale.x);
 const BENCH_HALF_LENGTH = .745*RAIL.carScale.x;
-const BENCH_EDGE = (.897-.285)*RAIL.carScale.z;
+/** Local (unscaled) cushion dimensions shared by the visible seats and their collision. */
+export const CABIN_BENCH = { front:.50, back:1.182, cushionTop:.865, backrest:1.113 } as const;
+const BENCH_EDGE = CABIN_BENCH.front*RAIL.carScale.z;
 export const CABIN = {
 	halfLength:5.73*RAIL.carScale.x,
 	halfWidth:1.11*RAIL.carScale.z,
-	seatHeight:(.865-.45)*RAIL.carScale.y,
+	seatHeight:CABIN_BENCH.cushionTop*RAIL.carScale.y-RAIL.floor,
 } as const;
 export type CabinSeat = {x:number;z:number;heading:number;side:number};
 export const CABIN_SEATS: readonly CabinSeat[] = [-1,1].flatMap(side=>SEAT_X.map(x=>({
-	x,z:side*.897*RAIL.carScale.z,heading:side>0?Math.PI:0,side,
+	// Nixchan's Sit clip is anchored at the front lip, with her knees in the aisle.
+	x,z:side*BENCH_EDGE,heading:side>0?Math.PI:0,side,
 })));
 const clamp = (v:number,limit:number) => Math.max(-limit,Math.min(limit,v));
 export const insideCabin = (pose:RailPose,x:number,z:number) =>
 	Math.abs(x-pose.x)<=CABIN.halfLength && Math.abs(z-RAIL.z)<=CABIN.halfWidth;
+/** Seated framing stays in the aisle instead of orbiting through the backrest and hair. */
+export function cabinView(pose:RailPose, eye:Vector, yaw:number, pitch:number, seatSide = 0):Vector {
+	const xLimit = CABIN.halfLength-.18, zLimit = CABIN.halfWidth-.22;
+	const ax = eye.x-pose.x, az = eye.z-RAIL.z;
+	const towardCenter = ax>0 ? -1 : 1;
+	const x = clamp(ax+(seatSide ? towardCenter*(2.08+.52*Math.sin(yaw)) : Math.sin(yaw)*2.35), xLimit);
+	let z = clamp(az+(seatSide ? -seatSide*(1.88+.52*Math.abs(Math.cos(yaw))) : Math.cos(yaw)*2.35), zLimit);
+	if (!seatSide && Math.hypot(x-ax,z-az)<.7) {
+		z = az>0 ? -.57 : .57;
+	}
+	const y = Math.max(RAIL.floor+.62,Math.min(RAIL.roof-.70,eye.y+.30+Math.sin(pitch)*.9));
+	return {x:pose.x+x,y,z:RAIL.z+z};
+}
+
 export function keepInCabin(pose:RailPose,p:Vector,rad:number,v:Vector) {
 	// Both the cabin and its four bench pairs live in the moving car's local frame.
 	let x = p.x-pose.x, z = p.z-RAIL.z;
@@ -117,7 +134,7 @@ export function createRailShuttle() {
 			return next;
 		},
 		seatPoint(seat:CabinSeat){return {x:pose.x+seat.x,y:RAIL.floor,z:RAIL.z+seat.z};},
-		standingPoint(seat:CabinSeat){return {x:pose.x+seat.x,y:RAIL.floor,z:RAIL.z+seat.side*.27};},
+		standingPoint(seat:CabinSeat){return {x:pose.x+seat.x,y:RAIL.floor,z:RAIL.z+seat.side*.25};},
 		boardingPoint(){ return {x:pose.x,y:RAIL.floor,z:RAIL.z-.38}; },
 		platformPoint(){ return {x:pose.x,y:0,z:RAIL.platformZ}; },
 	};

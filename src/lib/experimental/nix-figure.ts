@@ -135,6 +135,8 @@ export interface NixFigure {
 	setBlink(closed: boolean): void;
 	/** Change the painted expression on her face; strength 0 keeps the original neutral art. */
 	setEmotion(emotion: FaceEmotion, strength?: number): void;
+	/** Tuck the long hair's depth for a tight seat. Pass 1 to restore its original shape. */
+	setSeatedHairDepth(scale: number): void;
 	/** Show or hide something in her right hand: the fishing rod, the watering can or the hammer. */
 	setProp(prop: NixProp, shown: boolean): void;
 	/** Which hat she wears (the outfit's in outfit.ts). */
@@ -242,6 +244,14 @@ export function buildNixFigure(url: string, made: FigureLook = nodeLook): NixFig
 	/** Where the long hair swings about, in its bone's frame (scaled as the bone is). */
 	const hairPivots = { brim: new THREE.Vector3(), bare: new THREE.Vector3() };
 	const swung = new THREE.Vector3();
+	let hairCurtain: THREE.Object3D | null = null;
+	let hairCurtainDepth = 1;
+	let seatedHairDepth = 1;
+	const applySeatedHairDepth = () => {
+		// Only the depth of the rigid long hair and its outline changes, not the skull,
+		// hair's length or width, or the bone that moves it during ordinary animation.
+		if (hairCurtain) hairCurtain.scale.z = hairCurtainDepth * seatedHairDepth;
+	};
 
 	const ready = new GLTFLoader().loadAsync(url).then((gltf) => {
 		const model = gltf.scene;
@@ -280,6 +290,11 @@ export function buildNixFigure(url: string, made: FigureLook = nodeLook): NixFig
 		// The rig's bones: the clips pose the body, and the page turns the head and long hair on top.
 		head = model.getObjectByName('Head') ?? null;
 		longHair = model.getObjectByName('Hair') ?? null;
+		hairCurtain = longHair?.getObjectByName('LongHair') ?? null;
+		if (hairCurtain) {
+			hairCurtainDepth = hairCurtain.scale.z;
+			applySeatedHairDepth();
+		}
 		if (head) rest.head.copy(head.quaternion);
 		if (longHair) {
 			rest.hair.copy(longHair.quaternion);
@@ -346,6 +361,13 @@ export function buildNixFigure(url: string, made: FigureLook = nodeLook): NixFig
 		},
 		setEmotion(emotion, strength = 1) {
 			faceMat.map = face.emote(emotion, strength);
+		},
+		setSeatedHairDepth(scale) {
+			if (!Number.isFinite(scale)) return;
+			const depth = THREE.MathUtils.clamp(scale, 0.05, 1);
+			if (depth === seatedHairDepth) return;
+			seatedHairDepth = depth;
+			applySeatedHairDepth();
 		},
 		setHat(next) {
 			hat = next;

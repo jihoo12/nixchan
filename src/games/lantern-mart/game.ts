@@ -16,7 +16,7 @@ import { townMap } from './town-map';
 import { createTownHelp } from './town-help';
 import { buildRailcar } from './railcar';
 import { buildWestBank } from './west-bank';
-import { CABIN, clearRailcar, createRailShuttle, insideCabin, keepInCabin, RAIL } from './rail-shuttle';
+import { CABIN, cabinView, clearRailcar, createRailShuttle, insideCabin, keepInCabin, RAIL } from './rail-shuttle';
 import type { WorldSeat } from './world-seats';
 
 const SHELF = new THREE.Vector3(-2.72, 0, -4.54);
@@ -209,22 +209,18 @@ export default function start({ createGame, store }: GameContext) {
 	},50);
 	// Trim the camera against new facades after Nixkit's usual follow camera; the original shop
 	// keeps its own window-seat framing. Restore slowly after a wall leaves the line of sight.
-	const eye=new THREE.Vector3(), cabinCamera=new THREE.Vector3();
+	const eye=new THREE.Vector3();
+	const normalFov=game.camera.fov;
 	let cameraReach=1;
 	game.engine.add({order:ORDER.camera+1,always:true,update(dt){
+		const fov=shuttle.seated&&!game.firstPerson?56:normalFov;
+		if(game.camera.fov!==fov){game.camera.fov=fov;game.camera.updateProjectionMatrix();}
 		if(game.firstPerson||indoors(player.pos.x,player.pos.z)){cameraReach=1;return;}
-		eye.copy(player.pos);eye.y+=shuttle.seated?1.04:1.14;
+		eye.copy(player.pos);eye.y+=shuttle.seated?CABIN.seatHeight+.78:1.14;
 		if(shuttle.riding){
 			// The normal wide outdoor orbit would spend the ride staring at the roof from outside.
-			const x=shuttle.pose.x;
-			cabinCamera.set(
-				THREE.MathUtils.clamp(eye.x+Math.sin(orbit.yaw)*2.35,x-CABIN.halfLength+.16,x+CABIN.halfLength-.16),
-				THREE.MathUtils.clamp(eye.y+.27+Math.sin(orbit.pitch)*.9,RAIL.floor+.62,RAIL.roof-.52),
-				THREE.MathUtils.clamp(eye.z+Math.cos(orbit.yaw)*2.35,RAIL.z-CABIN.halfWidth+.20,RAIL.z+CABIN.halfWidth-.20)
-			);
-			if(Math.hypot(cabinCamera.x-eye.x,cabinCamera.z-eye.z)<.7)
-				cabinCamera.z=RAIL.z+(eye.z>RAIL.z?-.57:.57);
-			game.camera.position.copy(cabinCamera);game.camera.lookAt(eye);cameraReach=1;return;
+			const view=cabinView(shuttle.pose,eye,orbit.yaw,orbit.pitch,shuttle.seated?.side);
+			game.camera.position.set(view.x,view.y,view.z);game.camera.lookAt(eye);cameraReach=1;return;
 		}
 		eye.y=player.pos.y+(game.chairSeated ? game.chairLift+.66 : 1.2);
 		const clear=townCameraClear(eye,game.camera.position,cameraBlocks);
@@ -286,9 +282,11 @@ export default function start({ createGame, store }: GameContext) {
 		const train = shuttle.interact({x:player.pos.x,y:player.pos.y,z:player.pos.z,grounded:player.grounded});
 		if (train) {
 			if(train==='sit'&&shuttle.seated){
+				player.figure.setSeatedHairDepth(.58);
 				movePassenger(shuttle.seatPoint(shuttle.seated));
 				player.face(shuttle.seated.heading);
 			}else if(train==='stand'&&previousSeat){
+				player.figure.setSeatedHairDepth(1);
 				movePassenger(shuttle.standingPoint(previousSeat));
 			}else if(train==='board' || train==='leave'){
 				movePassenger(train==='board'?shuttle.boardingPoint():shuttle.platformPoint());
