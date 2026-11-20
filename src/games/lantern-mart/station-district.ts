@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import type { TownBlock } from './town-layout';
+import { benchSeat, type WorldSeat } from './world-seats';
 import { RAIL, RAIL_STOPS } from './rail-shuttle';
 
 /** Lantern Station: a little night-train terminus, with a through waiting room. */
-export function buildStationDistrict(scene: THREE.Scene): TownBlock[] {
+export function buildStationDistrict(scene: THREE.Scene, seats?: WorldSeat[]): TownBlock[] {
   const group = new THREE.Group(); group.name = 'Lantern Town / Station'; scene.add(group);
   const blocks: TownBlock[] = [];
   const palette = {
@@ -65,6 +66,7 @@ export function buildStationDistrict(scene: THREE.Scene): TownBlock[] {
     box(x,y,z-.125,w,.075,.04,'bark'); box(x,y-h/2-.08,z-.13,w+.28,.12,.24,'sandstone');
   }
   function bench(x:number,z:number,facesZ: -1 | 1) {
+    seats?.push(benchSeat(x,z,.60,facesZ));
     box(x,.52,z,2.35,.16,.65,'bench',true); box(x,.91,z-facesZ*.27,2.35,.40,.13,'bench',true);
     for(const dx of [-.91,.91]) box(x+dx,.26,z,.17,.52,.58,'metal',true);
   }

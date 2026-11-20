@@ -2,12 +2,13 @@
 // Geometry follows townGround; the centre promenade remains open all the way to z108.
 import * as THREE from 'three';
 import { townGround, type TownBlock } from './town-layout';
+import { benchSeat, type WorldSeat } from './world-seats';
 
 type Paint = 'timber' | 'stone' | 'roof' | 'brass' | 'paper' | 'glow';
 type Box = { x: number; y: number; z: number; w: number; h: number; d: number; color: string };
 type Tree = { x: number; y: number; z: number; radius: number; height: number; color: string };
 
-export function buildHillDistrict(scene: THREE.Scene): TownBlock[] {
+export function buildHillDistrict(scene: THREE.Scene, seats?: WorldSeat[]): TownBlock[] {
 	const district = new THREE.Group();
 	district.name = 'Cedar Hill · reading terraces and lantern observatory';
 	scene.add(district);
@@ -72,6 +73,7 @@ export function buildHillDistrict(scene: THREE.Scene): TownBlock[] {
 
 	function bench(x: number, z: number, width = 2.8) {
 		const g = townGround(x, z + 0.38) + 0.08;
+		seats?.push(benchSeat(x, z, g + 0.57, -1));
 		for (const dx of [-width * 0.35, width * 0.35]) {
 			box('brass', '#434e4b', x + dx, g + 0.23, z, 0.14, 0.46, 0.66);
 		}

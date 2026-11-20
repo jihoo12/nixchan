@@ -1,12 +1,13 @@
 // Moonbank: quiet evening meadows beyond the river. The station owns z54.5–65.5.
 import * as THREE from 'three';
 import type { TownBlock } from './town-layout';
+import { benchSeat, type WorldSeat } from './world-seats';
 
 type Shape = 'box' | 'pine' | 'rock' | 'reed';
 type Shade = 'matte' | 'light';
 type Part = {x:number;y:number;z:number;w:number;h:number;d:number;color:string;yaw:number;lean:number};
 
-export function buildWestBank(scene: THREE.Scene): TownBlock[] {
+export function buildWestBank(scene: THREE.Scene, seats?: WorldSeat[]): TownBlock[] {
 	const root = new THREE.Group();
 	root.name = 'Lantern Town · Moonbank Meadow';
 	scene.add(root);
@@ -41,7 +42,7 @@ export function buildWestBank(scene: THREE.Scene): TownBlock[] {
 	}
 	for(const z of [53.9,50.4]) {beacon(-129.8,z,1.55);beacon(-126.2,z,1.55);}
 	for(const x of [-124,-118,-112,-106,-99]) beacon(x,49,1.55);
-	for(const x of [-107,-100]) beacon(x,43.4,2.05);
+	for(const x of [-107,-99.76]) beacon(x,43.4,2.05);
 
 	// A warm weather shelter with sideboard: its front faces the open path, not the rail line.
 	const kioskX=-137.5,kioskZ=48.8;
@@ -60,14 +61,15 @@ export function buildWestBank(scene: THREE.Scene): TownBlock[] {
 	detail('#b9ac98',kioskX+.4,1.82,kioskZ-1.085,1.1,.55,.03);
 	for(let i=0;i<3;i++)detail('#7a7073',kioskX+.4,1.97-i*.14,kioskZ-1.062,.76,.027,.018);
 
-	function bench(x:number,z:number){
+	function bench(x:number,z:number,seatX=x){
+		seats?.push(benchSeat(seatX,z,.55,-1));
 		for(const side of [-1,1])solid('#4a4955',x+side*.9,.22,z,.15,.44,.56);
 		solid('#a6846f',x,.48,z,2.55,.14,.62);
 		solid('#856b63',x,.88,z+.26,2.55,.46,.12);
 	}
-	// Seats look south/east over the edge; leave the marked x=-103 path open.
+	// Seats look south over the edge. Use the left side of the east bench to avoid its lamp.
 	bench(-106.25,44.45);
-	bench(-99.75,44.45);
+	bench(-99.75,44.45,-100.47);
 	const rockColors=['#55586d','#666a7d','#454e64'];
 	for(let i=0;i<10;i++){
 		const x=-111+i*1.7,z=42.65+(i%3)*.28,h=.55+(i%4)*.28,w=.76+(i%3)*.23,d=.7;

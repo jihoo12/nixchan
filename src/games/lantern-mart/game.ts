@@ -17,6 +17,7 @@ import { createTownHelp } from './town-help';
 import { buildRailcar } from './railcar';
 import { buildWestBank } from './west-bank';
 import { CABIN, clearRailcar, createRailShuttle, insideCabin, keepInCabin, RAIL } from './rail-shuttle';
+import { findWorldSeat, type WorldSeat } from './world-seats';
 
 const SHELF = new THREE.Vector3(-2.72, 0, -4.54);
 const KETTLE = new THREE.Vector3(2.70, 0, -6.05);
@@ -84,18 +85,21 @@ export default function start({ createGame, store }: GameContext) {
 	const ko = lanternKorean();
 	const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 	const districts = new THREE.Scene();
+	const seats: WorldSeat[] = [];
+	let worldSeat: WorldSeat | null = null;
 	const {world,blocks} = townPhysics([
 		...buildTownGrounds(districts),
 		...buildRiverDistrict(districts),
-		...buildStationDistrict(districts),
-		...buildHillDistrict(districts),
-		...buildWestBank(districts),
+		...buildStationDistrict(districts, seats),
+		...buildHillDistrict(districts, seats),
+		...buildWestBank(districts, seats),
 	]);
 	const car = buildRailcar(districts);
 	car.setPose(shuttle.pose.x, shuttle.pose.door);
 	const platformGround = world.groundAt;
 	const oldCollide = world.collide;
 	const walkingInside = world.inside;
+	const seatLift = (s: WorldSeat) => s.height - platformGround(s.x,s.z,0);
 	world.inside = (x,z) => shuttle.riding ? insideCabin(shuttle.pose,x,z) : walkingInside(x,z);
 	world.groundAt = (x,z,y)=>shuttle.riding ? RAIL.floor : platformGround(x,z,y);
 	world.collide = (p,r,v)=>{
@@ -103,6 +107,7 @@ export default function start({ createGame, store }: GameContext) {
 			if(!shuttle.seated)keepInCabin(shuttle.pose,p,r,v);
 			return;
 		}
+		if(worldSeat)return;
 		oldCollide?.(p,r,v);
 		clearRailcar(shuttle.pose,p,r,v);
 	};
@@ -111,23 +116,23 @@ export default function start({ createGame, store }: GameContext) {
 		world,
 		firstPerson: {
 			showButton: false,
-			get eyeHeight() { return shuttle.seated ? 1.17 : 1.52; },
+			get eyeHeight() { return shuttle.seated ? 1.17 : worldSeat ? seatLift(worldSeat)+.72 : 1.52; },
 			label: ko ? '1인칭' : 'First person',
 			lockedLabel: ko ? '식사 중에는 3인칭으로 보여요' : 'Third person while eating',
 			forceThirdPerson: () => errand.phase === 'eat',
 		},
 		emotes: { ...lanternEmotes(ko), showButton: false },
 		clip: (): NixClip | null => {
-			if(shuttle.seated) return 'Sit';
+			if(shuttle.seated || worldSeat) return 'Sit';
 			if (errand.phase === 'eat') return errand.elapsed < 4.28 ? 'Sit' : 'Carry';
 			if (errand.phase === 'water' || errand.phase === 'wait' || errand.phase === 'seat') {
 				return game && Math.hypot(game.player.vel.x, game.player.vel.z) > 0.25 ? 'CarryWalk' : 'Carry';
 			}
 			return null;
 		},
-		hold: () => shuttle.seated?.heading ?? (errand.phase === 'eat' ? SEAT_HEADING : null),
+		hold: () => shuttle.seated?.heading ?? worldSeat?.heading ?? (errand.phase === 'eat' ? SEAT_HEADING : null),
 		onKey: (key, e) => {
-			if (key !== 'e' || e.altKey || e.ctrlKey || e.metaKey) return;
+			if (key !== 'e' || e.repeat || e.altKey || e.ctrlKey || e.metaKey) return;
 			if (e.target instanceof HTMLButtonElement || e.target instanceof HTMLAnchorElement) return;
 			if (game && (interact() || shuttle.riding || errand.phase === 'eat')) game.controls.state.waveQueued = false;
 		},
@@ -148,6 +153,7 @@ export default function start({ createGame, store }: GameContext) {
 		const pose=shuttle.update(time);
 		followingRailcar.x=pose.x;
 		car.setPose(pose.x,pose.door);
+		if(worldSeat) movePassenger({x:worldSeat.x,y:platformGround(worldSeat.x,worldSeat.z,0),z:worldSeat.z});
 		if(shuttle.riding){
 			game.controls.state.jumpQueued=false;
 			if(shuttle.seated) movePassenger(shuttle.seatPoint(shuttle.seated));
@@ -227,7 +233,7 @@ export default function start({ createGame, store }: GameContext) {
 				cabinCamera.z=RAIL.z+(eye.z>RAIL.z?-.57:.57);
 			game.camera.position.copy(cabinCamera);game.camera.lookAt(eye);cameraReach=1;return;
 		}
-		eye.y=player.pos.y+1.2;
+		eye.y=player.pos.y+(worldSeat ? seatLift(worldSeat)+.66 : 1.2);
 		const clear=townCameraClear(eye,game.camera.position,cameraBlocks);
 		cameraReach=clear<cameraReach?clear:damp(cameraReach,clear,5,dt);
 		if(cameraReach<.999){game.camera.position.lerpVectors(eye,game.camera.position,cameraReach);game.camera.lookAt(eye);}
@@ -255,7 +261,7 @@ export default function start({ createGame, store }: GameContext) {
 	setNight();
 	addEventListener('site-time', setNight);
 
-	buildShop(scene);
+	buildShop(scene, seats);
 	const street = buildStreet(scene);
 	const ramen = createRamen(scene, player);
 	const snow = driftingSnow(scene);
@@ -280,8 +286,37 @@ export default function start({ createGame, store }: GameContext) {
 		return !!at && player.grounded && indoors(player.pos.x, player.pos.z) &&
 			Math.hypot(player.pos.x - at.x, player.pos.z - at.z) <= 1.10;
 	}
+	const checkPoint = new THREE.Vector3(), checkVel = new THREE.Vector3();
+	function clearFooting(x: number, z: number) {
+		if(!walkingInside(x,z))return false;
+		checkPoint.set(x,platformGround(x,z,0),z);
+		checkVel.set(0,0,0);
+		oldCollide?.(checkPoint,.45,checkVel);
+		clearRailcar(shuttle.pose,checkPoint,.45,checkVel);
+		return Math.hypot(checkPoint.x-x,checkPoint.z-z)<1e-6;
+	}
+	function nearbyWorldSeat() {
+		if(shuttle.riding || errand.phase==='eat' || player.dashing)return null;
+		return findWorldSeat(seats,{x:player.pos.x,y:player.pos.y,z:player.pos.z,grounded:player.grounded},(seat)=>{
+			// Verify the route to the seat's foot space before snapping to it.
+			for(const t of [.33,.67,1]){
+				if(!clearFooting(THREE.MathUtils.lerp(player.pos.x,seat.x,t),
+					THREE.MathUtils.lerp(player.pos.z,seat.standZ,t)))return false;
+			}
+			return true;
+		});
+	}
 	function interact() {
 		if (!game?.ready || game.paused) return false;
+		if(worldSeat){
+			const {x,standZ:z}=worldSeat;
+			if(clearFooting(x,z)){
+				worldSeat=null;
+				movePassenger({x,y:platformGround(x,z,0),z});
+				panel.update(null);
+			}
+			return true;
+		}
 		const previousSeat=shuttle.seated;
 		const train = shuttle.interact({x:player.pos.x,y:player.pos.y,z:player.pos.z,grounded:player.grounded});
 		if (train) {
@@ -298,7 +333,15 @@ export default function start({ createGame, store }: GameContext) {
 			panel.update(null);
 			return true;
 		}
-		if (!canReach()) return false;
+		if (!canReach()) {
+			const seat=nearbyWorldSeat();
+			if(!seat)return false;
+			worldSeat=seat;
+			movePassenger({x:seat.x,y:platformGround(seat.x,seat.z,0),z:seat.z});
+			player.face(seat.heading);
+			panel.update(null);
+			return true;
+		}
 		const previous = errand.phase;
 		if (!errand.act()) return false;
 		if (previous === 'water') game.emote('surprised', 1.05); // The first puff of steam.
@@ -353,15 +396,16 @@ export default function start({ createGame, store }: GameContext) {
 		// The shared Sit clip is based at the seat, not at the avatar's feet.
 		const seated = phase === 'eat' ? 0.65 * THREE.MathUtils.smoothstep(errand.elapsed, 0, 0.32)
 			* (1 - THREE.MathUtils.smoothstep(errand.elapsed, 4.25, EAT_SECONDS)) : 0;
-		player.figure.group.position.y = shuttle.seated ? CABIN.seatHeight : seated;
+		player.figure.group.position.y = shuttle.seated ? CABIN.seatHeight : worldSeat ? seatLift(worldSeat) : seated;
 		ramen.update(phase === 'water' ? 'dry' : phase === 'wait' || phase === 'seat' ? 'hot' :
 			phase === 'eat' ? 'eating' : phase === 'after' ? 'done' : 'empty', phase === 'eat' ? errand.elapsed : elapsed, reduced.matches);
 
 		const railAction=shuttle.action({x:player.pos.x,y:player.pos.y,z:player.pos.z,grounded:player.grounded});
-		panel.update(railAction==='board'?(ko?'기차 타기':'Board train'):
+		panel.update(worldSeat?(ko?'일어나기':'Stand up'):railAction==='board'?(ko?'기차 타기':'Board train'):
 			railAction==='leave'?(ko?'기차에서 내리기':'Get off train'):
 			railAction==='sit'?(ko?'창가에 앉기':'Sit by the window'):
-			railAction==='stand'?(ko?'일어나기':'Stand up'):ramenAction(phase, canReach(), ko));
+			railAction==='stand'?(ko?'일어나기':'Stand up'):
+			ramenAction(phase, canReach(), ko) ?? (nearbyWorldSeat()?(ko?'앉기':'Sit down'):null));
 	});
 	game.loaded.then(() => {
 		if (focusMapButton) focusMapButton.disabled = false;
