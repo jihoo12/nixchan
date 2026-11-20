@@ -110,7 +110,7 @@ export function createLanternHud(activate: () => void) {
 	let shownAction: string | null = null;
 	return {
 		text,
-		reveal() { panel.hidden = false; },
+		show(visible: boolean) { panel.hidden = !visible; },
 		update(phase: Phase, action: string | null, value: number) {
 			if (shownPhase !== phase) {
 				shownPhase = phase;

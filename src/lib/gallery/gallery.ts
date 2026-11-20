@@ -1,27 +1,19 @@
 // The gallery: a round plaza floating in the sky, where Nixchan walks about among portals to the
-// games made for her. The island has one, and so does every game in src/games/<id>/ (from its
-// meta.ts, in the order they were added), so a new game turns up here by itself. Last comes one
-// to GitHub, for how to make the next.
+// worlds currently featured. Archived games keep their direct play routes; they don't
+// need to have a portal on this plaza.
 //
 // Back from a game, the page is asked for with ?from=<id>, and she steps out of that game's portal.
 import * as THREE from 'three';
 import { createGame } from '../nixkit/game';
 import { addPortal, type Portal, type PortalSpec } from '../nixkit/portal';
-import type { GameMeta } from '../nixkit/meta';
+import lanternTown from '../../games/lantern-mart/meta';
 import { cloud, cloudSea } from '../nixkit/scenery';
 import { to as inSite } from '../base';
 
-const GAMES = Object.entries(import.meta.glob<{ default: GameMeta }>('../../games/*/meta.ts', { eager: true }))
-	.map(([path, mod]) => ({ id: path.split('/').at(-2)!, meta: mod.default }))
-	.filter(({ id }) => !id.startsWith('_'))
-	.sort((a, b) => a.meta.added.localeCompare(b.meta.added) || a.id.localeCompare(b.id));
-
-/** The portals, left to right round the far side of the plaza. */
+// Import the featured town statically. The independent play-page registry still serves all games.
 const PORTALS: (Omit<PortalSpec, 'at' | 'facing'> & { id: string })[] = [
 	{ id: 'island', title: "Nixchan's Island", note: 'Roam, fish, garden and build', href: inSite('/island/'), colors: ['#5fd17a', '#5fb8ff'] },
-	...GAMES.map(({ id, meta }) => ({ id, title: meta.title, note: `${meta.note} · by ${meta.author}`, href: inSite(`/play/${id}/`), colors: meta.colors })),
-	// The way to make one: how to add a game, on GitHub.
-	{ id: 'make', title: 'Make your own', note: 'Add a game with a pull request', href: 'https://github.com/jihoo12/nixchan/blob/main/CONTRIBUTING.md', colors: ['#c8d3f5', '#8f7bff'] },
+	{ id: 'lantern-mart', title: lanternTown.title, note: lanternTown.note, href: inSite('/play/lantern-mart/'), colors: lanternTown.colors },
 ];
 
 /** How far apart the portals stand round their ring, and how far round the far side they spread

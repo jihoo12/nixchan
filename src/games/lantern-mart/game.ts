@@ -1,12 +1,18 @@
-// A small playable scene, not a new site route: Nixkit adds its Gallery portal automatically.
+// Lantern Town keeps the original shop, controls and save key on the existing play route.
 import * as THREE from 'three';
 import type { GameContext, NixClip } from '../../lib/nixkit/meta';
-import type { World } from '../../lib/nixkit/world';
-import { buildShop, shopSolids } from './art';
+import { ORDER } from '../../lib/nixkit/engine';
+import { buildShop } from './art';
 import { buildStreet } from './street';
 import { createRamen } from './ramen';
 import { createLanternHud, lanternEmotes, lanternKorean } from './ui';
 import { createErrand, STEEP_SECONDS, EAT_SECONDS } from './errand';
+import { buildTownGrounds } from './town-grounds';
+import { buildRiverDistrict } from './river-district';
+import { buildStationDistrict } from './station-district';
+import { buildHillDistrict } from './hill-district';
+import { townArea, townCameraClear, townPhysics } from './town-layout';
+import { townMap } from './town-map';
 
 const SHELF = new THREE.Vector3(-2.72, 0, -4.54);
 const KETTLE = new THREE.Vector3(2.70, 0, -6.05);
@@ -18,23 +24,6 @@ const FIRST_BITE = 1.30;
 const STREET_CAMERA_DISTANCE = 8.2;
 const indoors = (x: number, z: number) => Math.abs(x) < 4.6 && z < -0.32 && z > -8.05;
 const damp = (a: number, b: number, k: number, dt: number) => a + (b - a) * (1 - Math.exp(-k * dt));
-type Bounds = readonly [number, number, number, number];
-const outdoorSolids: Bounds[] = [
-	[-12, -6.4, -9.1, -2.3], [6.4, 12, -9.1, -2.3],
-	[-9.15, -6.0, 1.68, 2.2], [7.35, 9.15, 2.66, 3.43],
-];
-const solids = [...shopSolids, ...outdoorSolids];
-const map: World = {
-	groundAt: () => 0,
-	ceilingAt: () => Infinity,
-	nearby: () => [],
-	inside(x, z) {
-		if (Math.abs(x) > 10.8 || z < -8.95 || z > 12.7) return false;
-		return !solids.some(([left, right, back, front]) =>
-			x > left - 0.24 && x < right + 0.24 && z > back - 0.24 && z < front + 0.24);
-	},
-};
-
 /** Where a follow camera would run into the shop shell; the door is the one gap. */
 function cameraClear(x: number, z: number, yaw: number, requested: number) {
 	const dx = Math.sin(yaw), dz = Math.cos(yaw);
@@ -107,9 +96,16 @@ export default function start({ createGame, store }: GameContext) {
 	const errand = createErrand();
 	const ko = lanternKorean();
 	const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+	const districts = new THREE.Scene();
+	const {world,blocks} = townPhysics([
+		...buildTownGrounds(districts),
+		...buildRiverDistrict(districts),
+		...buildStationDistrict(districts),
+		...buildHillDistrict(districts),
+	]);
 	const game = createGame({
 		spawn: { pos: SPAWN.clone(), heading: Math.PI },
-		world: map,
+		world,
 		firstPerson: {
 			label: ko ? '1인칭' : 'First person',
 			lockedLabel: ko ? '식사 중에는 3인칭으로 보여요' : 'Third person while eating',
@@ -133,9 +129,45 @@ export default function start({ createGame, store }: GameContext) {
 	if (!game) return;
 
 	const { scene, player, orbit } = game;
+	scene.add(...[...districts.children]);
+	const tour = townMap(ko);
+	const place = game.hud.stat(ko?'등불편의점':'Lantern Mart');
+	let focusMapButton:HTMLButtonElement|undefined;
+	const showMap=(show:boolean)=>{
+		tour.panel.hidden=!show;
+		game.paused=show;
+		focusMapButton?.setAttribute('aria-expanded',String(show));
+		if(show){
+			const l=townArea(player.pos.x,player.pos.z);
+			tour.update(player.pos.x,player.pos.z,l?(ko?l.ko:l.en):(ko?'등불마을':'Lantern Town'));
+			tour.close.focus();
+		}else focusMapButton?.focus();
+	};
+	tour.close.onclick=()=>showMap(false);
+	focusMapButton=game.hud.button(ko?'마을 지도':'Town map',()=>showMap(Boolean(tour.panel.hidden)));
+	focusMapButton.setAttribute('aria-expanded','false');
+	game.keys.intercept((key,e)=>{
+		if(e.altKey||e.ctrlKey||e.metaKey)return false;
+		if(key==='m'||(key==='escape'&&!tour.panel.hidden)){
+			e.preventDefault();if(!e.repeat)showMap(key!=='escape'&&Boolean(tour.panel.hidden));
+			return true;
+		}
+		return !tour.panel.hidden;
+	},50);
+	// Trim the camera against new facades after Nixkit's usual follow camera; the original shop
+	// keeps its own window-seat framing. Restore slowly after a wall leaves the line of sight.
+	const eye=new THREE.Vector3();
+	let cameraReach=1;
+	game.engine.add({order:ORDER.camera+1,always:true,update(dt){
+		if(game.firstPerson||indoors(player.pos.x,player.pos.z)){cameraReach=1;return;}
+		eye.copy(player.pos);eye.y+=1.2;
+		const clear=townCameraClear(eye,game.camera.position,blocks);
+		cameraReach=clear<cameraReach?clear:damp(cameraReach,clear,5,dt);
+		if(cameraReach<.999){game.camera.position.lerpVectors(eye,game.camera.position,cameraReach);game.camera.lookAt(eye);}
+	}});
 	orbit.distance = STREET_CAMERA_DISTANCE;
 	orbit.pitch = 0.23;
-	const fog = new THREE.FogExp2('#192139', 0.046);
+	const fog = new THREE.Fog('#252d49', 29, 157);
 	const sky = new THREE.Color('#1e2542');
 	const fill = scene.children.find((light) => light instanceof THREE.HemisphereLight) as THREE.HemisphereLight | undefined;
 	const key = scene.children.find((light) => light instanceof THREE.DirectionalLight) as THREE.DirectionalLight | undefined;
@@ -169,6 +201,7 @@ export default function start({ createGame, store }: GameContext) {
 	const seatPrev = new THREE.Vector3();
 	let wantedZoom = STREET_CAMERA_DISTANCE;
 	let lastZoom = orbit.distance;
+	const visited=new Set<string>();
 
 	function target() {
 		switch (errand.phase) {
@@ -235,6 +268,12 @@ export default function start({ createGame, store }: GameContext) {
 		snowFade = reduced.matches ? Number(snowStarted) : damp(snowFade, Number(snowStarted), 1.4, dt);
 		snow(time, snowFade, reduced.matches);
 		if (!reduced.matches) street?.(dt);
+		const area=townArea(player.pos.x,player.pos.z);
+		place.set(area?(ko?area.ko:area.en):(ko?'등불마을':'Lantern Town'));
+		if(area&&area.id!=='mart'&&!visited.has(area.id)&&Math.hypot(player.pos.x-area.x,player.pos.z-area.z)<9){
+			visited.add(area.id);game.hud.banner(ko?area.ko:area.en,ko?area.hintKo:area.hintEn,4.3);
+		}
+		panel.show(inShop || Math.abs(player.pos.x)<9.5&&player.pos.z<12&&player.pos.z>-1);
 		const phase = errand.phase;
 		// The shared Sit clip is based at the seat, not at the avatar's feet.
 		const seated = phase === 'eat' ? 0.65 * THREE.MathUtils.smoothstep(errand.elapsed, 0, 0.32)
@@ -251,6 +290,9 @@ export default function start({ createGame, store }: GameContext) {
 		panel.update(phase, action, phase === 'wait' ? errand.elapsed / STEEP_SECONDS :
 			phase === 'eat' ? errand.elapsed / EAT_SECONDS : 0);
 	});
-	game.loaded.then(panel.reveal, () => {});
+	game.loaded.then(()=>{
+		panel.show(true);
+		game.hud.banner(ko?'등불마을':'Lantern Town',ko?'편의점을 등지면 시장과 역으로 이어지는 길이 있어요.':'Turn around to find the roads to the market and the station.',4.6);
+	},()=>{});
 	void game.start();
 }
