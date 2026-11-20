@@ -47,6 +47,7 @@ function paintMouth(ctx: CanvasRenderingContext2D, mood: Mood, strength: number)
 	const width = lerp(.075, m.width, strength);
 	const y = lerp(.473, m.y, strength);
 	const corner = m.smile * strength;
+	const softTongue = m.tongue && m.smile > 0 && strength > .23;
 	ctx.save();
 	ctx.globalAlpha = Math.min(1, strength / .34);
 	ctx.strokeStyle = '#663846';
@@ -62,14 +63,28 @@ function paintMouth(ctx: CanvasRenderingContext2D, mood: Mood, strength: number)
 		if (m.tongue && strength > .23) {
 			ctx.save();
 			ctx.clip();
-			ctx.fillStyle = '#e98c9b';
 			ctx.beginPath();
-			ctx.ellipse(0, y + m.bottom * strength * .70, width * .68, m.bottom * strength * .30, 0, 0, Math.PI * 2);
+			if (softTongue) {
+				// Let the mouth's own curve shape the lower edge of a small tongue.
+				// A separate oval reads as a second lip at the size the face is shown.
+				const edge = y + (m.bottom * .75 - m.smile * .25) * strength;
+				const lip = edge - .038 * strength;
+				ctx.fillStyle = '#dc8190';
+				ctx.moveTo(-width * .84, lip + .023 * strength);
+				ctx.quadraticCurveTo(0, lip - .023 * strength, width * .84, lip + .023 * strength);
+				ctx.lineTo(width * .84, edge + .05);
+				ctx.lineTo(-width * .84, edge + .05);
+				ctx.closePath();
+			} else {
+				ctx.fillStyle = '#e98c9b';
+				ctx.ellipse(0, y + m.bottom * strength * .70, width * .68, m.bottom * strength * .30, 0, 0, Math.PI * 2);
+			}
 			ctx.fill();
 			ctx.restore();
 		}
 	}
-	ctx.stroke();
+	// Canvas save/restore does not restore the path; this would outline the tongue.
+	if (!softTongue) ctx.stroke();
 	ctx.restore();
 }
 
