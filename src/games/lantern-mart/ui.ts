@@ -1,3 +1,4 @@
+import type { TalkUi } from '../../lib/nixkit/talk';
 import type { Phase } from './errand';
 
 const labels = {
@@ -27,6 +28,23 @@ const css = `
 [data-town-action]:focus-visible { outline:2px solid #ffd9a2; outline-offset:3px; }
 [data-town-action] kbd { border:1px solid #ddc4a963; border-radius:5px; padding:3px 5px; font-size:11px; }
 @media (pointer:coarse) { [data-town-action] kbd { display:none; } }
+[data-lantern-talk] { z-index:22; position:fixed; inset:auto 0 max(24px, env(safe-area-inset-bottom)) 0; margin:auto;
+	width:min(480px,calc(100% - 32px)); box-sizing:border-box; padding:13px 16px 14px; border:1px solid #e2b98575;
+	border-radius:16px; background:#1b2032f2; color:#fff0d7; font:500 15px/1.5 system-ui,sans-serif;
+	box-shadow:0 8px 32px #0808157a; }
+[data-lantern-talk][hidden], [data-lantern-bubble][hidden] { display:none!important; }
+[data-lantern-talk] .who { display:inline-block; padding:2px 10px; border-radius:999px; color:#fff8ec;
+	font-size:12px; font-weight:800; letter-spacing:.02em; }
+[data-lantern-talk] p { margin:7px 0 0; min-height:2.9em; }
+[data-lantern-talk] .choices { display:flex; flex-wrap:wrap; gap:7px; margin-top:9px; }
+[data-lantern-talk] .choices button { min-height:44px; border:1px solid #e2b98575; border-radius:8px; background:#2a2c44;
+	color:#fff0d7; padding:6px 12px; font:650 13px system-ui,sans-serif; cursor:pointer; touch-action:manipulation; }
+[data-lantern-talk] .choices button[aria-pressed="true"] { background:#ffd9a2; color:#291e21; border-color:#ffd9a2; }
+[data-lantern-talk] .choices button:focus-visible { outline:2px solid #ffd9a2; outline-offset:2px; }
+[data-lantern-bubble] { z-index:20; position:fixed; left:0; top:0; max-width:220px; padding:6px 11px; border-radius:12px;
+	background:#fff4e0; color:#2e2235; font:700 13px/1.35 system-ui,sans-serif; pointer-events:none;
+	box-shadow:0 4px 14px #0a0a1a55; margin-top:-8px; }
+@media (pointer:coarse) { [data-lantern-talk] { bottom:max(10px, env(safe-area-inset-bottom)); width:min(460px,calc(100% - 24px)); } }
 `;
 
 export function lanternKorean() {
@@ -60,4 +78,25 @@ export function createLanternHud(activate: () => void, ko: boolean) {
 			button.hidden = action === null;
 		},
 	};
+}
+
+/** The conversation box and speech bubble Nixkit's talk draws into (lib/nixkit/talk.ts), styled to
+ * match the action button. */
+export function createTalkUi(ko: boolean): TalkUi {
+	const talk = document.createElement('section');
+	talk.dataset.lanternTalk = '';
+	talk.hidden = true;
+	const name = document.createElement('span');
+	name.className = 'who';
+	const text = document.createElement('p');
+	text.setAttribute('aria-live', 'polite');
+	const choices = document.createElement('div');
+	choices.className = 'choices';
+	talk.append(name, text, choices);
+	const bubble = document.createElement('div');
+	bubble.dataset.lanternBubble = '';
+	bubble.hidden = true;
+	bubble.lang = talk.lang = ko ? 'ko' : 'en';
+	document.body.append(talk, bubble);
+	return { talk, name, text, choices, bubble };
 }

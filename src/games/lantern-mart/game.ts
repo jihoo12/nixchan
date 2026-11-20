@@ -5,7 +5,7 @@ import { ORDER } from '../../lib/nixkit/engine';
 import { buildShop } from './art';
 import { buildStreet } from './street';
 import { createRamen } from './ramen';
-import { createLanternHud, lanternEmotes, lanternKorean, ramenAction } from './ui';
+import { createLanternHud, createTalkUi, lanternEmotes, lanternKorean, ramenAction } from './ui';
 import { createErrand, EAT_SECONDS } from './errand';
 import { buildTownGrounds } from './town-grounds';
 import { buildRiverDistrict } from './river-district';
@@ -18,6 +18,15 @@ import { buildRailcar } from './railcar';
 import { buildWestBank } from './west-bank';
 import { CABIN, cabinView, clearRailcar, createRailShuttle, insideCabin, keepInCabin, RAIL } from './rail-shuttle';
 import type { WorldSeat } from './world-seats';
+import { createTalk } from '../../lib/nixkit/talk';
+import { buildStalls, stallSolids } from './stalls';
+import { createNeighbors, neighborSolids, NEIGHBORS, type NeighborId } from './neighbors';
+import { createTreats, type TreatKind } from './treat';
+import type { TownBlock } from './town-layout';
+
+/** A footprint as [left, right, back, front], standing on the ground up to `top`. */
+const footprint = ([left, right, back, front]: readonly [number, number, number, number], top = 2.4): TownBlock =>
+	({ x: (left + right) / 2, z: (back + front) / 2, w: right - left, d: front - back, bottom: 0, top });
 
 const SHELF = new THREE.Vector3(-2.72, 0, -4.54);
 const KETTLE = new THREE.Vector3(2.70, 0, -6.05);
@@ -81,6 +90,8 @@ function driftingSnow(scene: THREE.Scene) {
 
 export default function start({ createGame, store }: GameContext) {
 	const errand = createErrand();
+	// Made once the game is, but the clip callback below may ask before then.
+	let treats: ReturnType<typeof createTreats> | null = null;
 	const shuttle = createRailShuttle();
 	const ko = lanternKorean();
 	const reduced = matchMedia('(prefers-reduced-motion: reduce)');
@@ -92,6 +103,9 @@ export default function start({ createGame, store }: GameContext) {
 		...buildStationDistrict(districts, seats),
 		...buildHillDistrict(districts, seats),
 		...buildWestBank(districts, seats),
+		// The neighbours' stalls along the mart's street, and room for the neighbours themselves.
+		...stallSolids.map((b) => footprint(b)),
+		...neighborSolids.map((b) => footprint(b, 1.4)),
 	]);
 	const car = buildRailcar(districts);
 	car.setPose(shuttle.pose.x, shuttle.pose.door);
@@ -122,7 +136,7 @@ export default function start({ createGame, store }: GameContext) {
 		clip: (): NixClip | null => {
 			if(shuttle.seated) return 'Sit';
 			if (errand.phase === 'eat') return errand.elapsed < 4.28 ? 'Sit' : 'Carry';
-			if (errand.phase === 'water' || errand.phase === 'wait' || errand.phase === 'seat') {
+			if (errand.phase === 'water' || errand.phase === 'wait' || errand.phase === 'seat' || treats?.holding) {
 				return game && Math.hypot(game.player.vel.x, game.player.vel.z) > 0.25 ? 'CarryWalk' : 'Carry';
 			}
 			return null;
@@ -255,6 +269,45 @@ export default function start({ createGame, store }: GameContext) {
 	const street = buildStreet(scene);
 	const ramen = createRamen(scene, player);
 	const snow = driftingSnow(scene);
+
+	// The neighbours, their stalls, and the treats Nixchan can buy from them.
+	treats = createTreats(scene, player);
+	const tray = treats;
+	const stalls = buildStalls(scene, ko, (kind, prop) => tray.set(kind, prop));
+	const talkUi = createTalkUi(ko);
+	const talk = createTalk(game.camera, talkUi);
+	// Nixkit's talk speaks the site's language; this game follows its own ?lang= (ui.ts).
+	for (const el of [talkUi.talk, talkUi.bubble]) if (el) el.lang = ko ? 'ko' : 'en';
+	talk.keysFor(game.keys, 60);
+	const metBefore = store.get('met');
+	const met = new Set<NeighborId>(Array.isArray(metBefore) ? metBefore.filter((id): id is NeighborId => NEIGHBORS.includes(id)) : []);
+	const eatenBefore = store.get('treats') as Partial<Record<TreatKind, unknown>> | undefined;
+	const tally = (v: unknown) => (typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 ? v : 0);
+	const eaten: Record<TreatKind, number> = { bungeo: tally(eatenBefore?.bungeo), eomuk: tally(eatenBefore?.eomuk) };
+	const neighbors = createNeighbors({
+		scene, toon: game.toon, talk, ko, pos: player.pos,
+		facts: () => ({
+			phase: errand.phase,
+			snowing: snowStarted,
+			handsFull: !!tray.holding || ['water', 'wait', 'seat', 'eat'].includes(errand.phase),
+			eaten,
+		}),
+		buy: (kind) => {
+			if (tray.holding || !player.grounded || game.chairSeated) return false;
+			tray.start(kind);
+			return true;
+		},
+		met: (id) => met.has(id),
+		meet: (id) => {
+			met.add(id);
+			store.set('met', [...met]);
+		},
+		face: (heading) => {
+			player.vel.set(0, 0, 0);
+			player.face(heading);
+		},
+	});
+	game.focus.add(() => neighbors.framing());
 	let snowFade = 0;
 	let snowStarted = false;
 	let elapsed = 0;
@@ -273,7 +326,8 @@ export default function start({ createGame, store }: GameContext) {
 	}
 	function canReach() {
 		const at = target();
-		return !!at && player.grounded && indoors(player.pos.x, player.pos.z) &&
+		// With a treat in her hand, the errand waits until it's eaten.
+		return !!at && !treats?.holding && player.grounded && indoors(player.pos.x, player.pos.z) &&
 			Math.hypot(player.pos.x - at.x, player.pos.z - at.z) <= 1.10;
 	}
 	function interact() {
@@ -297,7 +351,11 @@ export default function start({ createGame, store }: GameContext) {
 			return true;
 		}
 		if (shuttle.riding || errand.phase === 'eat') return true;
-		if (!canReach()) return false;
+		if (!canReach()) {
+			const neighbor = player.grounded && !game.chairSeated ? neighbors.offer() : null;
+			neighbor?.go();
+			return !!neighbor;
+		}
 		const previous = errand.phase;
 		if (!errand.act()) return false;
 		if (previous === 'water') game.emote('surprised', 1.05); // The first puff of steam.
@@ -329,8 +387,21 @@ export default function start({ createGame, store }: GameContext) {
 			player.root.position.copy(player.pos);
 			if (a >= 1 || errand.phase !== 'eat') seatBlend = false;
 		}
+		talk.update(dt);
+		neighbors.update(dt);
+		const chatting = neighbors.talking;
+		const treat = tray.update(dt, reduced.matches);
+		if (treat.bite) game.emote('happy', 1.1);
+		if (treat.done) {
+			eaten[treat.done] += 1;
+			store.set('treats', { ...eaten });
+		}
+		stalls(time, reduced.matches);
 		const inShop = indoors(player.pos.x, player.pos.z);
-		if (Math.abs(orbit.distance - lastZoom) > 0.008) wantedZoom = THREE.MathUtils.clamp(orbit.distance, 3.0, 12);
+		// While she's talking, the camera frames her with whoever it is (Nixkit's focus) rather than
+		// taking its change of distance for a zoom of the player's own.
+		if (chatting) lastZoom = orbit.distance;
+		else if (Math.abs(orbit.distance - lastZoom) > 0.008) wantedZoom = THREE.MathUtils.clamp(orbit.distance, 3.0, 12);
 		if (errand.phase === 'eat') {
 			const angle = 0.77;
 			const turn = Math.atan2(Math.sin(angle - orbit.yaw), Math.cos(angle - orbit.yaw));
@@ -339,7 +410,7 @@ export default function start({ createGame, store }: GameContext) {
 		}
 		// Keep the character and cup visible inside the narrow shop without resetting outdoor zoom.
 		if (inShop) orbit.pitch = Math.min(orbit.pitch, 0.53);
-		const ideal = errand.phase === 'eat' ? 3.3 : inShop ? Math.min(4.6, wantedZoom) : wantedZoom;
+		const ideal = errand.phase === 'eat' ? 3.3 : chatting ? (inShop ? 4.2 : 5.5) : inShop ? Math.min(4.6, wantedZoom) : wantedZoom;
 		const clearance = cameraClear(player.pos.x, player.pos.z, orbit.yaw, ideal);
 		const preferred = damp(lastZoom, ideal, 5.5, dt);
 		orbit.distance = Math.min(preferred, clearance);
@@ -358,11 +429,14 @@ export default function start({ createGame, store }: GameContext) {
 
 		const railAction=shuttle.action({x:player.pos.x,y:player.pos.y,z:player.pos.z,grounded:player.grounded});
 		const chairAction = game.chairAction();
-		panel.update(chairAction==='stand'?(ko?'일어나기':'Stand up'):railAction==='board'?(ko?'기차 타기':'Board train'):
+		const neighborAction = !chatting && !shuttle.riding && phase !== 'eat' && player.grounded && !game.chairSeated
+			? neighbors.offer()?.label ?? null : null;
+		if (chatting) panel.update(null);
+		else panel.update(chairAction==='stand'?(ko?'일어나기':'Stand up'):railAction==='board'?(ko?'기차 타기':'Board train'):
 			railAction==='leave'?(ko?'기차에서 내리기':'Get off train'):
 			railAction==='sit'?(ko?'창가에 앉기':'Sit by the window'):
 			railAction==='stand'?(ko?'일어나기':'Stand up'):
-			ramenAction(phase, canReach(), ko) ?? (chairAction==='sit'?(ko?'앉기':'Sit down'):null));
+			ramenAction(phase, canReach(), ko) ?? neighborAction ?? (chairAction==='sit'?(ko?'앉기':'Sit down'):null));
 	});
 	game.loaded.then(() => {
 		if (focusMapButton) focusMapButton.disabled = false;

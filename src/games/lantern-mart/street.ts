@@ -237,6 +237,25 @@ export function buildStreet(scene: THREE.Scene) {
 	}
 	fasciaSign('LAST STOP', 'TEA  ·  BOOKS', -10.4, -2.65, 3.2, '#35385d', '#e6c8a2');
 	fasciaSign('MOON LAUNDRY', 'OPEN UNTIL THE RAIN STOPS', 10.5, -3.55, 4.0, '#3c344f', '#e8badc');
+	// The shops at either end of the block: a florist behind Gomsun's bungeoppang cart, and a little
+	// arcade behind Yeoul's tent (stalls.ts).
+	fasciaSign('HANA FLOWERS', 'BLOOMS AFTER DARK', -18.2, -1.85, 3.6, '#3d4a45', '#f2d7e0');
+	fasciaSign('STAR ARCADE', 'CLAW  ·  COIN  ·  PRIZES', 18.6, -2.3, 3.6, '#2e2a52', '#a8e8ff');
+	// Buckets of flowers on the florist's step, and the arcade's glowing machines by its door.
+	for (let i = 0; i < 6; i++) {
+		const x = -20.6 + i * 0.52;
+		block(x, 0.18, -1.45, 0.34, 0.36, 0.34, '#5d6c7b');
+		for (let k = 0; k < 3; k++) {
+			block(x + (k - 1) * 0.09, 0.47 + (k % 2) * 0.07, -1.45 + (k % 2 ? 0.06 : -0.05), 0.11, 0.11, 0.11,
+				choose(['#f29bb5', '#ffd27a', '#f5f0ff', '#e46f73', '#b9a3f0'] as const), 'lamp');
+		}
+		block(x, 0.38, -1.45, 0.3, 0.12, 0.3, '#4f7a5a');
+	}
+	block(16.6, 0.95, -2.05, 1.0, 1.9, 0.6, '#3b3570');
+	block(16.6, 1.25, -1.74, 0.82, 0.8, 0.02, '#9ff0ff', 'lamp');
+	block(16.6, 1.85, -1.74, 0.9, 0.12, 0.03, '#ff8ad8', 'lamp');
+	block(20.4, 0.75, -1.95, 0.8, 1.5, 0.5, '#46306a');
+	block(20.4, 1.05, -1.69, 0.6, 0.5, 0.02, '#ffd27a', 'lamp');
 
 	// Far city gets colour and a few bigger silhouettes, not an endlessly repeated facade.
 	for (let i = 0; i < 16; i++) {

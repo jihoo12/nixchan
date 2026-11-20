@@ -211,6 +211,11 @@ page's address to see how fast it's drawing.
 These came out of the island, and any game can use them. Each draws into the page's own elements,
 so the page styles them as it likes.
 
+- `createCharacter(scene, toon, { url, at, facing, scale })` (`character.ts`): someone else in the
+  world, a rigged `.glb` from Blender drawn in the kit's toon look with an ink line. `play('Wave')`
+  blends into a clip, and `update(dt, lookAt)` moves it on and turns its head toward `lookAt`.
+  Lantern Town's neighbours are made with it (`src/games/lantern-mart/neighbors.ts`, modelled in
+  `tools/lantern-mart/build.py`).
 - `createTalk(camera, ui)` (`talk.ts`): a conversation box and a speech bubble. `open({ name, color })`,
   `say(text, choices)`, `bye(text)`, `bubble(text, at)`, and `update(dt)` each frame.
   `talk.keysFor(game.keys)` gives it the keys while someone's talking.
@@ -247,6 +252,7 @@ so the page styles them as it likes.
 - `snow.ts`: snow on the GPU: snowfall, bursts and a vortex
 - `figure-nodes.ts`: Nixchan's look in TSL, for WebGPU
 - `interact.ts`: "press E to …" offers
+- `character.ts`: other characters, from a rigged `.glb`
 - `talk.ts`, `inventory.ts`, `menu.ts`: conversations, the bag, and tabs over the game
 - `save.ts`, `daynight.ts`, `lang.ts`: saves, day and night, and the site's language
 - `thumbnail.ts`: pictures of 3D things for menus
