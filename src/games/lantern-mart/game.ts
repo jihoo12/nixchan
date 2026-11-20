@@ -13,6 +13,7 @@ import { buildStationDistrict } from './station-district';
 import { buildHillDistrict } from './hill-district';
 import { townArea, townCameraClear, townPhysics } from './town-layout';
 import { townMap } from './town-map';
+import { createTownHelp } from './town-help';
 
 const SHELF = new THREE.Vector3(-2.72, 0, -4.54);
 const KETTLE = new THREE.Vector3(2.70, 0, -6.05);
@@ -89,11 +90,12 @@ export default function start({ createGame, store }: GameContext) {
 		spawn: { pos: SPAWN.clone(), heading: Math.PI },
 		world,
 		firstPerson: {
+			showButton: false,
 			label: ko ? '1인칭' : 'First person',
 			lockedLabel: ko ? '식사 중에는 3인칭으로 보여요' : 'Third person while eating',
 			forceThirdPerson: () => errand.phase === 'eat',
 		},
-		emotes: lanternEmotes(ko),
+		emotes: { ...lanternEmotes(ko), showButton: false },
 		clip: (): NixClip | null => {
 			if (errand.phase === 'eat') return errand.elapsed < 4.28 ? 'Sit' : 'Carry';
 			if (errand.phase === 'water' || errand.phase === 'wait' || errand.phase === 'seat') {
@@ -129,7 +131,30 @@ export default function start({ createGame, store }: GameContext) {
 	tour.close.onclick=()=>showMap(false);
 	focusMapButton=game.hud.button(ko?'마을 지도':'Town map',()=>showMap(Boolean(tour.panel.hidden)));
 	focusMapButton.setAttribute('aria-expanded','false');
+	const help = createTownHelp(ko);
+	const helpButton = game.hud.button('Help', () => {
+		if (help.dialog.open) return;
+		if (!tour.panel.hidden) showMap(false);
+		panel.update(null);
+		game.paused = true;
+		help.dialog.showModal();
+		help.close.focus();
+	});
+	helpButton.setAttribute('aria-haspopup','dialog');
+	helpButton.setAttribute('aria-controls',help.dialog.id);
+	const closeHelp = () => {
+		help.dialog.close();
+		game.paused = false;
+		helpButton.focus();
+	};
+	help.close.onclick = closeHelp;
+	help.dialog.addEventListener('cancel', (e) => { e.preventDefault(); closeHelp(); });
 	game.keys.intercept((key,e)=>{
+		if(help.dialog.open){
+			// Keep modal Tab/Enter/Space working. Nixkit's window listener must not move Nixchan.
+			if(key==='escape'){e.preventDefault();closeHelp();}
+			return true;
+		}
 		if(e.altKey||e.ctrlKey||e.metaKey)return false;
 		if(key==='m'||(key==='escape'&&!tour.panel.hidden)){
 			e.preventDefault();if(!e.repeat)showMap(key!=='escape'&&Boolean(tour.panel.hidden));

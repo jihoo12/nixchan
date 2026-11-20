@@ -126,12 +126,15 @@ export function createHud() {
 		/** Optional, keyboard- and touch-friendly disclosure for reactions. */
 		emotes(opts: EmoteMenu, play: (emotion: Emotion) => void, dance?: () => void) {
 			const holder = el('div', 'nk-emotes', actions);
-			const button = el('button', 'nk-action', holder);
+			const button = opts.showButton === false ? null : el('button', 'nk-action', holder);
+			let returnFocus: HTMLElement | null = null;
 			const panel = el('div', 'nk-emote-panel', holder);
 			const label = opts.label ?? 'Expressions';
-			button.textContent = label;
-			button.type = 'button';
-			button.setAttribute('aria-keyshortcuts', 'B');
+			if (button) {
+				button.textContent = label;
+				button.type = 'button';
+				button.setAttribute('aria-keyshortcuts', 'B');
+			}
 			panel.setAttribute('role', 'group');
 			panel.setAttribute('aria-label', label);
 			const labelDefaults = { happy: 'Happy', surprised: 'Surprised', sad: 'Sad', determined: 'Determined' };
@@ -152,14 +155,17 @@ export function createHud() {
 			if (hint) el('p', '', panel).textContent = hint;
 			function close(focus = false) {
 				panel.hidden = true;
-				button.setAttribute('aria-expanded', 'false');
-				if (focus && !holder.hidden) button.focus();
+				button?.setAttribute('aria-expanded', 'false');
+				if (focus && !holder.hidden) (button ?? returnFocus)?.focus();
+				returnFocus = null;
 			}
 			const toggle = (focus = false) => {
 				if (holder.hidden) return;
 				if (!panel.hidden) return close(focus);
+				const current = document.activeElement;
+				returnFocus = current && current !== document.body && 'focus' in current ? current as HTMLElement : null;
 				panel.hidden = false;
-				button.setAttribute('aria-expanded', 'true');
+				button?.setAttribute('aria-expanded', 'true');
 				if (focus) panel.querySelector('button')?.focus();
 			};
 			holder.addEventListener('keydown', (e) => {
@@ -167,7 +173,7 @@ export function createHud() {
 				e.preventDefault();
 				close(true);
 			});
-			button.addEventListener('click', () => toggle());
+			button?.addEventListener('click', () => toggle());
 			close();
 			return {
 				toggle,
