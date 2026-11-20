@@ -1,4 +1,4 @@
-import type { Phase } from './ui';
+export type Phase = 'shelf' | 'water' | 'wait' | 'seat' | 'eat' | 'after';
 
 export const STEEP_SECONDS = 3;
 export const EAT_SECONDS = 4.6;

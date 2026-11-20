@@ -5,8 +5,8 @@ import { ORDER } from '../../lib/nixkit/engine';
 import { buildShop } from './art';
 import { buildStreet } from './street';
 import { createRamen } from './ramen';
-import { createLanternHud, lanternEmotes, lanternKorean } from './ui';
-import { createErrand, STEEP_SECONDS, EAT_SECONDS } from './errand';
+import { createLanternHud, lanternEmotes, lanternKorean, ramenAction } from './ui';
+import { createErrand, EAT_SECONDS } from './errand';
 import { buildTownGrounds } from './town-grounds';
 import { buildRiverDistrict } from './river-district';
 import { buildStationDistrict } from './station-district';
@@ -41,24 +41,6 @@ function cameraClear(x: number, z: number, yaw: number, requested: number) {
 		return a > 1.0 && a < 4.6;
 	});
 	return Math.max(1.55, Math.min(requested, ...candidates.map((t) => t - 0.22)));
-}
-
-function makeMarker(scene: THREE.Scene) {
-	const root = new THREE.Group();
-	const gold = new THREE.MeshBasicMaterial({ color: '#ffd390', transparent: true, opacity: 0.63, depthWrite: false });
-	const ring = new THREE.Mesh(new THREE.RingGeometry(0.39, 0.43, 32), gold);
-	ring.rotation.x = -Math.PI / 2;
-	const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.105), new THREE.MeshBasicMaterial({ color: '#ffd99c' }));
-	root.add(ring, gem);
-	scene.add(root);
-	return (target: THREE.Vector3 | null, t: number, reduced: boolean, near: boolean) => {
-		root.visible = !!target;
-		if (!target) return;
-		root.position.copy(target).setY(0.057);
-		gem.position.y = 0.40 + (reduced ? 0 : Math.sin(t * 2.8) * 0.09);
-		gem.rotation.y = reduced ? 0.6 : t * 1.3;
-		gold.opacity = near ? 0.92 : 0.56;
-	};
 }
 
 function driftingSnow(scene: THREE.Scene) {
@@ -131,11 +113,12 @@ export default function start({ createGame, store }: GameContext) {
 	const { scene, player, orbit } = game;
 	scene.add(...[...districts.children]);
 	const tour = townMap(ko);
-	const place = game.hud.stat(ko?'등불편의점':'Lantern Mart');
+	const panel = createLanternHud(interact, ko);
 	let focusMapButton:HTMLButtonElement|undefined;
 	const showMap=(show:boolean)=>{
 		tour.panel.hidden=!show;
 		game.paused=show;
+		if(show)panel.update(null);
 		focusMapButton?.setAttribute('aria-expanded',String(show));
 		if(show){
 			const l=townArea(player.pos.x,player.pos.z);
@@ -191,9 +174,7 @@ export default function start({ createGame, store }: GameContext) {
 	buildShop(scene);
 	const street = buildStreet(scene);
 	const ramen = createRamen(scene, player);
-	const mark = makeMarker(scene);
 	const snow = driftingSnow(scene);
-	const panel = createLanternHud(interact);
 	let snowFade = 0;
 	let snowStarted = false;
 	let elapsed = 0;
@@ -201,7 +182,6 @@ export default function start({ createGame, store }: GameContext) {
 	const seatPrev = new THREE.Vector3();
 	let wantedZoom = STREET_CAMERA_DISTANCE;
 	let lastZoom = orbit.distance;
-	const visited=new Set<string>();
 
 	function target() {
 		switch (errand.phase) {
@@ -217,7 +197,7 @@ export default function start({ createGame, store }: GameContext) {
 			Math.hypot(player.pos.x - at.x, player.pos.z - at.z) <= 1.10;
 	}
 	function interact() {
-		if (!game?.ready || !canReach()) return false;
+		if (!game?.ready || game.paused || !canReach()) return false;
 		const previous = errand.phase;
 		if (!errand.act()) return false;
 		if (previous === 'water') game.emote('surprised', 1.05); // The first puff of steam.
@@ -268,12 +248,6 @@ export default function start({ createGame, store }: GameContext) {
 		snowFade = reduced.matches ? Number(snowStarted) : damp(snowFade, Number(snowStarted), 1.4, dt);
 		snow(time, snowFade, reduced.matches);
 		if (!reduced.matches) street?.(dt);
-		const area=townArea(player.pos.x,player.pos.z);
-		place.set(area?(ko?area.ko:area.en):(ko?'등불마을':'Lantern Town'));
-		if(area&&area.id!=='mart'&&!visited.has(area.id)&&Math.hypot(player.pos.x-area.x,player.pos.z-area.z)<9){
-			visited.add(area.id);game.hud.banner(ko?area.ko:area.en,ko?area.hintKo:area.hintEn,4.3);
-		}
-		panel.show(inShop || Math.abs(player.pos.x)<9.5&&player.pos.z<12&&player.pos.z>-1);
 		const phase = errand.phase;
 		// The shared Sit clip is based at the seat, not at the avatar's feet.
 		const seated = phase === 'eat' ? 0.65 * THREE.MathUtils.smoothstep(errand.elapsed, 0, 0.32)
@@ -282,17 +256,7 @@ export default function start({ createGame, store }: GameContext) {
 		ramen.update(phase === 'water' ? 'dry' : phase === 'wait' || phase === 'seat' ? 'hot' :
 			phase === 'eat' ? 'eating' : phase === 'after' ? 'done' : 'empty', phase === 'eat' ? errand.elapsed : elapsed, reduced.matches);
 
-		const near = canReach();
-		mark(phase === 'after' ? null : target(), time, reduced.matches, near);
-		const c = panel.text;
-		const action = !near ? null : phase === 'shelf' ? c.cup : phase === 'water' ? c.pour :
-			phase === 'seat' ? c.sit : phase === 'after' ? c.again : null;
-		panel.update(phase, action, phase === 'wait' ? errand.elapsed / STEEP_SECONDS :
-			phase === 'eat' ? errand.elapsed / EAT_SECONDS : 0);
+		panel.update(ramenAction(phase, canReach(), ko));
 	});
-	game.loaded.then(()=>{
-		panel.show(true);
-		game.hud.banner(ko?'등불마을':'Lantern Town',ko?'편의점을 등지면 시장과 역으로 이어지는 길이 있어요.':'Turn around to find the roads to the market and the station.',4.6);
-	},()=>{});
 	void game.start();
 }

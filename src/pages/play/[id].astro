@@ -18,6 +18,7 @@ export function getStaticPaths() {
 
 const { id } = Astro.params;
 const { meta } = Astro.props;
+const quietTown = id === 'lantern-mart';
 const title = `${meta.title} (experimental)`;
 ---
 <!doctype html>
@@ -31,13 +32,13 @@ const title = `${meta.title} (experimental)`;
 
 		<header class="bar">
 			<a class="brand" href={to('/')}>nixchan<span class="period">.</span></a>
-			<span class="badge">{meta.title.toLowerCase()} · by {meta.github ? <a href={`https://github.com/${meta.github}`} target="_blank" rel="noopener noreferrer">{meta.author}</a> : meta.author}</span>
+			<span class:list={['badge', { quiet: quietTown }]}>{meta.title.toLowerCase()} · by {meta.github ? <a href={`https://github.com/${meta.github}`} target="_blank" rel="noopener noreferrer">{meta.author}</a> : meta.author}</span>
 			<span class="spacer"></span>
 			<a class="pill" href={to(`/gallery/?from=${id}`)}>Gallery</a>
-			<button class="pill clock" type="button" data-clock aria-label="Switch between day and night"><span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span></button>
+			{!quietTown && <button class="pill clock" type="button" data-clock aria-label="Switch between day and night"><span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span></button>}
 		</header>
 
-		<p class="keys-hint"><kbd>WASD</kbd> move · <kbd>Shift</kbd> run · <kbd>Space</kbd> jump · drag to look{meta.keys && ` · ${meta.keys}`}</p>
+		{!quietTown && <p class="keys-hint"><kbd>WASD</kbd> move · <kbd>Shift</kbd> run · <kbd>Space</kbd> jump · drag to look{meta.keys && ` · ${meta.keys}`}</p>}
 		<p class="loading" data-loading>Nixchan is on her way…</p>
 		<noscript><p class="loading">{meta.title} needs JavaScript to run.</p></noscript>
 	</body>
@@ -80,6 +81,7 @@ const title = `${meta.title} (experimental)`;
 	.bar > * { pointer-events: auto; }
 	.brand { font-family: var(--display); font-size: 28px; line-height: 1; color: var(--ink); }
 	.badge { background: var(--star); color: #1c1a3e; font-size: 12px; font-weight: 900; padding: 3px 10px; border-radius: 999px; transform: rotate(-3deg); white-space: nowrap; }
+	.badge.quiet { transform: none; background: color-mix(in srgb, var(--surface) 86%, transparent); color: var(--ink); }
 	.badge a { color: inherit; }
 	.spacer { flex: 1; }
 	.pill {

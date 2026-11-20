@@ -37,7 +37,7 @@ export function startGallery() {
 		},
 	});
 	if (!game) return;
-	const { parts, hud } = game;
+	const { parts } = game;
 
 	// ---------- the plaza ----------
 
@@ -85,7 +85,6 @@ export function startGallery() {
 	game.loaded.then(
 		() => {
 			loading?.setAttribute('hidden', '');
-			if (!back) hud.banner("Nixchan's Gallery", 'Walk into a portal to play', 3.5);
 		},
 		() => {},
 	);
