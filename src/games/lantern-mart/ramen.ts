@@ -105,7 +105,7 @@ const ease = (a: number, b: number, t: number) => THREE.MathUtils.smoothstep(t, 
 
 /** Aim an animated limb at a nearby world-space target. The authored pose supplies its twist;
  * the pole keeps the elbow bent out rather than cutting backwards through her jacket. */
-function makeArm(upper: THREE.Object3D, lower: THREE.Object3D, wrist: THREE.Object3D, side: number) {
+export function makeArm(upper: THREE.Object3D, lower: THREE.Object3D, wrist: THREE.Object3D, side: number) {
 	const upperStart = new THREE.Quaternion(), lowerStart = new THREE.Quaternion();
 	const upperPosed = new THREE.Quaternion(), lowerPosed = new THREE.Quaternion();
 	const shoulder = new THREE.Vector3(), elbow = new THREE.Vector3(), hand = new THREE.Vector3();
