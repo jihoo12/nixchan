@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { TownBlock } from './town-layout';
+import { RAIL, RAIL_STOPS } from './rail-shuttle';
 
 /** Lantern Station: a little night-train terminus, with a through waiting room. */
 export function buildStationDistrict(scene: THREE.Scene): TownBlock[] {
@@ -94,9 +95,13 @@ export function buildStationDistrict(scene: THREE.Scene): TownBlock[] {
   sign('등불역','LANTERN STATION',30,3.47,44.13,3.42,.81);
   sign('밤 기차','NIGHT SERVICE',30,3.49,55.69,3.27,.72,0);
   roof(30,50,4.85,21.2,6.28);
-  // Platforms beside the tracks, with a slender dark canopy and clear east entry.
-  box(29,.019,58.45,23.5,.010,4.0,'pavingEdge');
-  for(let x=17.5;x<40.7;x+=.85) box(x,.029,60.22,.57,.008,.17,'brass');
+  // Both platforms end shy of the widened coach; the tactile strip is on the walking side.
+  const platformEdge = RAIL.z - RAIL.halfDepth - .26;
+  const platformFront = 56.35;
+  const platformMiddle = (platformEdge+platformFront)/2, platformDepth = platformEdge-platformFront;
+  box(29.5,.027,platformMiddle,45.5,.014,platformDepth,'pavingEdge');
+  for(let x=7.15;x<51.95;x+=.85) box(x,.056,platformEdge-.12,.57,.010,.13,'brass');
+  for(let x=8;x<=51;x+=1.8) box(x,.041,57.02,.52,.008,.10,'grout');
   for(const x of [19.2,27,36.4,39.8]) box(x,1.31,56.7,.19,2.62,.19,'enamel',true);
   roof(29.5,56.9,2.89,21,1.06,.21);
   sign('1번 승강장','PLATFORM 01',22.2,2.24,56.8,2.35,.56,0);
@@ -116,30 +121,71 @@ export function buildStationDistrict(scene: THREE.Scene): TownBlock[] {
     box(x,2.92,50,.08,.72,.08,'metal'); box(x,2.56,50,.73,.11,.57,'warm');
     box(x,2.65,50,.83,.12,.64,'brass');
   }
-  // Two low, nearly flush rails cross under the eastern pedestrian strip.
-  box(29,.014,62.2,36,.007,2.35,'gravel');
-  for(let x=11.5;x<47;x+=.72) box(x,.031,62.2,.29,.012,2.13,'bark');
-  for(const z of [61.6,62.82]) box(29,.048,z,36,.022,.09,'steel');
-  for(const x of [42.23,42.81,43.39,43.97]) box(x,.045,62.2,.55,.018,2.15,'enamel');
-  // Parked two-tone vintage railcar, set behind the platform and out of the walking loop.
-  const carX=29.5, carZ=62.0;
-  box(carX,1.1,carZ,11.9,2.05,2.5,'enamel',true);
-  box(carX,1.65,carZ,11.97,.73,2.54,'sandstone');
-  box(carX,2.20,carZ,12.15,.25,2.69,'tileLight');
-  box(carX,2.36,carZ,11.65,.10,2.45,'tile');
-  for(const side of [-1,1]) {
-    const z=carZ+side*1.285;
-    box(carX,1.11,z,11.9,.12,.038,'brass');
-    for(const x of [24.9,26.75,28.6,30.45,32.3,34.15]) {
-      box(x,1.69,z,1.46,.72,.048,'bark'); box(x,1.69,z+side*.034,1.22,.55,.031,'paper');
-      box(x,1.69,z+side*.057,.06,.55,.021,'bark');
+  // The rail bridge and its parallel pedestrian span meet dry land at both ends.
+  const bridgeX = -74, bridgeWidth = 40, walkZ = 56.65;
+  box(bridgeX,-.112,walkZ,bridgeWidth,.255,3.90,'paving');
+  const railGuardOffset = Math.max(2.50,RAIL.halfDepth+.42);
+  const railDeckDepth = (railGuardOffset+.105)*2;
+  box(bridgeX,-.157,RAIL.z,bridgeWidth,.31,railDeckDepth,'tile');
+  for (const x of [-92.7,-84.1,-74,-63.9,-55.3]) {
+    for (const z of [walkZ,RAIL.z]) {
+      box(x,-.26,z,2.03,.27,z===RAIL.z ? railDeckDepth-.2 : 3.76,'cornice');
+      box(x,-.66,z,1.60,.68,2.66,'tileLight');
+      box(x,-.96,z,1.93,.18,3.06,'tile');
     }
   }
-  const wheelGeo = new THREE.CylinderGeometry(.30,.30,.18,14);
-  for(const x of [25.25,26.15,32.85,33.75]) for(const z of [61.49,62.51]) {
-    const wheel=new THREE.Mesh(wheelGeo,mats.metal); wheel.rotation.x=Math.PI/2; wheel.position.set(x,.31,z); group.add(wheel);
+  for (const z of [walkZ-1.96,walkZ+1.96]) {
+    box(bridgeX,.13,z,bridgeWidth,.20,.13,'sandstone');
+    box(bridgeX,1.04,z,bridgeWidth,.10,.13,'brass');
+    blocks.push({x:bridgeX,z,w:bridgeWidth,d:.14,bottom:0,top:1.1});
+    for(let x=-93.4;x<=-54.6;x+=2.28) {
+      box(x,.55,z,.15,1.09,.15,'enamel');
+      if (Math.round((x+93.4)/2.28)%4===0) box(x,1.15,z,.21,.16,.2,'warm');
+    }
   }
-  for(const x of [23.52,35.48]) for(const z of [61.33,62.67]) box(x,.71,z,.11,.30,.27,'warm');
+  for (const z of [RAIL.z-railGuardOffset,RAIL.z+railGuardOffset]) {
+    box(bridgeX,.33,z,bridgeWidth,.10,.14,'tileLight');
+    blocks.push({x:bridgeX,z,w:bridgeWidth,d:.15,bottom:0,top:.58});
+    for(let x=-93.5;x<-54;x+=1.65) box(x,.22,z,.10,.45,.11,'steel');
+  }
+  for(let x=-93.8;x<=-54.1;x+=.9) box(x,.020,walkZ,.025,.006,3.65,'grout');
+  // Paved shore approaches steer foot traffic onto the walker span, not the rail deck.
+  box(-49,.029,57.0,10,.012,3.12,'pavingEdge');
+  box(-111.5,.031,56.65,35,.012,2.85,'pavingEdge');
+  for(let x=-125;x<=-96;x+=9.5) lamp(x,54.55,2.6);
+  // Flush crossings on the original paths and a permanent end crossing beyond the berthed train.
+  box(53.5,.028,61.15,2.35,.009,8.8,'paving');
+  const length = RAIL.trackMax - RAIL.trackMin, mid = (RAIL.trackMax + RAIL.trackMin) / 2;
+  box(mid,.020,RAIL.z,length,.010,2.75,'gravel');
+  for(let x=RAIL.trackMin+.35;x<RAIL.trackMax-.12;x+=.72) box(x,.034,RAIL.z,.29,.012,2.63,'bark');
+  for(const z of [61.6,62.82]) box(mid,.051,z,length,.022,.09,'steel');
+  for(const center of [0,43,53.5]) {
+    for(const dx of [-.87,-.29,.29,.87]) box(center+dx,.046,RAIL.z,.55,.016,2.75,'enamel');
+    for(const z of [RAIL.z-railGuardOffset,RAIL.z+railGuardOffset]) for(const dx of [-.72,0,.72]) box(center+dx,.057,z,.47,.010,.12,'brass');
+  }
+  // Moonwater Halt: welcoming far-bank plaza; the shelter and roof stay in front of the coach.
+  const west = RAIL_STOPS[1].x, shelter = west-4.425;
+  box(west,.035,platformMiddle,46,.025,platformDepth,'paving');
+  box(west,.055,57.18,46,.014,.09,'pavingEdge');
+  for(let x=west-22.7;x<west+22.8;x+=.89) box(x,.056,platformEdge-.12,.66,.012,.14,'brass');
+  for(const x of [shelter-1.675,shelter+1.675]) for(const z of [57.72,58.70]) {
+    box(x,1.22,z,.14,2.40,.14,'enamel',true);
+    box(x,.16,z,.28,.32,.28,'cornice',true);
+  }
+  box(shelter,1.19,58.70,3.25,1.03,.10,'bark',true);
+  box(shelter,1.27,58.63,2.97,.65,.03,'enamel');
+  bench(shelter,58.13);
+  roof(shelter,58.56,2.49,4.17,1.12,.27);
+  box(shelter,2.15,57.57,.51,.13,.28,'warm');
+  sign(RAIL_STOPS[1].ko,RAIL_STOPS[1].en.toUpperCase(),shelter,2.02,57.49,3.35,.75);
+  sign('물빛시장',RAIL_STOPS[1].en.toUpperCase(),shelter,2.09,59.55,2.80,.64,0);
+  for(const x of [west-20,west-11,west+7,west+18]) lamp(x,57.84,2.82);
+  // Matching inlaid circles/edges show the unobstructed waiting position at both stops.
+  for(const {x} of RAIL_STOPS) {
+    box(x,.067,RAIL.platformZ,1.45,.010,.73,'enamel');
+    for(const dx of [-.61,.61]) box(x+dx,.075,RAIL.platformZ,.08,.012,.51,'blue');
+    box(x,.075,RAIL.platformZ,.53,.012,.08,'paper');
+  }
   // The clock tower reads from across town, and serves as an east-side navigation anchor.
   const tx=50,tz=46.7;
   box(tx,.35,tz,3.6,.7,3.5,'cornice',true);

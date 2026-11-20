@@ -1,11 +1,21 @@
 import type { Vector3 } from 'three';
 import type { World } from '../../lib/nixkit/world';
 import { shopSolids } from './art';
+import { RAIL_STOPS } from './rail-shuttle';
 
 /** A solid from the same dimensions as the scenery that defines it. */
 export type TownBlock = {x:number;z:number;w:number;d:number;bottom:number;top:number};
-export const TOWN = { west:-56, east:56, south:-15, north:113 } as const;
-export function townGround(_x:number,z:number) {
+export const TOWN = { west:-154, east:56, south:-15, north:113 } as const;
+export const EAST_BANK = -56;
+export const WEST_BANK = { east:-94, south:42, north:80 } as const;
+export const WALK_BRIDGE = { z:56.65, halfWidth:1.96 } as const;
+export function onTownLand(x:number,z:number) {
+	if (x>=EAST_BANK) return x<=TOWN.east && z>=TOWN.south && z<=TOWN.north;
+	if (x<=WEST_BANK.east) return x>=TOWN.west && z>=WEST_BANK.south && z<=WEST_BANK.north;
+	return Math.abs(z-WALK_BRIDGE.z)<=WALK_BRIDGE.halfWidth;
+}
+export function townGround(x:number,z:number) {
+	if(x<EAST_BANK)return 0;
 	const t = Math.max(0,Math.min(1,(z-70)/42));
 	return 9*t*t*(3-2*t);
 }
@@ -18,10 +28,12 @@ export const landmarks: readonly Waypoint[] = [
 	{id:'station',x:34,z:39,ko:'등불역',en:'Lantern Station',radius:16,hintKo:'역 앞 광장을 지나 승강장을 둘러보세요.',hintEn:'The platform opens behind the station plaza.'},
 	{id:'platform',x:44,z:57,ko:'북쪽 승강장',en:'North Platform',radius:12,hintKo:'오늘 밤 마지막 열차가 쉬어가는 곳이에요.',hintEn:'The last train of the night is resting here.'},
 	{id:'hill',x:0,z:108,ko:'별바람 전망대',en:'Starwind Lookout',radius:13,hintKo:'여기서 돌아보면, 방금 걸어온 마을이 한눈에 들어와요.',hintEn:'Turn back to look over the town you just walked through.'},
+	{id:'west',x:RAIL_STOPS[1].x,z:56.65,ko:RAIL_STOPS[1].ko,en:RAIL_STOPS[1].en,radius:15,hintKo:'철교를 건너 물빛시장으로도 걸어갈 수 있어요.',hintEn:'You can also walk back to the market across the bridge.'},
 ];
 export const trails: readonly (readonly [number,number])[][] = [
 	[[0,12],[0,109]], [[0,32],[-45,32]], [[-44,32],[-44,58]], [[-44,58],[0,58]],
-	[[0,39],[44,39]], [[43,39],[43,65]], [[43,65],[0,65]],
+	[[0,39],[44,39]], [[43,39],[43,57.75]], [[43,57.75],[53.5,57.75]], [[53.5,57.75],[53.5,65]], [[53.5,65],[0,65]],
+	[[-44,58],[-51,58]], [[-51,58],[-55,56.65]], [[-55,56.65],[-129,56.65]],
 ];
 export function townArea(x:number,z:number) {
 	if(z>88)return landmarks[5];
@@ -46,7 +58,7 @@ export function townPhysics(blocks:readonly TownBlock[]): {world:World;blocks:To
 	const world: World = {
 		groundAt:townGround, ceilingAt:()=>Infinity,nearby:()=>[],
 		inside(x,z){
-			return x>=TOWN.west&&x<=TOWN.east&&z>=TOWN.south&&z<=TOWN.north &&
+			return onTownLand(x,z) &&
 				!shopSolids.some(([l,r,b,f])=>x>l-.24&&x<r+.24&&z>b-.24&&z<f+.24);
 		},
 		collide(p,r,vel){

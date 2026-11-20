@@ -56,7 +56,7 @@ export function buildRiverDistrict(scene: THREE.Scene): TownBlock[] {
 	for (let z = 20; z < 70; z += 1.3) box(paving, -50.2, .048, z, 7.72, .008, .024);
 
 	// A river BELOW the bank, fully outside x=-56. Reflections are tapering static dashes, not shaders.
-	box(standard('#203951', .33), -68, -.44, 47, 24, .07, 69);
+	box(standard('#203951', .33), -75, -.44, 47, 38, .07, 69);
 	box(blue, -55.7, -.22, 47, .52, .52, 58);
 	let seed = 2507;
 	const rand = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
@@ -71,15 +71,19 @@ export function buildRiverDistrict(scene: THREE.Scene): TownBlock[] {
 		add(oct, timber, x, y - .27 * size, z, .4 * size, .08 * size, .4 * size);
 	};
 	// Rail and viewing bays. Low posts leave the river visible without allowing walk-off.
+	// Shore railing has a wide opening shared by the two bridge landings.
 	for (let z = 20; z <= 70; z += 2.7) {
+		if (z > 54.15 && z < 64.8) continue;
 		box(stone, -54.75, .53, z, .27, 1.06, .27);
 		box(rim, -54.75, 1.08, z, .36, .13, .36);
 		if (Math.round((z - 20) / 2.7) % 4 === 0) lantern(-54.75, 1.43, z, .68);
 	}
-	for (const y of [.42, .78]) box(metal, -54.75, y, 44.5, .11, .09, 49);
-	block(-54.75, 44.5, .36, 49.36, 0, 1.145);
+	for (const [from,to] of [[19.82,54.15],[64.8,69.18]]) {
+		for (const y of [.42, .78]) box(metal, -54.75, y, (from+to)/2, .11, .09, to-from);
+		block(-54.75, (from+to)/2, .36, to-from, 0, 1.145);
+	}
 	// Decorative cantilevered dock ends over the river, not a route through the railing.
-	for (const z of [32, 58]) {
+	for (const z of [32]) {
 		for (let i = 0; i < 11; i++) box(i % 3 ? timber : wood, -60.6 + i * .37, -.16 + Math.sin(i / 10 * Math.PI) * .23, z, .35, .12, 2.55);
 		for (const dz of [-1.28, 1.28]) {
 			for (let i = 0; i < 4; i++) {
@@ -142,7 +146,7 @@ export function buildRiverDistrict(scene: THREE.Scene): TownBlock[] {
 		stall(x, 50.2, [olive, red, violet, indigo][i], i % 2 ? lamp : aqua, true, i + 1);
 	}
 	// Lantern posts line the promenade; larger gaps leave all cross streets open.
-	for (const z of [22, 27, 38, 46, 53, 64, 69]) {
+	for (const z of [22, 27, 38, 46, 53, 66.2, 69]) {
 		box(metal, -46.9, 1.28, z, .14, 2.56, .14);
 		box(timber, -46.55, 2.51, z, .85, .12, .13);
 		lantern(-46.22, 2.28, z, .76);
