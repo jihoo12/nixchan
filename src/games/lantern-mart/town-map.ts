@@ -2,10 +2,11 @@ import {landmarks, TOWN, trails} from './town-layout';
 
 export function townMap(ko:boolean) {
 	const panel=document.createElement('section');
+	panel.id='lantern-town-map';
 	panel.hidden=true;
 	panel.lang=ko?'ko':'en';
 	panel.setAttribute('aria-label',ko?'등불마을 지도':'Map of Lantern Town');
-	panel.style.cssText='z-index:25;position:fixed;top:120px;right:max(12px,env(safe-area-inset-right));width:min(340px,calc(100% - 24px));max-height:calc(100% - 132px);overflow:auto;padding:12px 14px;background:#191d31f9;border:1px solid #a898ac;border-radius:14px;color:#fff0d7;box-sizing:border-box;font:500 14px/1.4 system-ui,sans-serif;box-shadow:0 15px 44px #0808178c';
+	panel.style.cssText='z-index:25;position:fixed;top:max(68px,calc(env(safe-area-inset-top) + 68px));right:max(12px,env(safe-area-inset-right));width:min(340px,calc(100% - 24px));max-height:calc(100% - 80px - env(safe-area-inset-top));overflow:auto;padding:12px 14px;background:#191d31f9;border:1px solid #a898ac;border-radius:14px;color:#fff0d7;box-sizing:border-box;font:500 14px/1.4 system-ui,sans-serif;box-shadow:0 15px 44px #0808178c';
 	const header=document.createElement('div');
 	header.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:8px';
 	const title=document.createElement('strong');

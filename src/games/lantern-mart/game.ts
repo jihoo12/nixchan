@@ -116,7 +116,8 @@ export default function start({ createGame, store }: GameContext) {
 	scene.add(...[...districts.children]);
 	const tour = townMap(ko);
 	const panel = createLanternHud(interact, ko);
-	let focusMapButton:HTMLButtonElement|undefined;
+	const focusMapButton = document.querySelector<HTMLButtonElement>('[data-town-map]');
+	const helpButton = document.querySelector<HTMLButtonElement>('[data-town-help]');
 	const showMap=(show:boolean)=>{
 		tour.panel.hidden=!show;
 		game.paused=show;
@@ -129,10 +130,13 @@ export default function start({ createGame, store }: GameContext) {
 		}else focusMapButton?.focus();
 	};
 	tour.close.onclick=()=>showMap(false);
-	focusMapButton=game.hud.button(ko?'마을 지도':'Town map',()=>showMap(Boolean(tour.panel.hidden)));
-	focusMapButton.setAttribute('aria-expanded','false');
+	focusMapButton?.addEventListener('click', () => showMap(Boolean(tour.panel.hidden)));
+	if (focusMapButton && ko) {
+		focusMapButton.textContent = '지도';
+		focusMapButton.setAttribute('aria-label', '마을 지도 (M)');
+	}
 	const help = createTownHelp(ko);
-	const helpButton = game.hud.button('Help', () => {
+	helpButton?.addEventListener('click', () => {
 		if (help.dialog.open) return;
 		if (!tour.panel.hidden) showMap(false);
 		panel.update(null);
@@ -140,12 +144,10 @@ export default function start({ createGame, store }: GameContext) {
 		help.dialog.showModal();
 		help.close.focus();
 	});
-	helpButton.setAttribute('aria-haspopup','dialog');
-	helpButton.setAttribute('aria-controls',help.dialog.id);
 	const closeHelp = () => {
 		help.dialog.close();
 		game.paused = false;
-		helpButton.focus();
+		helpButton?.focus();
 	};
 	help.close.onclick = closeHelp;
 	help.dialog.addEventListener('cancel', (e) => { e.preventDefault(); closeHelp(); });
@@ -283,5 +285,9 @@ export default function start({ createGame, store }: GameContext) {
 
 		panel.update(ramenAction(phase, canReach(), ko));
 	});
+	game.loaded.then(() => {
+		if (focusMapButton) focusMapButton.disabled = false;
+		if (helpButton) helpButton.disabled = false;
+	}, () => {});
 	void game.start();
 }
