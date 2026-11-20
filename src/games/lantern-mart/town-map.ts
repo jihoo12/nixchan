@@ -21,7 +21,14 @@ export function townMap(ko:boolean) {
 	canvas.setAttribute('role','img');
 	canvas.setAttribute('aria-label',ko?'산책길과 등불역·물빛시장 사이의 철도':'Town walking paths and rail line between Lantern Station and Moonwater Halt');
 	const status=document.createElement('p');status.style.cssText='margin:4px 0 2px;font-size:13px;color:#e2cbbc';
-	panel.append(canvas,status);
+	// The walk notebook: a stamp for each neighbour's favour.
+	const book=document.createElement('section');
+	book.style.cssText='margin-top:10px;padding-top:9px;border-top:1px solid #4a4660';
+	const bookTitle=document.createElement('strong');bookTitle.style.cssText='display:block;font-size:14px;margin-bottom:4px';
+	const bookList=document.createElement('ul');bookList.style.cssText='list-style:none;margin:0;padding:0;font-size:13px;line-height:1.55';
+	const bookNote=document.createElement('p');bookNote.style.cssText='margin:6px 0 0;font-size:12px;color:#c9bccb';
+	book.append(bookTitle,bookList,bookNote);
+	panel.append(canvas,status,book);
 	document.body.append(panel);
 	const c=canvas.getContext('2d');
 	const X=(v:number)=>44+(v-TOWN.west)/(TOWN.east-TOWN.west)*352;
@@ -62,14 +69,37 @@ export function townMap(ko:boolean) {
 		b.fillStyle='#edb67d';b.textAlign='right';b.fillText(ko?'점선: 철도':'Dotted: rail',394,435);
 		b.strokeStyle='#cdcae2';b.lineWidth=2;b.beginPath();b.moveTo(46,445);b.lineTo(46+352*20/(TOWN.east-TOWN.west),445);b.stroke();
 	}
-	const update=(x:number,z:number,label:string)=>{
+	let marks:readonly {x:number;z:number}[]=[];
+	/** Rows of the notebook: who, what, and whether it's stamped, being done, or not yet asked. */
+	const notebook=(rows:readonly {who:string;what:string;state:'new'|'asked'|'done'}[],stamps:number)=>{
+		bookTitle.textContent=ko?`산책 수첩 · 도장 ${stamps}/${rows.length}`:`Walk notebook · ${stamps}/${rows.length} stamps`;
+		bookList.replaceChildren(...rows.map(r=>{
+			const li=document.createElement('li');
+			const mark=r.state==='done'?'●':r.state==='asked'?'◐':'○';
+			li.textContent=`${mark} ${r.who}: ${r.state==='new'?(ko?'이야기해 보세요':'say hello'):r.what}`;
+			li.style.color=r.state==='done'?'#ffd9a2':r.state==='asked'?'#fff0d7':'#a99fb5';
+			return li;
+		}));
+		bookNote.textContent=stamps===rows.length
+			?(ko?'도장을 다 모았어요. 하늘을 올려다보세요!':'Every stamp collected. Look up at the sky!')
+			:(ko?'이웃들의 작은 부탁을 들어주고 도장을 받아요. 별 표시가 다음에 갈 곳이에요.':"Do the neighbours' small favours to collect stamps. Stars mark where to go next.");
+	};
+	const update=(x:number,z:number,label:string,next:readonly {x:number;z:number}[]=marks)=>{
+		marks=next;
 		if(panel.hidden)return;
 		const line=ko?`현재 위치: ${label}`:`You are near: ${label}`;
 		if(status.textContent!==line)status.textContent=line;
 		if(!c)return;
 		c.clearRect(0,0,440,460);if(b)c.drawImage(base,0,0);
+		// Where to go next for each favour under way: a little star.
+		for(const m of marks){
+			const mx=X(m.x),mz=Z(m.z);
+			c.fillStyle='#ffcf5a';c.strokeStyle='#5a3b2e';c.lineWidth=1.5;c.beginPath();
+			for(let i=0;i<10;i++){const r=i%2?4:9,a=-Math.PI/2+i*Math.PI/5;c.lineTo(mx+Math.cos(a)*r,mz+Math.sin(a)*r);}
+			c.closePath();c.fill();c.stroke();
+		}
 		c.fillStyle='#fff';c.strokeStyle='#995366';c.lineWidth=3;
 		c.beginPath();c.arc(X(x),Z(z),7,0,Math.PI*2);c.fill();c.stroke();
 	};
-	return {panel,close,update};
+	return {panel,close,update,notebook};
 }

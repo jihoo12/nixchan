@@ -4,7 +4,10 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import stallsUrl from './models/stalls.glb?url';
-import type { TreatKind } from './treat';
+import type { Item } from './requests';
+
+/** The loose things in stalls.glb: what she can hold, and the festival's sky lantern. */
+export type Props = Record<Item | 'skyLantern', THREE.Object3D>;
 
 type Bounds = readonly [number, number, number, number];
 
@@ -65,7 +68,7 @@ function steam(scene: THREE.Scene, sources: { at: THREE.Vector3; spread: number 
 	};
 }
 
-export function buildStalls(scene: THREE.Scene, ko: boolean, onTreat: (kind: TreatKind, prop: THREE.Object3D) => void) {
+export function buildStalls(scene: THREE.Scene, ko: boolean, onProps: (props: Props) => void) {
 	const group = new THREE.Group();
 	group.name = 'Stalls';
 	scene.add(group);
@@ -171,6 +174,8 @@ export function buildStalls(scene: THREE.Scene, ko: boolean, onTreat: (kind: Tre
 					m.roughness = 0.85;
 					m.metalness = 0;
 				}
+				// Keep the name: night-walk.ts tells the sky lantern's glowing paper from its rim by it.
+				next.name = m.name;
 				tarp.set(m.name, next);
 				return next;
 			});
@@ -192,10 +197,11 @@ export function buildStalls(scene: THREE.Scene, ko: boolean, onTreat: (kind: Tre
 			pocha.position.set(TENT.x, 0, TENT.z);
 			group.add(pocha);
 		}
-		const bungeo = take('TreatBungeo');
-		const eomuk = take('TreatEomuk');
-		if (bungeo) onTreat('bungeo', bungeo);
-		if (eomuk) onTreat('eomuk', eomuk);
+		const props = {
+			bungeo: take('TreatBungeo'), eomuk: take('TreatEomuk'), umbrella: take('PropUmbrella'),
+			radish: take('PropRadish'), skyLantern: take('PropSkyLantern'),
+		};
+		if (Object.values(props).every(Boolean)) onProps(props as Props);
 	}, () => {
 		// Without the models the street is just quieter; the signs and lights still show where they'd be.
 	});

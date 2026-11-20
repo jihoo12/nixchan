@@ -1,7 +1,8 @@
 // The people of the Lantern Quarter, up late: Mochi at the mart's till, Pip at the bus stop, Gomsun at
 // her bungeoppang cart and Yeoul in her pojangmacha. They're modelled in Blender
 // (tools/lantern-mart/build.py) and brought in with Nixkit's createCharacter. Each waves as Nixchan
-// comes by and talks with her at E: about the errand she's on, the first snow, and each other.
+// comes by and talks with her at E: about the errand she's on, the first snow, and each other. Each
+// also has a small favour to ask (requests.ts), and stamps her walk notebook when it's done.
 import * as THREE from 'three';
 import { createCharacter, type Character } from '../../lib/nixkit/character';
 import type { Choice, Speaker, Talk } from '../../lib/nixkit/talk';
@@ -14,8 +15,9 @@ import yeoulUrl from './models/yeoul.glb?url';
 import { CART, TENT } from './stalls';
 import type { TreatKind } from './treat';
 import type { Phase } from './errand';
+import { REQUESTS, type Item, type NeighborId, type Requests } from './requests';
 
-export type NeighborId = 'mochi' | 'pip' | 'gomsun' | 'yeoul';
+export type { NeighborId };
 export const NEIGHBORS: readonly NeighborId[] = ['mochi', 'pip', 'gomsun', 'yeoul'];
 
 type Bounds = readonly [number, number, number, number];
@@ -28,7 +30,92 @@ export interface Facts {
 	handsFull: boolean;
 	/** Treats she's eaten so far, of each kind. */
 	eaten: Record<TreatKind, number>;
+	/** The sky lanterns are up: every favour's done. */
+	festival: boolean;
 }
+
+/** Each neighbour's favour: asking, a reminder, thanks, and what they say once it's done (and once
+ * the lanterns are up). The stallholders also say something when what she buys is for someone. */
+type Favor = { label: string; remind: string; asks: string; waiting: string; thanks: string; after: string; festival: string; forSomeone?: string };
+
+const ITEM: Record<'ko' | 'en', Record<Item, string>> = {
+	ko: { bungeo: '붕어빵', eomuk: '어묵', umbrella: '우산', radish: '무' },
+	en: { bungeo: 'bungeoppang', eomuk: 'fish cake', umbrella: 'umbrella', radish: 'radish' },
+};
+
+const FAVOR_KO: Record<NeighborId, Favor> = {
+	pip: {
+		label: '부탁할 거 있어?', remind: '부탁이 뭐였지?',
+		asks: '사실... 배가 고파. 근데 여기서 자리를 비우면 그 사이에 버스가 올 것 같단 말이야. 곰순 할머니 붕어빵 하나만 사다 줄래?',
+		waiting: '곰순 할머니 붕어빵! 꽃집 앞 빨간 수레야. 버스 오기 전에 부탁해!',
+		thanks: '우와, 따끈따끈해! 고마워 닉스쨩! 자, 내 수첩 도장이야. 꼬리부터 먹어야지!',
+		after: '붕어빵 먹으니까 기다리는 것도 하나도 안 힘들어. 버스야 천천히 와라~',
+		festival: '저것 봐, 풍등이야! 버스 기다리길 정말 잘했다!',
+	},
+	mochi: {
+		label: '뭐 도와줄까요?', remind: '부탁이 뭐였죠?',
+		asks: '저기... 손님한테 이런 부탁 드려도 될까요? 근무가 길어서 따뜻한 게 너무 먹고 싶어요. 여울 포차 어묵 하나만 사다 주실래요?',
+		waiting: '여울 포차는 거리 오른쪽 끝, 아케이드 앞 주황색 천막이에요. 국물이 제일 맛있어요.',
+		thanks: '와아, 국물까지! 몸이 다 녹는 것 같아요. 고마워요, 닉스쨩. 여기, 등불편의점 도장이에요!',
+		after: '어묵 덕분에 오늘 근무는 끝까지 버틸 수 있겠어요.',
+		festival: '창밖 좀 보세요, 풍등이 떠올라요! 근무 중에 이런 걸 보다니, 오늘은 좋은 밤이에요.',
+	},
+	gomsun: {
+		label: '도와드릴 거 있어요?', remind: '뭘 찾아 드리기로 했죠?',
+		asks: '아이고, 마침 잘 왔네. 아까 등불역에 갔다가 우산을 두고 왔지 뭐유. 노란 우산이야. 역 앞 광장 가로등 근처에 있을 거예요. 좀 찾아다 줄래요?',
+		waiting: '노란 우산이에요. 큰길을 따라 올라가다 오른쪽, 등불역 앞 광장 가로등 옆에 있을 거예요. 지도를 보면 쉬워요.',
+		thanks: '어머, 내 우산! 우리 영감님이 사 준 거라 아끼는 거라우. 고마워요, 아가. 자, 할머니 도장이야.',
+		after: '우산도 찾았으니, 이제 눈이 와도 걱정 없지요.',
+		festival: '풍등이 다 올라가네... 영감님이랑 같이 보던 생각이 나요. 고마워요, 아가.',
+		forSomeone: '핍 주려고? 그 녀석 또 배고프다고 했구먼. 식지 않게 종이에 꼭꼭 싸 줄게요.',
+	},
+	yeoul: {
+		label: '도와줄 거 있어요?', remind: '뭐 가져오기로 했죠?',
+		asks: '마침 잘 왔어요! 국물에 넣을 무가 다 떨어졌거든요. 물빛시장 채소 가게에 한 자루 맡겨 놨는데, 좀 가져다줄래요? 큰길로 가다 왼쪽이에요.',
+		waiting: '물빛시장이요! 큰길을 따라가다 왼쪽으로 꺾으면 줄지은 노점이 보여요. 상자 위에 무가 있을 거예요.',
+		thanks: '이 무 좀 봐요, 통통하다! 오늘 국물은 끝내주겠어요. 고마워요! 여울 포차 도장, 꾹!',
+		after: '닉스쨩이 가져온 무로 끓인 국물이에요. 오늘은 특별히 더 달아요!',
+		festival: '와, 풍등이다! 오늘 같은 밤엔 국물이 세 배로 맛있어요!',
+		forSomeone: '모찌 주려고요? 걔 또 근무하다 배고파졌구나. 국물 안 흘리게 뚜껑 덮어 줄게요!',
+	},
+};
+
+const FAVOR_EN: Record<NeighborId, Favor> = {
+	pip: {
+		label: 'Need anything?', remind: 'What did you need again?',
+		asks: "Honestly... I'm hungry. But if I leave, the bus will come the minute I'm gone. Could you get me a bungeoppang from Gomsun's cart?",
+		waiting: "Gomsun's bungeoppang! The red cart in front of the florist. Before the bus comes, please!",
+		thanks: "Wow, it's still warm! Thank you, Nixchan! Here, a stamp for your notebook. Tail first, I think!",
+		after: "With a bungeoppang inside me, waiting's no trouble at all. Take your time, bus~",
+		festival: "Look, sky lanterns! I'm so glad I waited for the bus!",
+	},
+	mochi: {
+		label: 'Can I help with anything?', remind: 'What was it you needed?',
+		asks: "Um... is it all right to ask a customer this? It's a long shift and I'd love something warm. Could you get me a fish cake from Yeoul's tent?",
+		waiting: "Yeoul's tent is at the right end of the street, the orange one in front of the arcade. The broth is the best part.",
+		thanks: "Oh, with broth too! I feel like I'm thawing out. Thank you, Nixchan. Here's a Lantern Mart stamp!",
+		after: "Thanks to that fish cake, I'll make it to the end of my shift.",
+		festival: "Look out the window, the lanterns are going up! What a night to be working.",
+	},
+	gomsun: {
+		label: 'Can I help you with anything?', remind: 'What was I finding for you?',
+		asks: "Oh, just the person. I went up to Lantern Station earlier and left my umbrella behind. A yellow one. It'll be by a lamp in the station plaza. Would you fetch it for me, dear?",
+		waiting: "A yellow umbrella. Up the main street and right, by a lamp in front of Lantern Station. The map will show you.",
+		thanks: "My umbrella! My husband gave me that one, you know. Thank you, dear. Here's a stamp from Grandma.",
+		after: "Now I've my umbrella back, let it snow all it likes.",
+		festival: "All the lanterns going up... it puts me in mind of watching them with my husband. Thank you, dear.",
+		forSomeone: "For Pip? That one's always hungry. I'll wrap it up snug so it stays warm.",
+	},
+	yeoul: {
+		label: 'Need a hand?', remind: 'What was I bringing you?',
+		asks: "Perfect timing! I've run out of radish for the broth. I left a sack at the Waterside Market. Could you bring it? Up the main street, then left.",
+		waiting: "The Waterside Market! Up the main street, then left, and you'll see the rows of stalls. The radish is on a crate.",
+		thanks: "Look at this radish, so plump! Tonight's broth will be amazing. Thank you! A Yeoul's Pocha stamp, there!",
+		after: "This broth is made with the radish you brought. It's extra sweet tonight!",
+		festival: "Wow, sky lanterns! Broth tastes three times as good on a night like this!",
+		forSomeone: "For Mochi? Hungry on shift again, I bet. I'll put a lid on so the broth doesn't spill!",
+	},
+};
 
 interface Who {
 	id: NeighborId;
@@ -278,17 +365,27 @@ export interface NeighborContext {
 	ko: boolean;
 	pos: THREE.Vector3;
 	facts: () => Facts;
-	/** Hands her a treat; false if she can't take it. */
-	buy: (kind: TreatKind) => boolean;
+	/** Hands her a treat (to eat, or to carry to whoever asked for it); false if she can't take it. */
+	buy: (kind: TreatKind, carry: boolean) => boolean;
+	requests: Requests;
+	/** What she's holding, if anything. */
+	holding: () => Item | null;
+	/** She hands over what she's holding, and the notebook gets a stamp. */
+	give: (id: NeighborId) => void;
 	/** The first time she talks with each of them. */
 	met: (id: NeighborId) => boolean;
 	meet: (id: NeighborId) => void;
 	/** Turns her to face whoever she's talking to. */
 	face: (heading: number) => void;
+	/** She's said she'll do someone a favour. */
+	onAsk: (id: NeighborId) => void;
 }
 
 export function createNeighbors(ctx: NeighborContext) {
 	const words = ctx.ko ? KO : EN;
+	const favors = ctx.ko ? FAVOR_KO : FAVOR_EN;
+	const items = ITEM[ctx.ko ? 'ko' : 'en'];
+	const { requests } = ctx;
 	const rand = <T>(list: readonly T[]) => list[Math.floor(Math.random() * list.length)];
 	// Mochi stands on a little step behind the counter, out of sight below its top.
 	const step = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.48, 0.36), new THREE.MeshStandardMaterial({ color: '#4a3a50', roughness: 0.9 }));
@@ -300,6 +397,7 @@ export function createNeighbors(ctx: NeighborContext) {
 			url: who.url, at: who.at, facing: who.facing, scale: who.scale, clip: 'Work', look: { within: 7 },
 		});
 		const lines = words[who.id];
+		const favor = favors[who.id];
 		const speaker: Speaker = {
 			name: lines.name,
 			color: who.color,
@@ -307,35 +405,56 @@ export function createNeighbors(ctx: NeighborContext) {
 			onTyped: () => body.play('Idle'),
 			onClose: () => body.play('Work'),
 		};
-		return { who, body, lines, speaker, near: false, waveUntil: 0, happyUntil: 0, chat: Math.floor(Math.random() * lines.chat.length), workClock: Math.random() * 8 };
+		return { who, body, lines, favor, speaker, near: false, waveUntil: 0, happyUntil: 0, chat: Math.floor(Math.random() * lines.chat.length), workClock: Math.random() * 8 };
 	});
 	type Person = (typeof people)[number];
 	let talking: Person | null = null;
 
 	const say = (p: Person, text: string) => ctx.talk.say(text, menu(p));
 	function menu(p: Person): Choice[] {
-		const { lines, who } = p;
+		const { lines, who, favor } = p;
 		const choices: Choice[] = [];
+		if (requests.canGive(who.id, ctx.holding())) choices.push({ label: giveLabel(p), run: () => give(p) });
 		if (who.sells && lines.buy) choices.push({ label: lines.buy, run: () => buy(p) });
+		const state = requests.state(who.id);
+		if (state === 'new') choices.push({ label: favor.label, run: () => (requests.ask(who.id), ctx.onAsk(who.id), say(p, favor.asks)) });
+		else if (state === 'asked' && !requests.canGive(who.id, ctx.holding())) choices.push({ label: favor.remind, run: () => say(p, favor.waiting) });
 		choices.push({
 			label: lines.ask,
 			run: () => {
 				if (who.id === 'pip' && Math.random() < 0.5) return say(p, rand(ctx.ko ? PIP_BUS_KO : PIP_BUS_EN));
 				p.chat = (p.chat + 1) % lines.chat.length;
-				say(p, ctx.facts().snowing && p.chat === 0 ? lines.snow : lines.chat[p.chat]);
+				const f = ctx.facts();
+				if (f.festival && p.chat === 0) return say(p, favor.festival);
+				if (requests.state(who.id) === 'done' && p.chat === 1) return say(p, favor.after);
+				say(p, f.snowing && p.chat === 0 ? lines.snow : lines.chat[p.chat]);
 			},
 		});
 		choices.push({ label: lines.bye, run: () => ctx.talk.bye(lines.byeLine) });
 		return choices;
 	}
 	function buy(p: Person) {
-		const { lines, who } = p;
+		const { lines, who, favor } = p;
 		if (!who.sells) return;
 		const f = ctx.facts();
-		if (f.handsFull || !ctx.buy(who.sells)) return say(p, lines.full ?? '');
+		// Bought while someone's waiting for one, it's for them: wrapped up to carry, not eaten.
+		const forSomeone = requests.wanted(who.sells) !== null;
+		if (f.handsFull || !ctx.buy(who.sells, forSomeone)) return say(p, lines.full ?? '');
 		p.happyUntil = performance.now() + 1600;
 		p.body.play('Happy');
+		if (forSomeone && favor.forSomeone) return ctx.talk.bye(favor.forSomeone);
 		ctx.talk.bye(f.eaten[who.sells] > 0 && lines.again ? `${lines.again} ${lines.sold}` : (lines.sold ?? ''));
+	}
+	function giveLabel(p: Person) {
+		const thing = items[REQUESTS[p.who.id].wants];
+		return ctx.ko ? `${josa(thing, '을', '를')} 건네기` : `Give ${p.lines.name} the ${thing}`;
+	}
+	function give(p: Person) {
+		if (!requests.canGive(p.who.id, ctx.holding())) return;
+		ctx.give(p.who.id);
+		p.happyUntil = performance.now() + 2400;
+		p.body.play('Happy');
+		say(p, p.favor.thanks);
 	}
 	function open(p: Person) {
 		if (!ctx.talk.open(p.speaker)) return;
@@ -344,7 +463,9 @@ export function createNeighbors(ctx: NeighborContext) {
 		const f = ctx.facts();
 		const first = !ctx.met(p.who.id);
 		if (first) ctx.meet(p.who.id);
-		const about = f.phase === 'after' ? (p.lines.about.after ?? p.lines.snow) : p.lines.about[f.phase];
+		// Arriving with what they asked for, she hands it straight over.
+		if (requests.canGive(p.who.id, ctx.holding())) return give(p);
+		const about = f.festival ? p.favor.festival : f.phase === 'after' ? (p.lines.about.after ?? p.lines.snow) : p.lines.about[f.phase];
 		const hello = first ? p.lines.first : rand(p.lines.hello);
 		say(p, about && !first ? `${hello} ${about}` : hello);
 	}
@@ -369,6 +490,10 @@ export function createNeighbors(ctx: NeighborContext) {
 			if (ctx.talk.talking) return null;
 			const p = nearest();
 			if (!p) return null;
+			if (requests.canGive(p.who.id, ctx.holding())) {
+				const thing = items[REQUESTS[p.who.id].wants];
+				return { label: ctx.ko ? `${p.lines.name}에게 ${josa(thing, '을', '를')} 건네기` : giveLabel(p), go: () => open(p) };
+			}
 			return { label: ctx.ko ? `${josa(p.lines.name, '과', '와')} 이야기하기` : `Talk to ${p.lines.name}`, go: () => open(p) };
 		},
 		get talking() {
@@ -407,5 +532,12 @@ export function createNeighbors(ctx: NeighborContext) {
 		},
 		/** Each of them, for counting who she's met. */
 		count: people.length,
+		/** Their names, for the notebook. */
+		name: (id: NeighborId) => words[id].name,
+		/** Everyone's delighted (the lanterns have gone up). */
+		cheer() {
+			const now = performance.now();
+			for (const p of people) p.happyUntil = now + 3200;
+		},
 	};
 }

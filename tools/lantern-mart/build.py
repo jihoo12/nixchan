@@ -876,6 +876,8 @@ def build_stalls():
         'Broth': '#c9874a', 'Sauce': '#d9443a', 'RiceCake': '#fff6e6', 'FishCake': '#e8b979', 'Stick': '#e8d2a8',
         'StoolRed': '#e0524a', 'StoolBlue': '#4f7fd0', 'Cup': '#f7efe2', 'Kettle': '#7fa7a0', 'Board': '#f8e7c4',
         'GlowSteam': '#fff4dc', 'Plastic': '#d9e5ef',
+        'Umbrella': '#f2c14e', 'UmbrellaDark': '#c9932f', 'Handle': '#6b4a3a', 'Radish': '#f4f1e6',
+        'RadishTop': '#cfe0b0', 'Leaf': '#5f9a5a', 'GlowPaper': '#ffc27a', 'LanternRim': '#a8573a',
     })
 
     # ---------- the bungeoppang cart, footprint centred on the origin, customers on +z ----------
@@ -1027,6 +1029,37 @@ def build_stalls():
     rod(p, (0, -0.02, 0.0), (0, 0.06, 0.0), 0.035, 0.04, 'Cup', 12)
     p.done().location = (0, -10, 0)
 
+    # ---------- things the neighbours ask her to fetch ----------
+    # Gomsun's umbrella, rolled up and strapped, with a crook handle; centred on its middle.
+    p = Part('PropUmbrella')
+    rod(p, (0, -0.2, 0), (0, 0.27, 0), 0.008, 0.008, 'Iron', 8)
+    rod(p, (0, -0.15, 0), (0, 0.17, 0), 0.025, 0.045, 'Umbrella', 12)
+    rod(p, (0, 0.17, 0), (0, 0.22, 0), 0.045, 0.012, 'Umbrella', 12)
+    for k in range(4):
+        a = k * math.pi / 2
+        rod(p, (0.03 * math.cos(a), -0.12, 0.03 * math.sin(a)), (0.043 * math.cos(a), 0.15, 0.043 * math.sin(a)), 0.006, 0.006, 'UmbrellaDark', 6)
+    rod(p, (0, 0.03, 0), (0, 0.05, 0), 0.042, 0.042, 'UmbrellaDark', 12)
+    hook = [(0, -0.2, 0), (0, -0.27, 0), (0.02, -0.31, 0), (0.05, -0.32, 0), (0.075, -0.3, 0), (0.08, -0.27, 0)]
+    for a, b in zip(hook, hook[1:]):
+        rod(p, a, b, 0.012, 0.012, 'Handle', 8)
+    p.done().location = (0, -10, 0)
+    # A fat white radish (mu), pale green at the shoulder, with its leaves; centred on its middle.
+    p = Part('PropRadish')
+    ball(p, (0, -0.03, 0), 1, 'Radish', scale=(0.065, 0.16, 0.065), seg=(14, 10))
+    ball(p, (0, 0.09, 0), 1, 'RadishTop', scale=(0.06, 0.05, 0.06), seg=(12, 8))
+    for k in range(5):
+        a = k * TAU / 5
+        tip = Vector((0.07 * math.cos(a), 0.3, 0.07 * math.sin(a)))
+        rod(p, (0, 0.12, 0), tip, 0.012, 0.006, 'Leaf', 6)
+        ball(p, tip * 0.8 + Vector((0, 0.03, 0)), 1, 'Leaf', scale=(0.035, 0.07, 0.012), seg=(8, 6), matrix=Matrix.Translation(tip * 0.8) @ Euler((0, -a, 0), 'XYZ').to_matrix().to_4x4() @ Matrix.Translation(-tip * 0.8))
+    p.done().location = (0, -10, 0)
+    # A paper sky lantern for the festival at the end: a glowing bag on a little bamboo ring.
+    p = Part('PropSkyLantern')
+    rod(p, (0, 0, 0), (0, 0.42, 0), 0.15, 0.2, 'GlowPaper', 12, smooth=False)
+    ball(p, (0, 0.42, 0), 1, 'GlowPaper', scale=(0.2, 0.06, 0.2), seg=(12, 6))
+    rod(p, (0, -0.01, 0), (0, 0.02, 0), 0.155, 0.155, 'LanternRim', 12)
+    p.done().location = (0, -10, 0)
+
     cart.location = (-2.5, 0, 0)
     pocha.location = (1.5, 0, 0)
     export(os.path.join(OUT, 'stalls.glb'), animations=False)
@@ -1034,6 +1067,11 @@ def build_stalls():
         shoot = preview_setup(6.5, (0, 1.2, 0), size=(640, 420))
         shoot(os.path.join(PREVIEW, 'stalls-front.png'), (0, 2.0, 6))
         shoot(os.path.join(PREVIEW, 'stalls-side.png'), (5, 3.5, 4))
+        for name in ('PropUmbrella', 'PropRadish', 'PropSkyLantern'):
+            bpy.data.objects[name].location = (0, 1.2, 0)
+            shot = preview_setup(1.0, (0, 1.2, 0), size=(240, 240))
+            shot(os.path.join(PREVIEW, f'{name.lower()}.png'), (1.5, 1.8, 4))
+            bpy.data.objects[name].location = (0, -10, 0)
 
 
 only = set(argv[2:])
