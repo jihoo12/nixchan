@@ -19,7 +19,9 @@ import { buildWestBank } from './west-bank';
 import { CABIN, cabinView, clearRailcar, createRailShuttle, insideCabin, keepInCabin, RAIL } from './rail-shuttle';
 import type { WorldSeat } from './world-seats';
 import { createTalk } from '../../lib/nixkit/talk';
-import { buildStalls, stallSolids } from './stalls';
+import { buildStalls, stallSolids, CART, TENT } from './stalls';
+import { createRequests, ASKERS, PICKUPS, REQUESTS, type Item } from './requests';
+import { createNightWalk } from './night-walk';
 import { createNeighbors, neighborSolids, NEIGHBORS, type NeighborId } from './neighbors';
 import { createTreats, type TreatKind } from './treat';
 import type { TownBlock } from './town-layout';
@@ -57,8 +59,9 @@ function cameraClear(x: number, z: number, yaw: number, requested: number) {
 	return Math.max(1.55, Math.min(requested, ...candidates.map((t) => t - 0.22)));
 }
 
+/** Snow round wherever she is, heavier as `amount` goes from 0 to 1. */
 function driftingSnow(scene: THREE.Scene) {
-	const count = 112;
+	const count = 420;
 	const flake = new THREE.Object3D();
 	const spread = (i: number, salt: number) => {
 		const x = Math.sin(i * 91.73 + salt * 69.1) * 39619.423;
@@ -66,20 +69,23 @@ function driftingSnow(scene: THREE.Scene) {
 	};
 	// Small instanced flakes keep their world-space size on both rendering backends.
 	const mat = new THREE.MeshBasicMaterial({ color: '#d5ebff', transparent: true, opacity: 0, depthWrite: false });
-	const mesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.039, 0), mat, count);
+	const mesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.03, 1), mat, count);
 	mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 	mesh.frustumCulled = false;
 	mesh.visible = false;
 	scene.add(mesh);
-	return (time: number, fade: number, reduced: boolean) => {
+	return (time: number, fade: number, reduced: boolean, around: THREE.Vector3, amount: number) => {
 		mesh.visible = fade > 0.01;
+		mesh.count = Math.round(count * (0.27 + 0.73 * amount));
 		mat.opacity = fade * 0.67;
 		if (!mesh.visible) return;
 		const t = reduced ? 0 : time;
-		for (let i = 0; i < count; i++) {
-			const x = -10 + spread(i, 1) * 20 + 0.22 * Math.sin(t * 0.7 + i);
+		// Each flake has a place in a 24 m box that wraps round her, so she's always in the middle of it.
+		const wrap = (v: number, centre: number) => centre + ((((v - centre + 12) % 24) + 24) % 24) - 12;
+		for (let i = 0; i < mesh.count; i++) {
+			const x = wrap(spread(i, 1) * 240 + 0.22 * Math.sin(t * 0.7 + i), around.x);
 			const y = ((spread(i, 2) * 7 - t * (0.36 + spread(i, 3) * 0.23)) % 7 + 7) % 7;
-			flake.position.set(x, y, 0.55 + spread(i, 4) * 14);
+			flake.position.set(x, around.y - 0.5 + y, wrap(spread(i, 4) * 240, around.z));
 			flake.scale.setScalar(0.57 + 0.72 * spread(i, 5));
 			flake.updateMatrix();
 			mesh.setMatrixAt(i, flake.matrix);
@@ -106,6 +112,8 @@ export default function start({ createGame, store }: GameContext) {
 		// The neighbours' stalls along the mart's street, and room for the neighbours themselves.
 		...stallSolids.map((b) => footprint(b)),
 		...neighborSolids.map((b) => footprint(b, 1.4)),
+		// The crate the radish waits on at the market.
+		{ x: PICKUPS.radish.x, z: PICKUPS.radish.z, w: 0.7, d: 0.7, bottom: 0, top: 0.5 },
 	]);
 	const car = buildRailcar(districts);
 	car.setPose(shuttle.pose.x, shuttle.pose.door);
@@ -182,7 +190,7 @@ export default function start({ createGame, store }: GameContext) {
 		focusMapButton?.setAttribute('aria-expanded',String(show));
 		if(show){
 			const l=townArea(player.pos.x,player.pos.z);
-			tour.update(player.pos.x,player.pos.z,l?(ko?l.ko:l.en):(ko?'등불마을':'Lantern Town'));
+			tour.update(player.pos.x,player.pos.z,l?(ko?l.ko:l.en):(ko?'등불마을':'Lantern Town'),notebook());
 			tour.close.focus();
 		}else focusMapButton?.focus();
 	};
@@ -273,7 +281,13 @@ export default function start({ createGame, store }: GameContext) {
 	// The neighbours, their stalls, and the treats Nixchan can buy from them.
 	treats = createTreats(scene, player);
 	const tray = treats;
-	const stalls = buildStalls(scene, ko, (kind, prop) => tray.set(kind, prop));
+	const walk = createNightWalk(scene, ko);
+	const stalls = buildStalls(scene, ko, (props) => {
+		for (const item of ['bungeo', 'eomuk', 'umbrella', 'radish'] as const) tray.set(item, props[item]);
+		walk.setProps(props);
+	});
+	const requests = createRequests(store.get('requests'));
+	const festivalSaved = store.get('festival') === true;
 	const talkUi = createTalkUi(ko);
 	const talk = createTalk(game.camera, talkUi);
 	// Nixkit's talk speaks the site's language; this game follows its own ?lang= (ui.ts).
@@ -288,15 +302,37 @@ export default function start({ createGame, store }: GameContext) {
 		scene, toon: game.toon, talk, ko, pos: player.pos,
 		facts: () => ({
 			phase: errand.phase,
-			snowing: snowStarted,
+			snowing: snowStarted || requests.stamps > 0,
 			handsFull: !!tray.holding || ['water', 'wait', 'seat', 'eat'].includes(errand.phase),
 			eaten,
+			festival: requests.all,
 		}),
-		buy: (kind) => {
+		buy: (kind, carry) => {
 			if (tray.holding || !player.grounded || game.chairSeated) return false;
-			tray.start(kind);
+			if (carry) tray.carry(kind);
+			else tray.start(kind);
 			return true;
 		},
+		requests,
+		holding: () => tray.holding,
+		give: (id) => {
+			if (!requests.give(id, tray.holding)) return;
+			tray.give();
+			store.set('requests', requests.save());
+			const stamps = requests.stamps;
+			game.react('happy');
+			game.hud.banner(ko ? '도장 쾅!' : 'Stamped!', ko ? `${neighbors.name(id)}의 부탁 · 산책 수첩 ${stamps}/${ASKERS.length}` : `${neighbors.name(id)}'s favour · notebook ${stamps}/${ASKERS.length}`);
+			if (requests.all) {
+				// The last stamp: the whole town lets its sky lanterns go.
+				store.set('festival', true);
+				setTimeout(() => {
+					walk.celebrate(true);
+					neighbors.cheer();
+					game.hud.banner(ko ? '풍등 축제' : 'Sky lantern night', ko ? '하늘을 올려다보세요' : 'Look up at the sky');
+				}, 2600);
+			}
+		},
+		onAsk: () => store.set('requests', requests.save()),
 		met: (id) => met.has(id),
 		meet: (id) => {
 			met.add(id);
@@ -308,6 +344,29 @@ export default function start({ createGame, store }: GameContext) {
 		},
 	});
 	game.focus.add(() => neighbors.framing());
+	if (festivalSaved || requests.all) walk.celebrate(false);
+	/** Where to go next for each favour under way: the thing, or whoever wants it once she has it. */
+	const PLACE: Record<string, { x: number; z: number }> = {
+		mochi: { x: -3, z: -7 }, pip: { x: -6.7, z: 2.8 }, gomsun: CART, yeoul: TENT,
+		station: PICKUPS.umbrella, market: PICKUPS.radish,
+	};
+	const notebook = () => {
+		const what: Record<Item, [string, string]> = {
+			bungeo: ['곰순 할머니 붕어빵 배달', "a bungeoppang from Gomsun's cart"],
+			eomuk: ['여울 포차 어묵 배달', "a fish cake from Yeoul's tent"],
+			umbrella: ['등불역에 두고 온 우산 찾기', 'the umbrella left at Lantern Station'],
+			radish: ['물빛시장에 맡긴 무 가져오기', 'the radish left at the Waterside Market'],
+		};
+		tour.notebook(ASKERS.map((id) => ({ who: neighbors.name(id), what: what[REQUESTS[id].wants][ko ? 0 : 1], state: requests.state(id) })), requests.stamps);
+		return ASKERS.filter((id) => requests.state(id) === 'asked')
+			.map((id) => tray.holding === REQUESTS[id].wants ? PLACE[id] : PLACE[REQUESTS[id].from]);
+	};
+	const pickUp = (item: Item) => {
+		tray.carry(item);
+		game.emote('happy', 1.2);
+	};
+	/** Whether something to be fetched is still lying where it was left. */
+	const lying = (item: 'umbrella' | 'radish') => requests.waiting(item) && tray.holding !== item;
 	let snowFade = 0;
 	let snowStarted = false;
 	let elapsed = 0;
@@ -323,6 +382,10 @@ export default function start({ createGame, store }: GameContext) {
 			case 'seat': return WINDOW;
 			default: return null;
 		}
+	}
+	/** Nothing in her hands: no ramen on the go, no treat, nothing being fetched. */
+	function handsFree() {
+		return !tray.holding && !['water', 'wait', 'seat', 'eat'].includes(errand.phase);
 	}
 	function canReach() {
 		const at = target();
@@ -352,9 +415,10 @@ export default function start({ createGame, store }: GameContext) {
 		}
 		if (shuttle.riding || errand.phase === 'eat') return true;
 		if (!canReach()) {
-			const neighbor = player.grounded && !game.chairSeated ? neighbors.offer() : null;
-			neighbor?.go();
-			return !!neighbor;
+			const free = player.grounded && !game.chairSeated;
+			const offer = free ? neighbors.offer() ?? walk.offer(player.pos, lying, handsFree(), pickUp) : null;
+			offer?.go();
+			return !!offer;
 		}
 		const previous = errand.phase;
 		if (!errand.act()) return false;
@@ -416,8 +480,11 @@ export default function start({ createGame, store }: GameContext) {
 		orbit.distance = Math.min(preferred, clearance);
 		lastZoom = orbit.distance;
 
-		snowFade = reduced.matches ? Number(snowStarted) : damp(snowFade, Number(snowStarted), 1.4, dt);
-		snow(time, snowFade, reduced.matches);
+		// The first bowl of ramen, or the first favour done, brings the snow, and each favour more of it.
+		const snowing = snowStarted || requests.stamps > 0;
+		snowFade = reduced.matches ? Number(snowing) : damp(snowFade, Number(snowing), 1.4, dt);
+		snow(time, snowFade, reduced.matches, player.pos, requests.stamps / ASKERS.length);
+		walk.update(dt, time, reduced.matches, lying);
 		if (!reduced.matches) street?.(dt);
 		const phase = errand.phase;
 		// The shared Sit clip is based at the seat, not at the avatar's feet.
@@ -430,7 +497,7 @@ export default function start({ createGame, store }: GameContext) {
 		const railAction=shuttle.action({x:player.pos.x,y:player.pos.y,z:player.pos.z,grounded:player.grounded});
 		const chairAction = game.chairAction();
 		const neighborAction = !chatting && !shuttle.riding && phase !== 'eat' && player.grounded && !game.chairSeated
-			? neighbors.offer()?.label ?? null : null;
+			? (neighbors.offer() ?? walk.offer(player.pos, lying, handsFree(), pickUp))?.label ?? null : null;
 		if (chatting) panel.update(null);
 		else panel.update(chairAction==='stand'?(ko?'일어나기':'Stand up'):railAction==='board'?(ko?'기차 타기':'Board train'):
 			railAction==='leave'?(ko?'기차에서 내리기':'Get off train'):

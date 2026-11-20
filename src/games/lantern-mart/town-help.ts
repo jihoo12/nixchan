@@ -11,6 +11,7 @@ const info = {
 			['기차', '등불역과 강 건너 물빛시장 정류장을 오가는 열차예요. 문이 열리면 출입문 근처에서 E 또는 화면 버튼으로 타고 내려요. 주행 중에도 통로를 걸을 수 있고, 좌석 가까이에서 E로 앉거나 일어나요.'],
 			['편의점', '선반에서 컵라면을 고르고 온수기에서 물을 부은 뒤 창가에서 먹을 수 있어요. 가까이 가면 E나 화면 버튼으로 상호작용해요.'],
 			['이웃', '편의점의 모찌, 정류장의 핍, 붕어빵 수레의 곰순 할머니, 포장마차의 여울에게 가까이 가서 E로 말을 걸어요. 붕어빵과 어묵도 살 수 있어요.'],
+			['산책 수첩', '이웃마다 작은 부탁이 하나씩 있어요. 부탁을 들어주면 도장을 받고, 지도(M)에서 수첩과 다음에 갈 곳(별 표시)을 볼 수 있어요. 도장을 다 모으면 마을에 특별한 밤이 찾아와요.'],
 		],
 	},
 	en: {
@@ -25,6 +26,7 @@ const info = {
 			['Train', 'The train runs between Lantern Station and Moonwater West, across the river. Use E or the on-screen button near the open door to board or leave. Walk inside while moving, and use E near a seat to sit or stand.'],
 			['Corner shop', 'Pick up ramen at the shelf, add hot water, then eat by the window. Use E or the on-screen action when close enough.'],
 			['Neighbours', 'Walk up to Mochi in the shop, Pip at the bus stop, Grandma Gomsun at the bungeoppang cart or Yeoul in the street-food tent and press E to talk. You can buy a bungeoppang or a fish cake, too.'],
+			['Walk notebook', 'Each neighbour has a small favour to ask. Do it for a stamp. The map (M) shows your notebook, and stars mark where to go next. Collect every stamp for a very special night.'],
 		],
 	},
 } as const;
