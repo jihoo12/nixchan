@@ -64,8 +64,8 @@ export function buildStationDistrict(scene: THREE.Scene): TownBlock[] {
     for(const dx of [-w/3,0,w/3]) box(x+dx,y,z-.125,.07,h,.04,'bark');
     box(x,y,z-.125,w,.075,.04,'bark'); box(x,y-h/2-.08,z-.13,w+.28,.12,.24,'sandstone');
   }
-  function bench(x:number,z:number) {
-    box(x,.52,z,2.35,.16,.65,'bench',true); box(x,.91,z+.27,2.35,.40,.13,'bench',true);
+  function bench(x:number,z:number,facesZ: -1 | 1) {
+    box(x,.52,z,2.35,.16,.65,'bench',true); box(x,.91,z-facesZ*.27,2.35,.40,.13,'bench',true);
     for(const dx of [-.91,.91]) box(x+dx,.26,z,.17,.52,.58,'metal',true);
   }
   // Flush civic paths: the cross-town walk at z=39 and eastern branch remain uninterrupted.
@@ -105,10 +105,10 @@ export function buildStationDistrict(scene: THREE.Scene): TownBlock[] {
   for(const x of [19.2,27,36.4,39.8]) box(x,1.31,56.7,.19,2.62,.19,'enamel',true);
   roof(29.5,56.9,2.89,21,1.06,.21);
   sign('1번 승강장','PLATFORM 01',22.2,2.24,56.8,2.35,.56,0);
-  bench(23,58.25); bench(37.25,58.25);
+  bench(23,57.46,1); bench(37.25,57.46,1);
   // Interior reading and waiting corners. No furnishings in the x=30 through aisle.
   for(const x of [23,37]) {
-    bench(x,51.8);
+    bench(x,51.8,-1); // Indoor benches face the tables rather than the track.
     box(x,.61,47,2.5,1.22,.8,'bench',true);
     box(x,1.25,47,2.59,.09,.88,'brass');
     box(x-.55,1.40,47,.41,.22,.32,'paper');
@@ -168,17 +168,23 @@ export function buildStationDistrict(scene: THREE.Scene): TownBlock[] {
   box(west,.035,platformMiddle,46,.025,platformDepth,'paving');
   box(west,.055,57.18,46,.014,.09,'pavingEdge');
   for(let x=west-22.7;x<west+22.8;x+=.89) box(x,.056,platformEdge-.12,.66,.012,.14,'brass');
-  for(const x of [shelter-1.675,shelter+1.675]) for(const z of [57.72,58.70]) {
-    box(x,1.22,z,.14,2.40,.14,'enamel',true);
+  for(const x of [shelter-1.80,shelter+1.80]) for(const z of [57.72,58.70]) {
+    box(x,1.39,z,.14,2.74,.14,'enamel',true);
     box(x,.16,z,.28,.32,.28,'cornice',true);
   }
-  box(shelter,1.19,58.70,3.25,1.03,.10,'bark',true);
-  box(shelter,1.27,58.63,2.97,.65,.03,'enamel');
-  bench(shelter,58.13);
-  roof(shelter,58.56,2.49,4.17,1.12,.27);
-  box(shelter,2.15,57.57,.51,.13,.28,'warm');
-  sign(RAIL_STOPS[1].ko,RAIL_STOPS[1].en.toUpperCase(),shelter,2.02,57.49,3.35,.75);
-  sign('물빛시장',RAIL_STOPS[1].en.toUpperCase(),shelter,2.09,59.55,2.80,.64,0);
+  box(shelter,.40,57.72,3.55,.56,.10,'bark',true);
+  box(shelter,.42,57.79,3.27,.38,.03,'enamel');
+  bench(shelter,58.46,1);
+  roof(shelter,58.56,2.83,4.17,1.12,.27);
+  // One board, readable from either side. Put its hanging hardware above the
+  // lettering and the lamp behind it, not through the face under the eave.
+  const boardZ = 57.55, boardY = 2.24;
+  box(shelter,boardY,boardZ,3.42,.68,.10,'bark');
+  for (const dx of [-1.27,1.27]) box(shelter+dx,2.62,boardZ,.07,.18,.07,'brass');
+  for (const side of [-1,1]) sign(RAIL_STOPS[1].ko,RAIL_STOPS[1].en.toUpperCase(),
+    shelter,boardY,boardZ+side*.057,3.36,.64,side<0 ? Math.PI : 0);
+  box(shelter,2.62,58.46,.62,.12,.36,'brass');
+  box(shelter,2.53,58.46,.51,.10,.27,'warm');
   for(const x of [west-20,west-11,west+7,west+18]) lamp(x,57.84,2.82);
   // Matching inlaid circles/edges show the unobstructed waiting position at both stops.
   for(const {x} of RAIL_STOPS) {
