@@ -19,7 +19,7 @@
 # and the page shows one hat at a time; with none, it swaps HairShell (open where a hat covers it)
 # for HairShellBare (whole) and shows HairCrownLocks over it.
 # For snow magic (the Snow Magic game) she has a fighting stance (Ready), a held spell (Charge), and four spells that each
-# play once from Ready back to Ready: Shot, Slam, Summon and Dash.
+# play once from Ready back to Ready: Shot, Slam, Summon and Dash, and her ultimate, Ultimate.
 import math
 import os
 import sys
@@ -1583,13 +1583,34 @@ dash = keyed([
     (1.0, ready(0)),
 ])
 
+# Eternal Winter, her ultimate (seven seconds, for a cutscene): she crouches and gathers the cold
+# between her paws, opens her arms wide as the page lifts her off the ground, flings them up to call
+# winter down from the sky, then drops and strikes the ground with both paws at 0.66, where the page
+# raises the ice. Her legs are tucked under her while she's up in the air.
+ULT_HIT = 0.66
+# Flung out wide to either side, a little below her shoulders.
+WIDE = lambda side: ((side * 0.64, 0.6, BODY_Z + 0.24), (side, -0.3, -1))
+ultimate = keyed([
+    (0.0, ready(0)),
+    (0.07, battle_pose(lambda side: CUP(side, 0.36), bend=0.34, chest=0.3)),
+    (0.18, battle_pose(lambda side: CUP(side, 0.37), bend=0.38, chest=0.34, twist=0.03)),
+    (0.3, battle_pose(WIDE, bend=0.45, chest=-0.08)),
+    (0.44, battle_pose(lambda side: V_UP(side, 0.06), bend=0.4, chest=-0.3)),
+    (0.56, battle_pose(lambda side: V_UP(side, 0.08), bend=0.42, chest=-0.32)),
+    (0.62, battle_pose(UP_HIGH, bend=0.3, chest=-0.26)),
+    (ULT_HIT, slam_low()),
+    (0.8, slam_low()),
+    (0.9, battle_pose(GUARD, bend=0.22, chest=0.1)),
+    (1.0, ready(0)),
+])
+
 
 # Looping clips end where they start; the jumps and Land play once.
 FPS = 30
 CLIPS = {'Sit': (72, sit), 'Idle': (72, idle), 'Walk': (30, walk), 'Run': (18, run), 'Wave': (48, wave), 'Land': (13, land), 'Swim': (30, swim), 'Tread': (60, tread)}
 CLIPS.update({'Cast': (24, cast), 'Fish': (72, fish), 'Reel': (24, reel_in), 'Show': (40, show), 'Water': (54, water), 'Tend': (30, tend), 'Plant': (72, plant), 'Smith': (36, smith)})
 CLIPS.update({'Carry': (60, carry), 'CarryWalk': (30, carry_walk), 'Sleep': (120, sleep)})
-CLIPS.update({'Ready': (40, ready), 'Charge': (24, charge), 'Shot': (27, shot), 'Slam': (42, slam), 'Summon': (90, summon), 'Dash': (27, dash)})
+CLIPS.update({'Ready': (40, ready), 'Charge': (24, charge), 'Shot': (27, shot), 'Slam': (42, slam), 'Summon': (90, summon), 'Dash': (27, dash), 'Ultimate': (210, ultimate)})
 CLIPS.update({name: (30, keyed(keys)) for name, keys in JUMPS.items()})
 # The page turns the head and the long hair itself.
 UNKEYED = {'Head', 'Hair'}
@@ -1704,7 +1725,7 @@ if PREVIEW:
     # One still from each clip, from the front and from her left.
     standing = Vector((0, 1.15, BODY_Z))
     only_clips = os.environ.get('NIX_PREVIEW_CLIPS')
-    for clip, t in (('JumpStand', 0), ('JumpStand', 0.15), ('JumpStand', 0.45), ('JumpStand', 1.0), ('Land', 0.3), ('JumpDown', 0.45), ('Swim', 0), ('Swim', 0.25), ('Swim', 0.5), ('Tread', 0), ('Tread', 0.25), ('Fish', 0), ('Cast', 0.38), ('Cast', 0.6), ('Reel', 0), ('Reel', 0.5), ('Show', 0), ('Water', 0.16), ('Water', 0.3), ('Water', 0.55), ('Plant', 0.22), ('Plant', 0.3), ('Plant', 0.56), ('Plant', 0.74), ('Smith', 0.4), ('Smith', 0.62), ('Ready', 0), ('Charge', 0), ('Shot', 0.15), ('Shot', 0.3), ('Slam', 0.32), ('Slam', 0.55), ('Summon', 0.3), ('Summon', 0.55), ('Dash', 0.2), ('Dash', 0.4), ('Carry', 0), ('CarryWalk', 0), ('CarryWalk', 0.25), ('Sleep', 0)):
+    for clip, t in (('JumpStand', 0), ('JumpStand', 0.15), ('JumpStand', 0.45), ('JumpStand', 1.0), ('Land', 0.3), ('JumpDown', 0.45), ('Swim', 0), ('Swim', 0.25), ('Swim', 0.5), ('Tread', 0), ('Tread', 0.25), ('Fish', 0), ('Cast', 0.38), ('Cast', 0.6), ('Reel', 0), ('Reel', 0.5), ('Show', 0), ('Water', 0.16), ('Water', 0.3), ('Water', 0.55), ('Plant', 0.22), ('Plant', 0.3), ('Plant', 0.56), ('Plant', 0.74), ('Smith', 0.4), ('Smith', 0.62), ('Ready', 0), ('Charge', 0), ('Shot', 0.15), ('Shot', 0.3), ('Slam', 0.32), ('Slam', 0.55), ('Summon', 0.3), ('Summon', 0.55), ('Dash', 0.2), ('Dash', 0.4), ('Ultimate', 0.12), ('Ultimate', 0.3), ('Ultimate', 0.5), ('Ultimate', 0.62), ('Ultimate', 0.7), ('Carry', 0), ('CarryWalk', 0), ('CarryWalk', 0.25), ('Sleep', 0)):
         if only_clips and clip not in only_clips.split(','):
             continue
         apply_pose(CLIPS[clip][1](t))

@@ -47,6 +47,9 @@ const STYLE = `
 .nk-skill kbd { display: grid; place-items: center; min-width: 22px; height: 22px; border-radius: 6px; background: var(--accent-soft, #e6e3ff); font: 900 12px ui-monospace, monospace; }
 .nk-skill .nk-cool { position: absolute; inset: 0; background: rgba(28, 26, 62, 0.35); transform-origin: left; transform: scaleX(0); pointer-events: none; }
 .nk-skill.cooling { cursor: default; }
+.nk-skill.charged { background: linear-gradient(120deg, #e9f6ff, #b9e0ff 40%, #f3e6ff 60%, #e9f6ff); background-size: 300% 100%; animation: nk-charged 1.6s linear infinite; box-shadow: 0 4px 0 var(--edge, #c9c6e6), 0 0 0 3px #9fd4ff, 0 0 18px #9fd4ffcc; }
+@keyframes nk-charged { to { background-position: -300% 0; } }
+@media (prefers-reduced-motion: reduce) { .nk-skill.charged { animation: none; } }
 @media (max-width: 700px) { .nk-skills { bottom: 190px; flex-wrap: wrap; justify-content: center; width: calc(100% - 32px); } .nk-skill { padding: 8px 11px 8px 8px; font-size: 13px; } }
 @media (pointer: coarse) { .nk-skill kbd { display: none; } }
 /* Going through a portal, everything fades to white. */
@@ -186,7 +189,7 @@ export function createHud() {
 		},
 		/** A button in the row along the bottom for something she can do (a skill), with the key
 		 * that does it too. `use` is called by either; `cool(f)` greys `f` (1 … 0) of it over while
-		 * it can't be used again yet. */
+		 * it can't be used again yet, and `charged(on)` makes it shine (an ultimate that's ready). */
 		skill(label: string, key: string, use: () => void) {
 			const b = el('button', 'nk-skill', skills);
 			b.type = 'button';
@@ -202,6 +205,9 @@ export function createHud() {
 				cool(f: number) {
 					cover.style.transform = `scaleX(${Math.max(0, Math.min(1, f))})`;
 					b.classList.toggle('cooling', f > 0);
+				},
+				charged(on: boolean) {
+					b.classList.toggle('charged', on);
 				},
 			};
 		},
