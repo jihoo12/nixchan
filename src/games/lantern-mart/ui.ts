@@ -18,15 +18,15 @@ export function lanternEmotes(ko: boolean) {
 }
 
 const css = `
-[data-ramen-action] { position:fixed; z-index:21; bottom:max(24px, env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
+[data-town-action] { position:fixed; z-index:21; bottom:max(24px, env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
 	display:flex; align-items:center; gap:8px; min-height:44px; max-width:calc(100% - 36px); padding:8px 14px;
 	border:1px solid #e2b98575; border-radius:999px; background:#1b2032e8; color:#fff0d7; font:650 14px/1.2 system-ui,sans-serif;
 	cursor:pointer; touch-action:manipulation; }
-[data-ramen-action][hidden] { display:none; }
-[data-ramen-action]:hover { background:#33334a; }
-[data-ramen-action]:focus-visible { outline:2px solid #ffd9a2; outline-offset:3px; }
-[data-ramen-action] kbd { border:1px solid #ddc4a963; border-radius:5px; padding:3px 5px; font-size:11px; }
-@media (pointer:coarse) { [data-ramen-action] kbd { display:none; } }
+[data-town-action][hidden] { display:none; }
+[data-town-action]:hover { background:#33334a; }
+[data-town-action]:focus-visible { outline:2px solid #ffd9a2; outline-offset:3px; }
+[data-town-action] kbd { border:1px solid #ddc4a963; border-radius:5px; padding:3px 5px; font-size:11px; }
+@media (pointer:coarse) { [data-town-action] kbd { display:none; } }
 `;
 
 export function lanternKorean() {
@@ -39,7 +39,7 @@ export function createLanternHud(activate: () => void, ko: boolean) {
 	style.textContent = css;
 	document.head.append(style);
 	const button = document.createElement('button');
-	button.dataset.ramenAction = '';
+	button.dataset.townAction = '';
 	button.type = 'button';
 	button.lang = ko ? 'ko' : 'en';
 	button.hidden = true;

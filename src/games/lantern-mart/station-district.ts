@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { TownBlock } from './town-layout';
+import { RAIL, RAIL_STOPS } from './rail-shuttle';
 
 /** Lantern Station: a little night-train terminus, with a through waiting room. */
 export function buildStationDistrict(scene: THREE.Scene): TownBlock[] {
@@ -116,30 +117,37 @@ export function buildStationDistrict(scene: THREE.Scene): TownBlock[] {
     box(x,2.92,50,.08,.72,.08,'metal'); box(x,2.56,50,.73,.11,.57,'warm');
     box(x,2.65,50,.83,.12,.64,'brass');
   }
-  // Two low, nearly flush rails cross under the eastern pedestrian strip.
-  box(29,.014,62.2,36,.007,2.35,'gravel');
-  for(let x=11.5;x<47;x+=.72) box(x,.031,62.2,.29,.012,2.13,'bark');
-  for(const z of [61.6,62.82]) box(29,.048,z,36,.022,.09,'steel');
-  for(const x of [42.23,42.81,43.39,43.97]) box(x,.045,62.2,.55,.018,2.15,'enamel');
-  // Parked two-tone vintage railcar, set behind the platform and out of the walking loop.
-  const carX=29.5, carZ=62.0;
-  box(carX,1.1,carZ,11.9,2.05,2.5,'enamel',true);
-  box(carX,1.65,carZ,11.97,.73,2.54,'sandstone');
-  box(carX,2.20,carZ,12.15,.25,2.69,'tileLight');
-  box(carX,2.36,carZ,11.65,.10,2.45,'tile');
-  for(const side of [-1,1]) {
-    const z=carZ+side*1.285;
-    box(carX,1.11,z,11.9,.12,.038,'brass');
-    for(const x of [24.9,26.75,28.6,30.45,32.3,34.15]) {
-      box(x,1.69,z,1.46,.72,.048,'bark'); box(x,1.69,z+side*.034,1.22,.55,.031,'paper');
-      box(x,1.69,z+side*.057,.06,.55,.021,'bark');
-    }
+  // Continuous, nearly flush rails. Both pedestrian crossings stay walkable.
+  box(4,.014,RAIL.z,86,.007,2.35,'gravel');
+  for(let x=-38.65;x<46.85;x+=.72) box(x,.031,RAIL.z,.29,.012,2.13,'bark');
+  for(const z of [61.6,62.82]) box(4,.048,z,86,.022,.09,'steel');
+  for(const center of [0,43]) {
+    for(const dx of [-.87,-.29,.29,.87]) box(center+dx,.044,RAIL.z,.55,.016,2.43,'enamel');
+    for(const z of [60.87,63.53]) for(const dx of [-.72,0,.72]) box(center+dx,.054,z,.47,.010,.12,'brass');
   }
-  const wheelGeo = new THREE.CylinderGeometry(.30,.30,.18,14);
-  for(const x of [25.25,26.15,32.85,33.75]) for(const z of [61.49,62.51]) {
-    const wheel=new THREE.Mesh(wheelGeo,mats.metal); wheel.rotation.x=Math.PI/2; wheel.position.set(x,.31,z); group.add(wheel);
+  // Moonwater Halt faces the existing market crosswalk at z=58. The shelter sits to the west
+  // of the boarding mark, so x=-27 is clear from the street straight to the platform edge.
+  box(-27,.035,59.63,13.4,.025,2.72,'paving');
+  box(-27,.055,58,13.4,.014,.09,'pavingEdge');
+  for(let i=0;i<15;i++) box(-33.28+i*.89,.056,60.87,.66,.012,.14,'brass');
+  for(const x of [-33.1,-29.75]) for(const z of [58.72,59.70]) {
+    box(x,1.22,z,.14,2.40,.14,'enamel',true);
+    box(x,.16,z,.28,.32,.28,'cornice',true);
   }
-  for(const x of [23.52,35.48]) for(const z of [61.33,62.67]) box(x,.71,z,.11,.30,.27,'warm');
+  box(-31.425,1.19,59.70,3.25,1.03,.10,'bark',true);
+  box(-31.425,1.27,59.63,2.97,.65,.03,'enamel');
+  bench(-31.425,59.13);
+  roof(-31.425,59.56,2.49,4.17,1.12,.27);
+  box(-31.425,2.15,58.57,.51,.13,.28,'warm');
+  sign('물빛시장 정류장','MOONWATER HALT',-31.425,2.02,58.49,3.35,.75);
+  sign('물빛시장','MOONWATER HALT',-31.425,2.09,60.48,2.80,.64,0);
+  lamp(-21.7,59.3,2.82);
+  // Matching inlaid circles/edges show the unobstructed waiting position at both stops.
+  for(const {x} of RAIL_STOPS) {
+    box(x,.067,RAIL.platformZ,1.45,.010,.73,'enamel');
+    for(const dx of [-.61,.61]) box(x+dx,.075,RAIL.platformZ,.08,.012,.51,'blue');
+    box(x,.075,RAIL.platformZ,.53,.012,.08,'paper');
+  }
   // The clock tower reads from across town, and serves as an east-side navigation anchor.
   const tx=50,tz=46.7;
   box(tx,.35,tz,3.6,.7,3.5,'cornice',true);

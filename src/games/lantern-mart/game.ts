@@ -14,6 +14,8 @@ import { buildHillDistrict } from './hill-district';
 import { townArea, townCameraClear, townPhysics } from './town-layout';
 import { townMap } from './town-map';
 import { createTownHelp } from './town-help';
+import { buildRailcar } from './railcar';
+import { clearRailcar, createRailShuttle, RAIL } from './rail-shuttle';
 
 const SHELF = new THREE.Vector3(-2.72, 0, -4.54);
 const KETTLE = new THREE.Vector3(2.70, 0, -6.05);
@@ -77,6 +79,7 @@ function driftingSnow(scene: THREE.Scene) {
 
 export default function start({ createGame, store }: GameContext) {
 	const errand = createErrand();
+	const shuttle = createRailShuttle();
 	const ko = lanternKorean();
 	const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 	const districts = new THREE.Scene();
@@ -86,6 +89,16 @@ export default function start({ createGame, store }: GameContext) {
 		...buildStationDistrict(districts),
 		...buildHillDistrict(districts),
 	]);
+	const car = buildRailcar(districts);
+	car.setPose(shuttle.pose.x, shuttle.pose.door);
+	const platformGround = world.groundAt;
+	const oldCollide = world.collide;
+	world.groundAt = (x,z,y)=>shuttle.riding ? RAIL.floor : platformGround(x,z,y);
+	world.collide = (p,r,v)=>{
+		if(shuttle.riding) return;
+		oldCollide?.(p,r,v);
+		clearRailcar(shuttle.pose,p,r,v);
+	};
 	const game = createGame({
 		spawn: { pos: SPAWN.clone(), heading: Math.PI },
 		world,
@@ -103,17 +116,31 @@ export default function start({ createGame, store }: GameContext) {
 			}
 			return null;
 		},
-		hold: () => errand.phase === 'eat' ? SEAT_HEADING : null,
+		hold: () => shuttle.riding ? Math.PI : errand.phase === 'eat' ? SEAT_HEADING : null,
 		onKey: (key, e) => {
 			if (key !== 'e' || e.altKey || e.ctrlKey || e.metaKey) return;
 			if (e.target instanceof HTMLButtonElement || e.target instanceof HTMLAnchorElement) return;
-			if (game && (interact() || errand.phase === 'eat')) game.controls.state.waveQueued = false;
+			if (game && (interact() || shuttle.riding || errand.phase === 'eat')) game.controls.state.waveQueued = false;
 		},
 	});
 	if (!game) return;
 
 	const { scene, player, orbit } = game;
 	scene.add(...[...districts.children]);
+	const followingRailcar = {x:shuttle.pose.x,z:RAIL.z,w:RAIL.halfLength*2,d:RAIL.halfDepth*2,bottom:0,top:RAIL.roof};
+	const cameraBlocks = [...blocks,followingRailcar];
+	function movePassenger(at:{x:number;y:number;z:number}) {
+		player.pos.set(at.x,at.y,at.z);
+		player.root.position.copy(player.pos);
+		player.vel.set(0,0,0);
+	}
+	game.engine.add({order: ORDER.world+1,update(_dt,time){
+		const pose=shuttle.update(time);
+		followingRailcar.x=pose.x;
+		car.setPose(pose.x,pose.door);
+		if(shuttle.riding)movePassenger(shuttle.boardingPoint());
+	}});
+
 	const tour = townMap(ko);
 	const panel = createLanternHud(interact, ko);
 	const focusMapButton = document.querySelector<HTMLButtonElement>('[data-town-map]');
@@ -171,7 +198,7 @@ export default function start({ createGame, store }: GameContext) {
 	game.engine.add({order:ORDER.camera+1,always:true,update(dt){
 		if(game.firstPerson||indoors(player.pos.x,player.pos.z)){cameraReach=1;return;}
 		eye.copy(player.pos);eye.y+=1.2;
-		const clear=townCameraClear(eye,game.camera.position,blocks);
+		const clear=townCameraClear(eye,game.camera.position,shuttle.riding?blocks:cameraBlocks);
 		cameraReach=clear<cameraReach?clear:damp(cameraReach,clear,5,dt);
 		if(cameraReach<.999){game.camera.position.lerpVectors(eye,game.camera.position,cameraReach);game.camera.lookAt(eye);}
 	}});
@@ -224,7 +251,16 @@ export default function start({ createGame, store }: GameContext) {
 			Math.hypot(player.pos.x - at.x, player.pos.z - at.z) <= 1.10;
 	}
 	function interact() {
-		if (!game?.ready || game.paused || !canReach()) return false;
+		if (!game?.ready || game.paused) return false;
+		const train = shuttle.interact({x:player.pos.x,y:player.pos.y,z:player.pos.z,grounded:player.grounded});
+		if (train) {
+			movePassenger(train==='board'?shuttle.boardingPoint():shuttle.platformPoint());
+			player.face(Math.PI);
+			if (train==='board') orbit.yaw=0;
+			panel.update(null);
+			return true;
+		}
+		if (!canReach()) return false;
 		const previous = errand.phase;
 		if (!errand.act()) return false;
 		if (previous === 'water') game.emote('surprised', 1.05); // The first puff of steam.
@@ -283,7 +319,9 @@ export default function start({ createGame, store }: GameContext) {
 		ramen.update(phase === 'water' ? 'dry' : phase === 'wait' || phase === 'seat' ? 'hot' :
 			phase === 'eat' ? 'eating' : phase === 'after' ? 'done' : 'empty', phase === 'eat' ? errand.elapsed : elapsed, reduced.matches);
 
-		panel.update(ramenAction(phase, canReach(), ko));
+		const railAction=shuttle.action({x:player.pos.x,y:player.pos.y,z:player.pos.z,grounded:player.grounded});
+		panel.update(railAction==='board'?(ko?'기차 타기':'Board train'):
+			railAction==='leave'?(ko?'기차에서 내리기':'Get off train'):ramenAction(phase, canReach(), ko));
 	});
 	game.loaded.then(() => {
 		if (focusMapButton) focusMapButton.disabled = false;

@@ -1,4 +1,5 @@
 import {landmarks, TOWN, trails} from './town-layout';
+import {RAIL, RAIL_STOPS} from './rail-shuttle';
 
 export function townMap(ko:boolean) {
 	const panel=document.createElement('section');
@@ -18,7 +19,7 @@ export function townMap(ko:boolean) {
 	const canvas=document.createElement('canvas');
 	canvas.width=440;canvas.height=460;canvas.style.cssText='width:100%;display:block;height:auto;margin:.4rem 0';
 	canvas.setAttribute('role','img');
-	canvas.setAttribute('aria-label',ko?'편의점에서 갈라지는 시장길, 역 앞길과 전망대 오르막':'Paths from the mart to the riverside market, station and hill');
+	canvas.setAttribute('aria-label',ko?'산책길과 등불역·물빛시장 사이의 철도':'Town walking paths and rail line between Lantern Station and Moonwater Halt');
 	const status=document.createElement('p');status.style.cssText='margin:4px 0 2px;font-size:13px;color:#e2cbbc';
 	panel.append(canvas,status);
 	document.body.append(panel);
@@ -40,6 +41,13 @@ export function townMap(ko:boolean) {
 		b.strokeStyle='#a8bac9';b.lineWidth=6;b.lineCap='round';
 		for(const [a,end] of trails){b.beginPath();b.moveTo(X(a[0]),Z(a[1]));b.lineTo(X(end[0]),Z(end[1]));b.stroke();}
 		b.strokeStyle='#8599b1';b.lineWidth=5;b.beginPath();b.moveTo(X(0),Z(12));b.lineTo(X(0),Z(3));b.stroke();
+		b.strokeStyle='#edb67d';b.lineWidth=2;b.setLineDash([4,4]);
+		b.beginPath();b.moveTo(X(-39),Z(RAIL.z));b.lineTo(X(47),Z(RAIL.z));b.stroke();
+		b.setLineDash([]);
+		for(const stop of RAIL_STOPS){
+			b.fillStyle='#edb67d';
+			b.fillRect(X(stop.x)-3,Z(RAIL.z)-3,6,6);
+		}
 		for(const spot of landmarks){
 			const x=X(spot.x),z=Z(spot.z);
 			b.fillStyle='#ffd9a2';b.beginPath();b.arc(x,z,5,0,Math.PI*2);b.fill();
@@ -50,6 +58,7 @@ export function townMap(ko:boolean) {
 			b.fillText(text,x+(left?-9:9),z+delta);
 		}
 		b.font='700 12px system-ui,sans-serif';b.textAlign='left';b.fillStyle='#cdcae2';b.fillText('20 m',46,435);
+		b.fillStyle='#edb67d';b.textAlign='right';b.fillText(ko?'점선: 철도':'Dotted: rail',394,435);
 		b.strokeStyle='#cdcae2';b.lineWidth=2;b.beginPath();b.moveTo(46,445);b.lineTo(46+352*20/112,445);b.stroke();
 	}
 	const update=(x:number,z:number,label:string)=>{
