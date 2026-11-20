@@ -1,14 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { clearRailcar, createRailShuttle, railPose, RAIL, RAIL_STOPS } from '../src/games/lantern-mart/rail-shuttle.ts';
+import { CABIN, CABIN_SEATS, clearRailcar, createRailShuttle, insideCabin, keepInCabin, railPose, RAIL, RAIL_STOPS } from '../src/games/lantern-mart/rail-shuttle.ts';
 
 const half=RAIL.dwell+RAIL.travel;
 const east={x:RAIL_STOPS[0].x,z:RAIL.platformZ,y:0,grounded:true};
 const west={...east,x:RAIL_STOPS[1].x};
 
-test('the longer line has room to stop all three coaches and leaves the east crossing clear', () => {
-	assert.equal(RAIL.carOffsets.length,3);
-	assert.ok(RAIL.halfLength*2>44);
+test('the long route fits the taller, wider single coach and leaves the east crossing clear', () => {
+	assert.ok(RAIL.halfLength*2<16);
+	assert.ok(RAIL.halfDepth*2>4);
+	assert.ok(RAIL.roof>3.8);
 	assert.ok(RAIL_STOPS[0].x-RAIL_STOPS[1].x>150);
 	for (const stop of RAIL_STOPS) {
 		assert.ok(stop.x-RAIL.halfLength>=RAIL.trackMin);
@@ -37,19 +38,20 @@ test('board from the platform only, ride to the other stop, get off and ride bac
 	for (const wrong of [west,{...east,z:RAIL.z+.1},{...east,y:1},{...east,grounded:false}]) assert.equal(s.interact(wrong),null);
 	assert.equal(s.interact(east),'board');
 	assert.equal(s.riding,true);
-	assert.deepEqual(s.boardingPoint(),{x:east.x,y:RAIL.floor,z:RAIL.z-.05});
+	assert.deepEqual(s.boardingPoint(),{x:east.x,y:RAIL.floor,z:RAIL.z-.38});
 	s.update(RAIL.dwell+RAIL.travel/2);
 	assert.equal(s.interact(east),null);
 	assert.equal(s.boardingPoint().x,(east.x+west.x)/2);
 	assert.equal(s.riding,true);
 	s.update(half+2);
 	assert.equal(s.boardingPoint().x,west.x);
-	assert.equal(s.interact(west),'leave');
+	assert.equal(s.interact(west),null, 'must actually be at the cabin door');
+	assert.equal(s.interact({...s.boardingPoint(),grounded:true}),'leave');
 	assert.equal(s.riding,false);
 	assert.deepEqual(s.platformPoint(),{x:west.x,y:0,z:RAIL.platformZ});
 	assert.equal(s.interact(west),'board');
 	s.update(2*half+2);
-	assert.equal(s.interact(east),'leave');
+	assert.equal(s.interact({...s.boardingPoint(),grounded:true}),'leave');
 	assert.equal(s.platformPoint().x,east.x);
 });
 
@@ -62,4 +64,30 @@ test('only the current railcar position blocks pedestrians, not either empty pla
 	assert.equal(clearRailcar(railPose(half+2),nowAway,.45,velocity),false);
 	const platform={...west};
 	assert.equal(clearRailcar(railPose(half+2),platform,.45,velocity),false);
+});
+
+test('walkable cabin, bench collision, and sitting follow the train instead of the boarding spot', () => {
+	const s=createRailShuttle();
+	s.update(2);
+	assert.equal(s.interact(east),'board');
+	s.update(RAIL.dwell+RAIL.travel/2);
+	const p={...s.boardingPoint(),x:s.pose.x+CABIN_SEATS[0].x,grounded:true};
+	const v={x:0,y:0,z:-3};
+	p.z=RAIL.z-.86;
+	keepInCabin(s.pose,p,.45,v);
+	assert.equal(v.z,0);
+	assert.ok(Math.abs(p.z-RAIL.z)<.5);
+	assert.equal(s.interact(p),'sit');
+	const seat=s.seated;
+	assert.ok(seat);
+	assert.ok(CABIN.seatHeight>.5);
+	s.update(half+2);
+	const at=s.seatPoint(seat);
+	assert.ok(insideCabin(s.pose,at.x,at.z));
+	assert.equal(at.x,RAIL_STOPS[1].x+seat.x);
+	assert.equal(s.interact({...at,grounded:true}),'stand');
+	assert.equal(s.seated,null);
+	const stand=s.standingPoint(seat);
+	assert.equal(s.action({...stand,grounded:true}),'sit', 'no remote exit from the seat');
+	assert.equal(s.interact({...s.boardingPoint(),grounded:true}),'leave');
 });

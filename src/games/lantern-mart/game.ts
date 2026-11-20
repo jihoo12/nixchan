@@ -16,7 +16,7 @@ import { townMap } from './town-map';
 import { createTownHelp } from './town-help';
 import { buildRailcar } from './railcar';
 import { buildWestBank } from './west-bank';
-import { clearRailcar, createRailShuttle, RAIL } from './rail-shuttle';
+import { CABIN, clearRailcar, createRailShuttle, insideCabin, keepInCabin, RAIL } from './rail-shuttle';
 
 const SHELF = new THREE.Vector3(-2.72, 0, -4.54);
 const KETTLE = new THREE.Vector3(2.70, 0, -6.05);
@@ -95,9 +95,14 @@ export default function start({ createGame, store }: GameContext) {
 	car.setPose(shuttle.pose.x, shuttle.pose.door);
 	const platformGround = world.groundAt;
 	const oldCollide = world.collide;
+	const walkingInside = world.inside;
+	world.inside = (x,z) => shuttle.riding ? insideCabin(shuttle.pose,x,z) : walkingInside(x,z);
 	world.groundAt = (x,z,y)=>shuttle.riding ? RAIL.floor : platformGround(x,z,y);
 	world.collide = (p,r,v)=>{
-		if(shuttle.riding) return;
+		if(shuttle.riding){
+			if(!shuttle.seated)keepInCabin(shuttle.pose,p,r,v);
+			return;
+		}
 		oldCollide?.(p,r,v);
 		clearRailcar(shuttle.pose,p,r,v);
 	};
@@ -106,19 +111,21 @@ export default function start({ createGame, store }: GameContext) {
 		world,
 		firstPerson: {
 			showButton: false,
+			get eyeHeight() { return shuttle.seated ? 1.17 : 1.52; },
 			label: ko ? '1인칭' : 'First person',
 			lockedLabel: ko ? '식사 중에는 3인칭으로 보여요' : 'Third person while eating',
 			forceThirdPerson: () => errand.phase === 'eat',
 		},
 		emotes: { ...lanternEmotes(ko), showButton: false },
 		clip: (): NixClip | null => {
+			if(shuttle.seated) return 'Sit';
 			if (errand.phase === 'eat') return errand.elapsed < 4.28 ? 'Sit' : 'Carry';
 			if (errand.phase === 'water' || errand.phase === 'wait' || errand.phase === 'seat') {
 				return game && Math.hypot(game.player.vel.x, game.player.vel.z) > 0.25 ? 'CarryWalk' : 'Carry';
 			}
 			return null;
 		},
-		hold: () => shuttle.riding ? Math.PI : errand.phase === 'eat' ? SEAT_HEADING : null,
+		hold: () => shuttle.seated?.heading ?? (errand.phase === 'eat' ? SEAT_HEADING : null),
 		onKey: (key, e) => {
 			if (key !== 'e' || e.altKey || e.ctrlKey || e.metaKey) return;
 			if (e.target instanceof HTMLButtonElement || e.target instanceof HTMLAnchorElement) return;
@@ -137,10 +144,18 @@ export default function start({ createGame, store }: GameContext) {
 		player.vel.set(0,0,0);
 	}
 	game.engine.add({order: ORDER.world+1,update(_dt,time){
+		const previousX=shuttle.pose.x;
 		const pose=shuttle.update(time);
 		followingRailcar.x=pose.x;
 		car.setPose(pose.x,pose.door);
-		if(shuttle.riding)movePassenger(shuttle.boardingPoint());
+		if(shuttle.riding){
+			game.controls.state.jumpQueued=false;
+			if(shuttle.seated) movePassenger(shuttle.seatPoint(shuttle.seated));
+			else {
+				player.pos.x+=pose.x-previousX;
+				player.root.position.copy(player.pos);
+			}
+		}
 	}});
 
 	const tour = townMap(ko);
@@ -195,12 +210,25 @@ export default function start({ createGame, store }: GameContext) {
 	},50);
 	// Trim the camera against new facades after Nixkit's usual follow camera; the original shop
 	// keeps its own window-seat framing. Restore slowly after a wall leaves the line of sight.
-	const eye=new THREE.Vector3();
+	const eye=new THREE.Vector3(), cabinCamera=new THREE.Vector3();
 	let cameraReach=1;
 	game.engine.add({order:ORDER.camera+1,always:true,update(dt){
 		if(game.firstPerson||indoors(player.pos.x,player.pos.z)){cameraReach=1;return;}
-		eye.copy(player.pos);eye.y+=1.2;
-		const clear=townCameraClear(eye,game.camera.position,shuttle.riding?blocks:cameraBlocks);
+		eye.copy(player.pos);eye.y+=shuttle.seated?1.04:1.14;
+		if(shuttle.riding){
+			// The normal wide outdoor orbit would spend the ride staring at the roof from outside.
+			const x=shuttle.pose.x;
+			cabinCamera.set(
+				THREE.MathUtils.clamp(eye.x+Math.sin(orbit.yaw)*2.35,x-CABIN.halfLength+.16,x+CABIN.halfLength-.16),
+				THREE.MathUtils.clamp(eye.y+.27+Math.sin(orbit.pitch)*.9,RAIL.floor+.62,RAIL.roof-.52),
+				THREE.MathUtils.clamp(eye.z+Math.cos(orbit.yaw)*2.35,RAIL.z-CABIN.halfWidth+.20,RAIL.z+CABIN.halfWidth-.20)
+			);
+			if(Math.hypot(cabinCamera.x-eye.x,cabinCamera.z-eye.z)<.7)
+				cabinCamera.z=RAIL.z+(eye.z>RAIL.z?-.57:.57);
+			game.camera.position.copy(cabinCamera);game.camera.lookAt(eye);cameraReach=1;return;
+		}
+		eye.y=player.pos.y+1.2;
+		const clear=townCameraClear(eye,game.camera.position,cameraBlocks);
 		cameraReach=clear<cameraReach?clear:damp(cameraReach,clear,5,dt);
 		if(cameraReach<.999){game.camera.position.lerpVectors(eye,game.camera.position,cameraReach);game.camera.lookAt(eye);}
 	}});
@@ -254,11 +282,19 @@ export default function start({ createGame, store }: GameContext) {
 	}
 	function interact() {
 		if (!game?.ready || game.paused) return false;
+		const previousSeat=shuttle.seated;
 		const train = shuttle.interact({x:player.pos.x,y:player.pos.y,z:player.pos.z,grounded:player.grounded});
 		if (train) {
-			movePassenger(train==='board'?shuttle.boardingPoint():shuttle.platformPoint());
-			player.face(Math.PI);
-			if (train==='board') orbit.yaw=0;
+			if(train==='sit'&&shuttle.seated){
+				movePassenger(shuttle.seatPoint(shuttle.seated));
+				player.face(shuttle.seated.heading);
+			}else if(train==='stand'&&previousSeat){
+				movePassenger(shuttle.standingPoint(previousSeat));
+			}else if(train==='board' || train==='leave'){
+				movePassenger(train==='board'?shuttle.boardingPoint():shuttle.platformPoint());
+				player.face(Math.PI);
+				if (train==='board') orbit.yaw=0;
+			}
 			panel.update(null);
 			return true;
 		}
@@ -317,13 +353,15 @@ export default function start({ createGame, store }: GameContext) {
 		// The shared Sit clip is based at the seat, not at the avatar's feet.
 		const seated = phase === 'eat' ? 0.65 * THREE.MathUtils.smoothstep(errand.elapsed, 0, 0.32)
 			* (1 - THREE.MathUtils.smoothstep(errand.elapsed, 4.25, EAT_SECONDS)) : 0;
-		player.figure.group.position.y = seated;
+		player.figure.group.position.y = shuttle.seated ? CABIN.seatHeight : seated;
 		ramen.update(phase === 'water' ? 'dry' : phase === 'wait' || phase === 'seat' ? 'hot' :
 			phase === 'eat' ? 'eating' : phase === 'after' ? 'done' : 'empty', phase === 'eat' ? errand.elapsed : elapsed, reduced.matches);
 
 		const railAction=shuttle.action({x:player.pos.x,y:player.pos.y,z:player.pos.z,grounded:player.grounded});
 		panel.update(railAction==='board'?(ko?'기차 타기':'Board train'):
-			railAction==='leave'?(ko?'기차에서 내리기':'Get off train'):ramenAction(phase, canReach(), ko));
+			railAction==='leave'?(ko?'기차에서 내리기':'Get off train'):
+			railAction==='sit'?(ko?'창가에 앉기':'Sit by the window'):
+			railAction==='stand'?(ko?'일어나기':'Stand up'):ramenAction(phase, canReach(), ko));
 	});
 	game.loaded.then(() => {
 		if (focusMapButton) focusMapButton.disabled = false;

@@ -1,9 +1,9 @@
 /** One source of truth for the moving body, platform doors and passenger position. */
 export const RAIL = {
-	z: 62.2, floor: .45*1.16, halfLength: 14.9+6.12*1.19, halfDepth: 1.42*1.13, roof: 3.10*1.16,
-	carOffsets: [-14.9, 0, 14.9] as const, carScale: {x:1.19,y:1.16,z:1.13},
+	z: 62.2, floor: .45*1.27, halfLength: 6.12*1.19, halfDepth: 1.42*1.46, roof: 3.10*1.27,
+	carScale: {x:1.19,y:1.27,z:1.46},
 	trackMin: -153, trackMax: 54,
-	platformZ: 59.85, dwell: 14, travel: 29, doorSeconds: .85,
+	platformZ: 59.25, dwell: 14, travel: 29, doorSeconds: .85,
 } as const;
 export const RAIL_STOPS = [
 	{ x: 29.5, ko: '등불역', en: 'Lantern Station' },
@@ -14,7 +14,37 @@ type Direction = 0 | 1;
 export type RailPose = { x:number; door:number; stop:Direction|null; stopped:boolean };
 type GroundedPoint = { x:number; y:number; z:number; grounded:boolean };
 type Vector = { x:number; y:number; z:number };
-export type RailAction = 'board' | 'leave';
+export type RailAction = 'board' | 'leave' | 'sit' | 'stand';
+const SEAT_X = [-4.10,-2.51,2.51,4.10].map(x=>x*RAIL.carScale.x);
+const BENCH_HALF_LENGTH = .745*RAIL.carScale.x;
+const BENCH_EDGE = (.897-.285)*RAIL.carScale.z;
+export const CABIN = {
+	halfLength:5.73*RAIL.carScale.x,
+	halfWidth:1.11*RAIL.carScale.z,
+	seatHeight:(.865-.45)*RAIL.carScale.y,
+} as const;
+export type CabinSeat = {x:number;z:number;heading:number;side:number};
+export const CABIN_SEATS: readonly CabinSeat[] = [-1,1].flatMap(side=>SEAT_X.map(x=>({
+	x,z:side*.897*RAIL.carScale.z,heading:side>0?Math.PI:0,side,
+})));
+const clamp = (v:number,limit:number) => Math.max(-limit,Math.min(limit,v));
+export const insideCabin = (pose:RailPose,x:number,z:number) =>
+	Math.abs(x-pose.x)<=CABIN.halfLength && Math.abs(z-RAIL.z)<=CABIN.halfWidth;
+export function keepInCabin(pose:RailPose,p:Vector,rad:number,v:Vector) {
+	// Both the cabin and its four bench pairs live in the moving car's local frame.
+	let x = p.x-pose.x, z = p.z-RAIL.z;
+	const safeX=clamp(x,CABIN.halfLength-rad),safeZ=clamp(z,CABIN.halfWidth-rad);
+	if(safeX!==x && Math.sign(v.x)===Math.sign(x))v.x=0;
+	if(safeZ!==z && Math.sign(v.z)===Math.sign(z))v.z=0;
+	x=safeX;z=safeZ;
+	if(SEAT_X.some(b=>Math.abs(x-b)<BENCH_HALF_LENGTH+rad)&&Math.abs(z)>BENCH_EDGE-rad){
+		const side=Math.sign(z);
+		z=side*(BENCH_EDGE-rad);
+		if(v.z*side>0)v.z=0;
+	}
+	p.x=pose.x+x;p.z=RAIL.z+z;
+}
+
 const half = RAIL.dwell + RAIL.travel;
 const cycle = half * 2;
 const unit = (t:number) => Math.max(0, Math.min(1, t));
@@ -36,7 +66,7 @@ export function railPose(time:number): RailPose {
 
 export function railPlatformAction(pose:RailPose, riding:boolean, p:GroundedPoint): RailAction|null {
 	if (!pose.stopped || pose.stop === null || pose.door < .995) return null;
-	if (riding) return 'leave';
+	if (riding) return p.grounded && insideCabin(pose,p.x,p.z) && Math.abs(p.x-pose.x)<=1.3 && p.z<RAIL.z-.23 ? 'leave' : null;
 	if (!p.grounded || Math.abs(p.y) > .24) return null;
 	return Math.abs(p.x-pose.x) <= 1.35 && Math.abs(p.z-RAIL.platformZ) <= 1.15 && p.z < RAIL.z-RAIL.halfDepth
 		? 'board' : null;
@@ -56,17 +86,39 @@ export function clearRailcar(pose:RailPose, p:Vector, radius:number, velocity:Ve
 export function createRailShuttle() {
 	let pose=railPose(0);
 	let riding=false;
+	let seated:CabinSeat|null=null;
+	function nearbySeat(p:GroundedPoint) {
+		if(!p.grounded || Math.abs(p.z-RAIL.z)<.19)return null;
+		let closest:CabinSeat|null=null, reach=1.20;
+		for(const seat of CABIN_SEATS){
+			const dist=Math.hypot(p.x-pose.x-seat.x,p.z-RAIL.z-seat.z);
+			if(dist<reach){reach=dist;closest=seat;}
+		}
+		return closest;
+	}
+	function action(p:GroundedPoint):RailAction|null {
+		if(seated)return 'stand';
+		const platform=railPlatformAction(pose,riding,p);
+		if(platform)return platform;
+		return riding&&nearbySeat(p)?'sit':null;
+	}
 	return {
 		get pose(){return pose;},
 		get riding(){return riding;},
+		get seated(){return seated;},
 		update(time:number){ pose=railPose(time);return pose; },
-		action(p:GroundedPoint){ return railPlatformAction(pose,riding,p); },
+		action,
 		interact(p:GroundedPoint){
-			const action=railPlatformAction(pose,riding,p);
-			if(action)riding=action==='board';
-			return action;
+			const next=action(p);
+			if(next==='board')riding=true;
+			if(next==='leave')riding=false;
+			if(next==='sit')seated=nearbySeat(p);
+			if(next==='stand')seated=null;
+			return next;
 		},
-		boardingPoint(){ return {x:pose.x,y:RAIL.floor,z:RAIL.z-.05}; },
+		seatPoint(seat:CabinSeat){return {x:pose.x+seat.x,y:RAIL.floor,z:RAIL.z+seat.z};},
+		standingPoint(seat:CabinSeat){return {x:pose.x+seat.x,y:RAIL.floor,z:RAIL.z+seat.side*.27};},
+		boardingPoint(){ return {x:pose.x,y:RAIL.floor,z:RAIL.z-.38}; },
 		platformPoint(){ return {x:pose.x,y:0,z:RAIL.platformZ}; },
 	};
 }

@@ -4,7 +4,7 @@ import { RAIL } from './rail-shuttle';
 
 export function buildRailcar(scene: THREE.Scene): { setPose(x: number, door: number): void } {
 	const car = new THREE.Group();
-	car.name = 'Lantern Town • Last train (three-car consist)';
+	car.name = 'Lantern Town • Last train • passenger cabin';
 	car.position.z = RAIL.z;
 	car.scale.set(RAIL.carScale.x, RAIL.carScale.y, RAIL.carScale.z);
 	scene.add(car);
@@ -31,20 +31,22 @@ export function buildRailcar(scene: THREE.Scene): { setPose(x: number, door: num
 	const box = (m: THREE.Material, x: number, y: number, z: number, w: number, h: number, d: number, pitch = 0) =>
 		add(geom, m, x, y, z, w, h, d, pitch);
 
-	// The deck top is exactly y=.45 and the rider's center aisle/boarding bay is clear.
+	// The deck top is exactly local y=.45 and the rider's center aisle/boarding bay is clear.
 	box(iron, 0, .303, 0, 11.8, .15, 2.37);
-	box(floor, 0, RAIL.floor-.036, 0, 11.8, .072, 2.4);
+	box(floor, 0, .414, 0, 11.8, .072, 2.4);
 	for (const z of [-.98, -.49, 0, .49, .98]) box(wood, 0, .4505, z, 11.78, .004, .017);
 	box(brass, 0, .424, -1.247, 1.8, .047, .14);
 	for (const x of [-4.6, -3.67, 3.67, 4.6]) {
-		for (const z of [-.61, .62]) {
+		for (const rail of [-.60, .62]) {
+			// Keep the larger cabin above the existing track gauge.
+			const z = rail / RAIL.carScale.z;
 			add(circle, iron, x, .268, z, .51, .132, .51, Math.PI / 2);
 			add(circle, edge, x, .268, z + Math.sign(z) * .072, .31, .028, .31, Math.PI / 2);
 			add(circle, brass, x, .268, z + Math.sign(z) * .092, .105, .025, .105, Math.PI / 2);
 		}
-		box(iron, x, .267, 0, .115, .115, 1.22);
+		box(iron, x, .267, 0, .115, .115, 1.22 / RAIL.carScale.z);
 	}
-	for (const x of [-4.14, 4.14]) box(iron, x, .32, 0, 1.47, .19, 1.18);
+	for (const x of [-4.14, 4.14]) box(iron, x, .32, 0, 1.47, .19, 1.18 / RAIL.carScale.z);
 	const bay = (center: number, width: number, z: number) => {
 		box(enamel, center, .836, z, width, .77, .12);
 		box(brass, center, 1.23, z, width, .042, .145);
@@ -107,46 +109,33 @@ export function buildRailcar(scene: THREE.Scene): { setPose(x: number, door: num
 		box(plaque, x, .957, z, .58, .241, .026);
 		for (const d of [-.17, 0, .17]) box(brass, x + d, .957, z * 1.012, .076, .042, .021);
 	}
-	// Repeat the common coach body in the same instanced batches. Offsets are expressed in
-	// unscaled local coordinates so world car spacing stays exactly the route's spacing.
-	const offsets = RAIL.carOffsets.map(x => x / RAIL.carScale.x);
-	const translation = new THREE.Matrix4();
-	for (const materials of batches.values()) for (const transforms of materials.values()) {
-		const original = transforms.slice();
-		transforms.length = 0;
-		for (const offset of offsets) {
-			translation.makeTranslation(offset, 0, 0);
-			for (const matrix of original) transforms.push(matrix.clone().premultiply(translation));
-		}
+	// Tiny ceiling fittings and woven seat piping, above the sightlines or beside the aisle.
+	for (const x of [-4.6, -3.54, -2.45, 2.45, 3.54, 4.6]) for (const z of [-.83, .83]) {
+		for (const dx of [-.068, .068]) box(brass, x + dx, 2.322, z, .021, .25, .028);
+		box(wood, x, 2.207, z, .165, .042, .041);
 	}
-	// Short flexible black bellows (stacked ribs) and low couplers link the cars visually.
-	for (let i = 1; i < offsets.length; i++) {
-		const x = (offsets[i - 1] + offsets[i]) * .5;
-		box(iron, x, .395, 0, .61, .139, .29);
-		for (let j = -2; j <= 2; j++) {
-			box(iron, x + j * .117, 1.42, 0, .073, 1.91, 1.08);
-			box(dark, x + j * .117, 2.365, 0, .078, .1, 1.18);
-		}
+	for (const x of [-4.1, -2.51, 2.51, 4.1]) for (const z of [-.897, .897]) {
+		box(ivory, x, .828, z - Math.sign(z) * .283, 1.36, .013, .008);
+		box(wood, x, 1.099, z + Math.sign(z) * .126, 1.33, .018, .011);
 	}
 	// The outward ends get mirrored driver desks, headcode panels and side cab badges.
 	// Their exact same open window holes keep the vintage look instead of using painted glass.
 	for (const side of [-1, 1]) {
-		const offset = side < 0 ? offsets[0] : offsets[offsets.length - 1];
-		box(wood, offset + side * 5.49, 1.122, 0, .5, .31, 1.62);
-		box(brass, offset + side * 5.43, 1.291, -.28, .18, .05, .31);
-		box(lamp, offset + side * 5.43, 1.323, -.28, .11, .016, .22);
-		box(velour, offset + side * 4.93, .883, 0, .48, .12, .52);
-		box(dark, offset + side * 4.93, .669, 0, .19, .325, .19);
-		const exterior = offset + side * 5.939;
+		box(wood, side * 5.49, 1.122, 0, .5, .31, 1.62);
+		box(brass, side * 5.43, 1.291, -.28, .18, .05, .31);
+		box(lamp, side * 5.43, 1.323, -.28, .11, .016, .22);
+		box(velour, side * 4.93, .883, 0, .48, .12, .52);
+		box(dark, side * 4.93, .669, 0, .19, .325, .19);
+		const exterior = side * 5.939;
 		box(iron, exterior, 2.562, 0, .052, .199, .75);
 		for (const z of [-.215, 0, .215]) box(lamp, exterior + side * .029, 2.562, z, .018, .090, .091);
 		for (const z of [-1.248, 1.248]) {
-			box(plaque, offset + side * 4.84, 1.015, z, .46, .22, .027);
-			box(brass, offset + side * 4.84, 1.015, z * 1.013, .081, .13, .022);
+			box(plaque, side * 4.84, 1.015, z, .46, .22, .027);
+			box(brass, side * 4.84, 1.015, z * 1.013, .081, .13, .022);
 		}
 	}
 
-	// The end cars keep closed doors. Only the middle leaves are separate moving meshes.
+	// The center south door is the only moving geometry.
 	const doorParts = (side: number, part: (m: THREE.Material, x: number, y: number, z: number, w: number, h: number, d: number) => void) => {
 		part(enamel, 0, .875, 0, .888, .839, .065);
 		part(brass, 0, 1.319, 0, .888, .05, .071);
@@ -154,9 +143,6 @@ export function buildRailcar(scene: THREE.Scene): { setPose(x: number, door: num
 		for (const x of [-.394, .394]) part(ivory, x, 1.79, 0, .1, .903, .065);
 		part(brass, -side * .327, 1.165, -.059, .056, .206, .058);
 	};
-	for (const offset of offsets) if (offset !== 0) for (const side of [-1, 1]) {
-		doorParts(side, (m,x,y,z,w,h,d) => box(m, x + offset + side * .45, y, z - 1.318, w,h,d));
-	}
 	for (const [g, materials] of batches) for (const [m, transforms] of materials) {
 		const instances = new THREE.InstancedMesh(g, m, transforms.length);
 		transforms.forEach((transform, i) => instances.setMatrixAt(i, transform));

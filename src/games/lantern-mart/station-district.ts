@@ -95,9 +95,12 @@ export function buildStationDistrict(scene: THREE.Scene): TownBlock[] {
   sign('등불역','LANTERN STATION',30,3.47,44.13,3.42,.81);
   sign('밤 기차','NIGHT SERVICE',30,3.49,55.69,3.27,.72,0);
   roof(30,50,4.85,21.2,6.28);
-  // Long through-platform extends either side of the existing central canopy.
-  box(29.5,.027,58.9,45.5,.014,4.23,'pavingEdge');
-  for(let x=7.15;x<51.95;x+=.85) box(x,.056,60.87,.57,.010,.13,'brass');
+  // Both platforms end shy of the widened coach; the tactile strip is on the walking side.
+  const platformEdge = RAIL.z - RAIL.halfDepth - .26;
+  const platformFront = 56.35;
+  const platformMiddle = (platformEdge+platformFront)/2, platformDepth = platformEdge-platformFront;
+  box(29.5,.027,platformMiddle,45.5,.014,platformDepth,'pavingEdge');
+  for(let x=7.15;x<51.95;x+=.85) box(x,.056,platformEdge-.12,.57,.010,.13,'brass');
   for(let x=8;x<=51;x+=1.8) box(x,.041,57.02,.52,.008,.10,'grout');
   for(const x of [19.2,27,36.4,39.8]) box(x,1.31,56.7,.19,2.62,.19,'enamel',true);
   roof(29.5,56.9,2.89,21,1.06,.21);
@@ -121,10 +124,12 @@ export function buildStationDistrict(scene: THREE.Scene): TownBlock[] {
   // The rail bridge and its parallel pedestrian span meet dry land at both ends.
   const bridgeX = -74, bridgeWidth = 40, walkZ = 56.65;
   box(bridgeX,-.112,walkZ,bridgeWidth,.255,3.90,'paving');
-  box(bridgeX,-.157,RAIL.z,bridgeWidth,.31,4.04,'tile');
+  const railGuardOffset = Math.max(2.50,RAIL.halfDepth+.42);
+  const railDeckDepth = (railGuardOffset+.105)*2;
+  box(bridgeX,-.157,RAIL.z,bridgeWidth,.31,railDeckDepth,'tile');
   for (const x of [-92.7,-84.1,-74,-63.9,-55.3]) {
     for (const z of [walkZ,RAIL.z]) {
-      box(x,-.26,z,2.03,.27,3.76,'cornice');
+      box(x,-.26,z,2.03,.27,z===RAIL.z ? railDeckDepth-.2 : 3.76,'cornice');
       box(x,-.66,z,1.60,.68,2.66,'tileLight');
       box(x,-.96,z,1.93,.18,3.06,'tile');
     }
@@ -138,7 +143,7 @@ export function buildStationDistrict(scene: THREE.Scene): TownBlock[] {
       if (Math.round((x+93.4)/2.28)%4===0) box(x,1.15,z,.21,.16,.2,'warm');
     }
   }
-  for (const z of [RAIL.z-2.07,RAIL.z+2.07]) {
+  for (const z of [RAIL.z-railGuardOffset,RAIL.z+railGuardOffset]) {
     box(bridgeX,.33,z,bridgeWidth,.10,.14,'tileLight');
     blocks.push({x:bridgeX,z,w:bridgeWidth,d:.15,bottom:0,top:.58});
     for(let x=-93.5;x<-54;x+=1.65) box(x,.22,z,.10,.45,.11,'steel');
@@ -156,24 +161,24 @@ export function buildStationDistrict(scene: THREE.Scene): TownBlock[] {
   for(const z of [61.6,62.82]) box(mid,.051,z,length,.022,.09,'steel');
   for(const center of [0,43,53.5]) {
     for(const dx of [-.87,-.29,.29,.87]) box(center+dx,.046,RAIL.z,.55,.016,2.75,'enamel');
-    for(const z of [60.70,63.70]) for(const dx of [-.72,0,.72]) box(center+dx,.057,z,.47,.010,.12,'brass');
+    for(const z of [RAIL.z-railGuardOffset,RAIL.z+railGuardOffset]) for(const dx of [-.72,0,.72]) box(center+dx,.057,z,.47,.010,.12,'brass');
   }
-  // Moonwater Halt: low far-bank platform runs the length of the train. Shelter remains clear of the boarding mark.
+  // Moonwater Halt: welcoming far-bank plaza; the shelter and roof stay in front of the coach.
   const west = RAIL_STOPS[1].x, shelter = west-4.425;
-  box(west,.035,59.07,46,.025,3.86,'paving');
+  box(west,.035,platformMiddle,46,.025,platformDepth,'paving');
   box(west,.055,57.18,46,.014,.09,'pavingEdge');
-  for(let x=west-22.7;x<west+22.8;x+=.89) box(x,.056,60.87,.66,.012,.14,'brass');
-  for(const x of [shelter-1.675,shelter+1.675]) for(const z of [58.72,59.70]) {
+  for(let x=west-22.7;x<west+22.8;x+=.89) box(x,.056,platformEdge-.12,.66,.012,.14,'brass');
+  for(const x of [shelter-1.675,shelter+1.675]) for(const z of [57.72,58.70]) {
     box(x,1.22,z,.14,2.40,.14,'enamel',true);
     box(x,.16,z,.28,.32,.28,'cornice',true);
   }
-  box(shelter,1.19,59.70,3.25,1.03,.10,'bark',true);
-  box(shelter,1.27,59.63,2.97,.65,.03,'enamel');
-  bench(shelter,59.13);
-  roof(shelter,59.56,2.49,4.17,1.12,.27);
-  box(shelter,2.15,58.57,.51,.13,.28,'warm');
-  sign(RAIL_STOPS[1].ko,RAIL_STOPS[1].en.toUpperCase(),shelter,2.02,58.49,3.35,.75);
-  sign('물빛시장',RAIL_STOPS[1].en.toUpperCase(),shelter,2.09,60.48,2.80,.64,0);
+  box(shelter,1.19,58.70,3.25,1.03,.10,'bark',true);
+  box(shelter,1.27,58.63,2.97,.65,.03,'enamel');
+  bench(shelter,58.13);
+  roof(shelter,58.56,2.49,4.17,1.12,.27);
+  box(shelter,2.15,57.57,.51,.13,.28,'warm');
+  sign(RAIL_STOPS[1].ko,RAIL_STOPS[1].en.toUpperCase(),shelter,2.02,57.49,3.35,.75);
+  sign('물빛시장',RAIL_STOPS[1].en.toUpperCase(),shelter,2.09,59.55,2.80,.64,0);
   for(const x of [west-20,west-11,west+7,west+18]) lamp(x,57.84,2.82);
   // Matching inlaid circles/edges show the unobstructed waiting position at both stops.
   for(const {x} of RAIL_STOPS) {
