@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { benchSeat, type WorldSeat } from './world-seats';
 
 const WOOD = '#845b49';
 const INK = '#242238';
@@ -32,7 +33,7 @@ type Finish = 'paint' | 'glow';
 type Piece = { position: [number, number, number]; size: [number, number, number]; color: string; roll: number };
 
 /** Build a little corner shop from batched reusable shapes. +Z is out toward the street. */
-export function buildShop(scene: THREE.Scene): THREE.Group {
+export function buildShop(scene: THREE.Scene, seats?: WorldSeat[]): THREE.Group {
 	const shop = new THREE.Group();
 	shop.name = 'Lantern Mart';
 	scene.add(shop);
@@ -239,6 +240,7 @@ export function buildShop(scene: THREE.Scene): THREE.Group {
 	for (const x of [1.59, 4.10]) box(x, .49, -.385, .077, .96, .092, INK);
 	for (const x of [1.69, 2.72, 3.79]) {
 		disk(x, .61, -1.55, .45, .082, '#c2716d');
+		seats?.push(benchSeat(x, -1.55, .651, 1, .76, .04, -1));
 		disk(x, .317, -1.55, .076, .60, STEEL);
 		disk(x, .025, -1.55, .36, .045, '#373546');
 		disk(x, .27, -1.55, .24, .034, '#615767');

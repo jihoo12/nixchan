@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CABIN, CABIN_SEATS, clearRailcar, createRailShuttle, insideCabin, keepInCabin, railPose, RAIL, RAIL_STOPS } from '../src/games/lantern-mart/rail-shuttle.ts';
+import { CABIN, CABIN_BENCH, CABIN_SEATS, cabinView, clearRailcar, createRailShuttle, insideCabin, keepInCabin, railPose, RAIL, RAIL_STOPS } from '../src/games/lantern-mart/rail-shuttle.ts';
 
 const half=RAIL.dwell+RAIL.travel;
 const east={x:RAIL_STOPS[0].x,z:RAIL.platformZ,y:0,grounded:true};
@@ -90,4 +90,18 @@ test('walkable cabin, bench collision, and sitting follow the train instead of t
 	const stand=s.standingPoint(seat);
 	assert.equal(s.action({...stand,grounded:true}),'sit', 'no remote exit from the seat');
 	assert.equal(s.interact({...s.boardingPoint(),grounded:true}),'leave');
+});
+
+test('train sitting uses the cushion front edge and the camera remains on the aisle side', () => {
+	const pose=railPose(2);
+	for (const seat of CABIN_SEATS) {
+		assert.ok(Math.abs(Math.abs(seat.z)-CABIN_BENCH.front*RAIL.carScale.z)<1e-6);
+		const eye={x:pose.x+seat.x,y:RAIL.floor+CABIN.seatHeight+.78,z:RAIL.z+seat.z};
+		for (let i=0;i<36;i++) {
+			const camera=cabinView(pose,eye,i*Math.PI/18,.23,seat.side);
+			assert.ok(insideCabin(pose,camera.x,camera.z));
+			assert.ok((camera.z-eye.z)*seat.side < -1.85);
+			assert.ok(Math.hypot(camera.x-eye.x,camera.z-eye.z)>2.4);
+		}
+	}
 });

@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import type { TownBlock } from './town-layout';
+import { benchSeat, type WorldSeat } from './world-seats';
 import { RAIL, RAIL_STOPS } from './rail-shuttle';
 
 /** Lantern Station: a little night-train terminus, with a through waiting room. */
-export function buildStationDistrict(scene: THREE.Scene): TownBlock[] {
+export function buildStationDistrict(scene: THREE.Scene, seats?: WorldSeat[]): TownBlock[] {
   const group = new THREE.Group(); group.name = 'Lantern Town / Station'; scene.add(group);
   const blocks: TownBlock[] = [];
   const palette = {
@@ -65,7 +66,8 @@ export function buildStationDistrict(scene: THREE.Scene): TownBlock[] {
     box(x,y,z-.125,w,.075,.04,'bark'); box(x,y-h/2-.08,z-.13,w+.28,.12,.24,'sandstone');
   }
   function bench(x:number,z:number,facesZ: -1 | 1) {
-    box(x,.52,z,2.35,.16,.65,'bench',true); box(x,.91,z-facesZ*.27,2.35,.40,.13,'bench',true);
+    seats?.push(benchSeat(x,z,.60,facesZ));
+    box(x,.52,z,2.35,.16,.65,'bench',true); box(x,.91,z-facesZ*.32,2.35,.40,.13,'bench',true);
     for(const dx of [-.91,.91]) box(x+dx,.26,z,.17,.52,.58,'metal',true);
   }
   // Flush civic paths: the cross-town walk at z=39 and eastern branch remain uninterrupted.
@@ -102,8 +104,8 @@ export function buildStationDistrict(scene: THREE.Scene): TownBlock[] {
   box(29.5,.027,platformMiddle,45.5,.014,platformDepth,'pavingEdge');
   for(let x=7.15;x<51.95;x+=.85) box(x,.056,platformEdge-.12,.57,.010,.13,'brass');
   for(let x=8;x<=51;x+=1.8) box(x,.041,57.02,.52,.008,.10,'grout');
-  for(const x of [19.2,27,36.4,39.8]) box(x,1.31,56.7,.19,2.62,.19,'enamel',true);
-  roof(29.5,56.9,2.89,21,1.06,.21);
+  for(const x of [19.2,27,36.4,39.8]) box(x,1.625,56.7,.19,3.25,.19,'enamel',true);
+  roof(29.5,56.9,3.52,21,1.06,.21);
   sign('1번 승강장','PLATFORM 01',22.2,2.24,56.8,2.35,.56,0);
   bench(23,57.46,1); bench(37.25,57.46,1);
   // Interior reading and waiting corners. No furnishings in the x=30 through aisle.

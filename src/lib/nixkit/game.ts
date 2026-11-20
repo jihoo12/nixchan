@@ -27,10 +27,11 @@ import type { EmoteMenu } from './emotions';
 import { makeToon } from './look';
 import { createNixchan, type BodyAction, type FirstPersonOptions } from './nixchan';
 import { createParts } from './parts';
+import { createChairs, type ChairOptions } from './chairs';
 import type { World } from './world';
 import type { NixClip } from '../experimental/nix-figure';
 
-export type { NixClip, BodyAction };
+export type { NixClip, BodyAction, ChairOptions };
 
 export interface GameOptions {
 	canvas: HTMLCanvasElement;
@@ -56,18 +57,27 @@ export interface GameOptions {
 	hold?: (tryingToMove: boolean) => number | null;
 	/** Keys that aren't for moving or jumping (lower case), for the game to use. */
 	onKey?: (key: string, e: KeyboardEvent) => void;
+	/** A game's own primary action (e.g. train doors). True consumes E or the action button. */
+	onInteract?: () => boolean;
+	chairs?: {
+		/** Don't offer a new seat while another activity owns the player. */
+		available?: () => boolean;
+		/** Use the game's existing prompt instead of Nixkit's button. */
+		prompt?: 'custom';
+	};
 	/** Called when Nixchan can't be loaded (neither WebGPU nor WebGL 2, or the model didn't come). */
 	onFail?: (why: 'webgl' | 'model') => void;
 }
 
 export function createGame(opts: GameOptions) {
-	const engine = createEngine({
+	const built = createEngine({
 		canvas: opts.canvas,
 		// ?webgl on the URL draws with WebGL 2 even where there's WebGPU, to see what that looks like.
 		renderer: (canvas) => new WebGPURenderer({ canvas, antialias: true, forceWebGL: new URLSearchParams(location.search).has('webgl') }),
 		onFail: () => opts.onFail?.('webgl'),
 	});
-	if (!engine) return null;
+	if (!built) return null;
+	const engine = built;
 	const { renderer, scene, camera } = engine;
 	const toon = makeToon();
 	const hud = createHud();
@@ -76,6 +86,22 @@ export function createGame(opts: GameOptions) {
 	// touching is worked out once she has.
 	const parts = createParts(scene, toon);
 	const world = opts.world ?? parts.world;
+	const chairs = createChairs({ world, player: () => player, available: opts.chairs?.available });
+	const characterWorld: World = {
+		...world,
+		collide(p, r, v) {
+			if (!chairs.seated) world.collide?.(p, r, v);
+		},
+	};
+	function interact() {
+		if (!nix.ready || engine.paused) return false;
+		if (chairs.seated) return chairs.interact();
+		return !!opts.onInteract?.() || chairs.interact();
+	}
+	function chairAction() {
+		return nix.ready && !engine.paused ? chairs.action() : null;
+	}
+	const firstPerson = opts.firstPerson;
 	parts.setSpawn(opts.spawn.pos, opts.spawn.heading);
 	engine.add({ order: ORDER.world, update: (dt, time) => parts.move(dt, time) });
 
@@ -83,18 +109,30 @@ export function createGame(opts: GameOptions) {
 		canvas: opts.canvas,
 		modelUrl: opts.modelUrl,
 		spawn: opts.spawn,
-		world,
+		world: characterWorld,
 		toon,
 		look: nodeLook,
 		touch: hud.touch,
 		hud,
 		canGlide: opts.canGlide,
 		canDash: opts.canDash,
-		firstPerson: opts.firstPerson,
+		firstPerson: firstPerson && {
+			...firstPerson,
+			get eyeHeight() { return chairs.seated ? chairs.lift + .72 : firstPerson.eyeHeight; },
+		},
 		emotes: opts.emotes,
-		clip: opts.clip,
-		hold: opts.hold,
-		onKey: opts.onKey,
+		clip: () => chairs.seated ? 'Sit' : opts.clip?.() ?? null,
+		hold: (trying) => chairs.heading ?? opts.hold?.(trying) ?? null,
+		onKey(key, e) {
+			if (key === 'e' && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey &&
+				!(e.target instanceof HTMLElement && e.target.closest('button,a,input,select,textarea,[contenteditable]')) &&
+				interact()) {
+				controls.state.waveQueued = false;
+				e.preventDefault();
+				return;
+			}
+			opts.onKey?.(key, e);
+		},
 		player: {
 			respawnAt: () => parts.spawn,
 			carriedBy: (x, z, y) => parts.carriedBy(x, z, y),
@@ -102,8 +140,33 @@ export function createGame(opts: GameOptions) {
 		onModelFail: () => opts.onFail?.('model'),
 	});
 	const { player, controls, orbit } = nix;
+	let chairButton: HTMLButtonElement | undefined;
+	let previousLift: number | null = null;
+	engine.add({ order: ORDER.player - 1, update: () => chairs.pin() });
+	engine.add({ order: ORDER.player + 1, update() {
+		if (chairs.seated) {
+			// The world may have pushed her out of an obstacle making up the seat.
+			chairs.pin();
+			previousLift ??= player.figure.group.position.y;
+			player.figure.group.position.y = chairs.lift;
+		} else if (previousLift !== null) {
+			player.figure.group.position.y = previousLift;
+			previousLift = null;
+		}
+	} });
+	engine.add({ order: ORDER.hud, always: true, update() {
+		if (!chairButton) return;
+		const action = chairAction();
+		chairButton.hidden = action === null;
+		if (action) {
+			const ko = document.documentElement.lang.startsWith('ko');
+			const label = action === 'sit' ? (ko ? '앉기' : 'Sit down') : (ko ? '일어나기' : 'Stand up');
+			if (chairButton.textContent !== label) chairButton.textContent = label;
+		}
+	} });
 	engine.add({ order: ORDER.contact, update: (dt, time) => parts.touch(player, dt, time) });
 	parts.onKill(() => {
+		chairs.reset();
 		hud.flash();
 		player.respawn();
 		orbit.yaw = parts.spawn.heading + Math.PI;
@@ -140,6 +203,24 @@ export function createGame(opts: GameOptions) {
 		player,
 		parts,
 		world,
+		/** Register the sitting point of a fixed chair or bench; its art stays yours. */
+		addChair(options: ChairOptions) {
+			chairs.add(options);
+			if (!chairButton && opts.chairs?.prompt !== 'custom') {
+				const button = document.createElement('button');
+				button.type = 'button';
+				button.hidden = true;
+				button.setAttribute('aria-keyshortcuts', 'E');
+				button.style.cssText = 'position:fixed;z-index:21;bottom:max(24px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);min-height:44px;padding:8px 16px;border-radius:99px;border:1px solid #b7a9c5;color:#fff;background:#1b2032ef;font:600 14px system-ui;cursor:pointer;touch-action:manipulation';
+				button.addEventListener('click', () => chairAction() && interact());
+				document.body.append(button);
+				chairButton = button;
+			}
+		},
+		chairAction,
+		interact,
+		get chairSeated() { return chairs.seated; },
+		get chairLift() { return chairs.lift; },
 		/** Settles once Nixchan's here (her model has loaded). */
 		loaded: nix.loaded,
 		/** Whether it's drawing with WebGPU (or else WebGL 2), once `drawing` has settled. */
@@ -169,6 +250,7 @@ export function createGame(opts: GameOptions) {
 		/** Puts her somewhere at once (and makes it where she comes back to). The camera swings round
 		 * behind her, or to `cameraYaw` (heading itself has it in front of her, looking back at her). */
 		teleport(pos: THREE.Vector3, heading: number, cameraYaw = heading + Math.PI) {
+			chairs.reset();
 			parts.setSpawn(pos, heading);
 			player.respawn();
 			orbit.yaw = cameraYaw;

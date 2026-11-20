@@ -1,6 +1,6 @@
 // Original, open-window vintage railcar. All pose changes are local to this visual group.
 import * as THREE from 'three';
-import { RAIL } from './rail-shuttle';
+import { CABIN_BENCH, RAIL } from './rail-shuttle';
 
 export function buildRailcar(scene: THREE.Scene): { setPose(x: number, door: number): void } {
 	const car = new THREE.Group();
@@ -91,11 +91,15 @@ export function buildRailcar(scene: THREE.Scene): { setPose(x: number, door: num
 	}
 
 	// Bench cushions along the side walls, leaving the entire center of the car free.
-	for (const z of [-.897, .897]) for (const x of [-4.1, -2.51, 2.51, 4.1]) {
-		box(wood, x, .62, z, 1.47, .33, .54);
-		box(velour, x, .805, z, 1.49, .12, .57);
-		box(velour, x, 1.008, z + Math.sign(z) * .196, 1.49, .398, .124, -.09 * Math.sign(z));
-		for (const dx of [-.74, .74]) box(brass, x + dx, .89, z, .043, .075, .46);
+	const benchMid = (CABIN_BENCH.front+CABIN_BENCH.back)/2;
+	const benchDepth = CABIN_BENCH.back-CABIN_BENCH.front;
+	for (const side of [-1, 1]) for (const x of [-4.1, -2.51, 2.51, 4.1]) {
+		box(wood, x, .62, side*benchMid, 1.47, .33, benchDepth-.024);
+		box(velour, x, CABIN_BENCH.cushionTop-.06, side*benchMid, 1.49, .12, benchDepth);
+		box(velour, x, 1.008, side*CABIN_BENCH.backrest, 1.49, .398, .124, -.09*side);
+		for (const dx of [-.74, .74]) box(brass, x + dx, .89, side*benchMid, .043, .075, benchDepth-.11);
+		box(ivory, x, .828, side*(CABIN_BENCH.front+.002), 1.36, .013, .008);
+		box(wood, x, 1.099, side*(CABIN_BENCH.backrest-.069), 1.33, .018, .011);
 	}
 	for (const z of [-.83, .83]) {
 		box(brass, 0, 2.463, z, 10.97, .047, .05);
@@ -113,10 +117,6 @@ export function buildRailcar(scene: THREE.Scene): { setPose(x: number, door: num
 	for (const x of [-4.6, -3.54, -2.45, 2.45, 3.54, 4.6]) for (const z of [-.83, .83]) {
 		for (const dx of [-.068, .068]) box(brass, x + dx, 2.322, z, .021, .25, .028);
 		box(wood, x, 2.207, z, .165, .042, .041);
-	}
-	for (const x of [-4.1, -2.51, 2.51, 4.1]) for (const z of [-.897, .897]) {
-		box(ivory, x, .828, z - Math.sign(z) * .283, 1.36, .013, .008);
-		box(wood, x, 1.099, z + Math.sign(z) * .126, 1.33, .018, .011);
 	}
 	// The outward ends get mirrored driver desks, headcode panels and side cab badges.
 	// Their exact same open window holes keep the vintage look instead of using painted glass.
