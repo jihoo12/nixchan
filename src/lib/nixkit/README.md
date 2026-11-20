@@ -85,6 +85,29 @@ What it gives back:
 
 `store.get(key)` and `store.set(key, value)` remember things for the game between visits.
 
+## Chairs
+
+Register a fixed chair or a place on a bench with `game.addChair`. Draw the furniture separately;
+the kit handles reaching it, E or the on-screen action, the sitting pose, and stepping out.
+
+```ts
+game.addChair({
+	at: [3, .6, 8],   // world-space top of the cushion, in metres
+	facing: 0,        // radians: 0 faces +z, Math.PI faces -z
+	stand: [3, 8.9],  // walkable approach and exit point (optional)
+});
+```
+
+Without `stand`, the exit is .9 m in front of the chair. Specify it for a stool at a counter or
+an unusual layout. For a bench with multiple places, register one chair per cushion position.
+The kit checks the approach and exit against the world. This API is for fixed furniture, not a
+seat on a moving vehicle.
+
+If the game already has an action HUD, set `chairs: { prompt: 'custom' }`, use `game.chairAction()`
+for the seat label, and have the button call `game.interact()`. An optional `onInteract` callback
+handles the game's action before a new seat is considered; return true to consume it. An occupied
+chair takes priority so the player can always use the same control to stand when the exit is clear.
+
 ## Parts
 
 `parts.add(spec)` makes a box (or, with `shape: 'cylinder'`, a cylinder) with its middle at `at`
