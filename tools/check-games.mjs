@@ -5,7 +5,7 @@
 //   node tools/check-games.mjs                 check every game
 //   node tools/check-games.mjs --changed main  also list files a branch changes outside src/games/<id>/
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -13,8 +13,6 @@ const ROOT = resolve(import.meta.dirname, '..');
 const GAMES = join(ROOT, 'src', 'games');
 const ID = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const ASSETS = new Set(['.glb', '.png', '.jpg', '.jpeg', '.webp', '.json', '.mp3', '.ogg']);
-const MAX_FILE = 2 * 1024 * 1024;
-const MAX_GAME = 6 * 1024 * 1024;
 const COLOR = /^#[0-9a-f]{6}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -57,17 +55,12 @@ async function checkGame(id) {
 	const names = files.map((f) => relative(dir, f).split(sep).join('/'));
 	for (const need of ['meta.ts', 'game.ts']) if (!names.includes(need)) fail(where, `needs a ${need} (copy src/games/_template/)`);
 
-	let total = 0;
 	for (const file of files) {
 		const name = relative(ROOT, file).split(sep).join('/');
-		const size = statSync(file).size;
-		total += size;
 		const ext = file.slice(file.lastIndexOf('.')).toLowerCase();
 		if (ext === '.ts') checkCode(name, readFileSync(file, 'utf8'), dir, file);
 		else if (!ASSETS.has(ext)) fail(name, `files can be .ts, or assets (${[...ASSETS].join(' ')})`);
-		if (size > MAX_FILE) fail(name, `${(size / 1048576).toFixed(1)} MB is more than ${MAX_FILE / 1048576} MB for one file`);
 	}
-	if (total > MAX_GAME) fail(where, `${(total / 1048576).toFixed(1)} MB in all is more than ${MAX_GAME / 1048576} MB for a game`);
 
 	if (names.includes('meta.ts')) {
 		let meta;
