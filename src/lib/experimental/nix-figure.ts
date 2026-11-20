@@ -86,10 +86,11 @@ export type NixClip = 'Sit' | 'Idle' | 'Walk' | 'Run' | 'Wave' | 'Swim' | 'Tread
 	| 'Carry' | 'CarryWalk'
 	// Asleep in bed, curled up on her side (on /home).
 	| 'Sleep'
-	// Snow magic (the Snow Magic game): a fighting stance, holding a spell, and the spells themselves.
-	| 'Ready' | 'Charge' | 'Shot' | 'Slam' | 'Summon' | 'Dash';
+	// Snow magic (the Snow Magic game): a fighting stance, holding a spell, the spells themselves, and
+	// her ultimate (seven seconds long, for a cutscene).
+	| 'Ready' | 'Charge' | 'Shot' | 'Slam' | 'Summon' | 'Dash' | 'Ultimate';
 /** Clips that play once through from the top each time they're played, and hold their last pose. */
-const ONCE: NixClip[] = ['Water', 'Plant', 'Shot', 'Slam', 'Summon', 'Dash'];
+const ONCE: NixClip[] = ['Water', 'Plant', 'Shot', 'Slam', 'Summon', 'Dash', 'Ultimate'];
 /** The things she can hold, each hidden until she's using it. */
 export type NixProp = 'Rod' | 'Can' | 'Hammer';
 const PROP_PARTS: Record<NixProp, string[]> = { Rod: ['Rod', 'Reel'], Can: ['Can'], Hammer: ['Hammer'] };

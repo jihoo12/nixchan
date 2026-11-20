@@ -5,17 +5,33 @@
 //   2 Glacier Slam    paws down on the ground: a ring of snow bursts out round her
 //   3 Blizzard Crown  a storm turns round her for a while, and frosts whatever's in it
 //   4 Snow Dash       a dash, with a trail of snow
+//   5 Eternal Winter  her ultimate, once its gauge has filled (frosting snowmen fills it): a
+//                     cutscene in which she rises, calls winter down and strikes the ground, and
+//                     ice bursts up across the whole clearing (ultimate.ts)
 //
 // A snowman frosted through bursts into snow, and is built again a little later. The snow is
 // nixkit/snow.ts: worked out on the GPU, so there can be a lot of it.
 import * as THREE from 'three';
 import type { GameContext, NixClip } from '../../lib/nixkit/meta';
+import { pick } from '../../lib/nixkit/lang';
 import { addSnow } from '../../lib/nixkit/snow';
+import { createEternalWinter, LENGTH as ULTIMATE_LENGTH } from './ultimate';
 
 const ARENA = 19;
 const SNOWMEN = 7;
 /** How many hits frost a snowman through. */
 const FROST = 6;
+/** How far `p` is from the line from `a` to `b`, on the ground. */
+function segmentDistance(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3) {
+	const dx = b.x - a.x;
+	const dz = b.z - a.z;
+	const k = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / (dx * dx + dz * dz || 1)));
+	return Math.hypot(p.x - a.x - dx * k, p.z - a.z - dz * k);
+}
+
+/** How much of the ultimate's gauge a hit on a snowman fills, and how much fills by itself each second. */
+const CHARGE_PER_HIT = 0.04;
+const CHARGE_PER_SECOND = 1 / 80;
 
 interface Spell {
 	name: string;
@@ -27,6 +43,8 @@ interface Spell {
 	/** Called as it's cast; `at` is how far into her animation the magic comes out. */
 	at: number;
 	cast: () => void;
+	/** The ultimate: cast only once its gauge is full, standing on the ground. */
+	ultimate?: boolean;
 }
 
 export default function start({ createGame, store }: GameContext) {
@@ -126,6 +144,29 @@ export default function start({ createGame, store }: GameContext) {
 		snowmen.push({ group, body, pos, frost: 0, wobble: 0, wobbleV: 0, gone: 0, frostMat });
 	}
 
+	// The ultimate's gauge (0 … 1), and the ultimate itself: the shock wave frosts each snowman
+	// through as it reaches it.
+	let charge = 0;
+	const struck = new Set<Snowman>();
+	const ult = createEternalWinter(game, snow, {
+		arena: ARENA,
+		snowmen: snowmen.map((s) => s.pos),
+		onWave(from, radius) {
+			for (const s of snowmen) {
+				if (struck.has(s) || s.pos.distanceTo(from) > radius) continue;
+				struck.add(s);
+				while (s.gone <= 0) hit(s, 2);
+			}
+		},
+		onSkip() {
+			if (casting?.ultimate) casting = null;
+		},
+		// Snowmen between the cutscene's camera and her step out of the shot.
+		onCamera(from, to) {
+			for (const s of snowmen) s.body.visible = !from || segmentDistance(s.pos, from, to) > 1.4;
+		},
+	});
+
 	let frosted = Number(store.get('frosted') ?? 0);
 	const frostStat = hud.stat(`☃ ${frosted}`);
 	const ICE = new THREE.Color('#7cc4ff');
@@ -134,6 +175,7 @@ export default function start({ createGame, store }: GameContext) {
 	/** A hit on a snowman: it wobbles, frosts a little bluer, and bursts once frosted through. */
 	const hit = (s: Snowman, push = 1) => {
 		if (s.gone > 0) return;
+		if (!ult.active) charge = Math.min(1, charge + CHARGE_PER_HIT);
 		s.wobbleV += 3.2 * push;
 		s.frost++;
 		s.frostMat.color.copy(WHITE).lerp(ICE, Math.min(1, s.frost / FROST));
@@ -228,12 +270,33 @@ export default function start({ createGame, store }: GameContext) {
 				for (const s of ahead(4, 0.5)) hit(s, 1.2);
 			},
 		},
+		{
+			name: 'Eternal Winter',
+			key: '5',
+			clip: 'Ultimate',
+			busy: ULTIMATE_LENGTH,
+			cool: 0,
+			at: 0,
+			ultimate: true,
+			cast() {
+				charge = 0;
+				// The blizzard gives way to it.
+				storm = 0;
+				snow.vortex.off();
+				struck.clear();
+				ult.start();
+			},
+		},
 	];
 	const cools = new Map<Spell, number>(spells.map((s) => [s, 0]));
 	const buttons = new Map(spells.map((s) => [s, hud.skill(s.name, s.key, () => cast(s))]));
 
 	function cast(spell: Spell) {
-		if (casting || (cools.get(spell) ?? 0) > 0 || !game!.ready || player.swimming) return;
+		if (casting || ult.cutscene || (cools.get(spell) ?? 0) > 0 || !game!.ready || player.swimming) return;
+		if (spell.ultimate && (charge < 1 || !player.grounded)) {
+			if (charge < 1) hud.toast(pick({ en: `Eternal Winter: ${Math.floor(charge * 100)}% — frost snowmen to charge it`, ko: `영원한 겨울: ${Math.floor(charge * 100)}% — 눈사람을 얼려서 채워요` }));
+			return;
+		}
 		casting = spell;
 		castT = 0;
 		fired = false;
@@ -254,8 +317,16 @@ export default function start({ createGame, store }: GameContext) {
 		for (const s of spells) {
 			const c = Math.max(0, (cools.get(s) ?? 0) - dt);
 			cools.set(s, c);
-			buttons.get(s)!.cool(c / (s.cool + s.busy));
+			if (!s.ultimate) buttons.get(s)!.cool(c / (s.cool + s.busy));
 		}
+		// The ultimate's gauge fills by itself too, slowly; its button shines once it's full.
+		if (!ult.active && charge < 1) {
+			charge = Math.min(1, charge + CHARGE_PER_SECOND * dt);
+			if (charge >= 1) hud.toast(pick({ en: 'Eternal Winter is ready! Press 5', ko: '영원한 겨울 준비 완료! 5를 눌러요' }), 3.2);
+		}
+		const ultButton = buttons.get(spells[4])!;
+		ultButton.cool(1 - charge);
+		ultButton.charged(charge >= 1 && !ult.active);
 
 		// The snow dash leaves a trail.
 		if (player.dashing) snow.burst(player.pos.clone().setY(player.pos.y + 0.7), { count: 220, dir: facing().negate().setY(0.4), speed: 3, spread: 0.6, life: 1.2, size: 1.1 });
@@ -297,7 +368,8 @@ export default function start({ createGame, store }: GameContext) {
 		}
 	});
 
-	game.loaded.then(() => hud.banner('Snow Magic', 'Press 1 to 4 to cast'), () => {});
+	game.loaded.then(() => hud.banner('Snow Magic', pick({ en: 'Press 1 to 4 to cast · 5 once it shines', ko: '1~4로 마법 · 빛나면 5로 궁극기' })), () => {});
 	game.start();
-	if (import.meta.env.DEV) Object.assign(window, { snow });
+	// (In development, `fillUltimate()` in the console fills the gauge, to try it straight away.)
+	if (import.meta.env.DEV) Object.assign(window, { snow, ult, fillUltimate: () => (charge = 1) });
 }
