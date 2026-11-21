@@ -1,12 +1,10 @@
 // Bom (봄, "spring"), on the mart's street a few steps from where Nixchan starts: out on the night
 // of the first snow in a T-shirt and shorts, as if it were already spring. She's jihoo's own VRoid
-// model (models/bom.vrm, CC BY 4.0, LICENSE-ARTWORK). A .vrm is a glTF underneath, so three's GLTFLoader reads it as it is;
-// it doesn't know VRM's own parts (MToon, spring bones, expressions), so here she's drawn in the
-// game's toon look with the neighbours' ink line, her arms let down from VRM's T-pose, with a
-// breath, a blink (the Fcl_EYE_Close face key), and a head that turns to Nixchan when she's near.
-//
-// (bom.vrm is 15 MB and not one of the kit's asset types, so `npm run check:games` says so: it's
-// here as it is, to see the two of them together first.)
+// model (models/bom.vrm, CC BY 4.0, LICENSE-ARTWORK). A .vrm is a glTF underneath, so three's
+// GLTFLoader reads it as it is; it doesn't know VRM's own parts (MToon, spring bones, expressions),
+// so here she's drawn in the game's toon look with the neighbours' ink line, her arms let down from
+// VRM's T-pose, with a breath, a blink (the Fcl_EYE_Close face key), and a head that turns to
+// Nixchan when she's near.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Game } from '../../lib/nixkit/game';

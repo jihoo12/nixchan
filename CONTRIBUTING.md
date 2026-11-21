@@ -81,8 +81,8 @@ every game before it's merged.
   node material from `three/webgpu` with nodes from `three/tsl` (`src/lib/nixkit/portal.ts` has
   one). Add `?webgl` to the page's address to see your game the way it looks without WebGPU.
 - **Nothing from outside the site.** No `fetch`, no network connections, no links to other sites
-  in code. Models, pictures and sounds go in your folder (`.glb`, `.png`, `.jpg`, `.webp`, `.json`,
-  `.mp3`, `.ogg`). Nixchan doesn't impose a size cap per file or per game. [GitHub's file
+  in code. Models, pictures and sounds go in your folder (`.glb`, `.vrm`, `.png`, `.jpg`, `.webp`,
+  `.json`, `.mp3`, `.ogg`). Nixchan doesn't impose a size cap per file or per game. [GitHub's file
   limits](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github)
   and [GitHub Pages' deployment limits](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits)
   still apply. Keep initial downloads small by loading large assets only when needed.

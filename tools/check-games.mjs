@@ -12,7 +12,7 @@ import { pathToFileURL } from 'node:url';
 const ROOT = resolve(import.meta.dirname, '..');
 const GAMES = join(ROOT, 'src', 'games');
 const ID = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-const ASSETS = new Set(['.glb', '.png', '.jpg', '.jpeg', '.webp', '.json', '.mp3', '.ogg']);
+const ASSETS = new Set(['.glb', '.vrm', '.png', '.jpg', '.jpeg', '.webp', '.json', '.mp3', '.ogg']);
 const COLOR = /^#[0-9a-f]{6}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
