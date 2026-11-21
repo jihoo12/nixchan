@@ -25,6 +25,7 @@ import { createNightWalk } from './night-walk';
 import { createNeighbors, neighborSolids, NEIGHBORS, type NeighborId } from './neighbors';
 import { createTreats, type TreatKind } from './treat';
 import type { TownBlock } from './town-layout';
+import { createBom, bomSolid } from './bom';
 
 /** A footprint as [left, right, back, front], standing on the ground up to `top`. */
 const footprint = ([left, right, back, front]: readonly [number, number, number, number], top = 2.4): TownBlock =>
@@ -112,6 +113,8 @@ export default function start({ createGame, store }: GameContext) {
 		// The neighbours' stalls along the mart's street, and room for the neighbours themselves.
 		...stallSolids.map((b) => footprint(b)),
 		...neighborSolids.map((b) => footprint(b, 1.4)),
+		// Bom, by the mart's door (bom.ts).
+		footprint(bomSolid, 2.5),
 		// The crate the radish waits on at the market.
 		{ x: PICKUPS.radish.x, z: PICKUPS.radish.z, w: 0.7, d: 0.7, bottom: 0, top: 0.5 },
 	]);
@@ -179,6 +182,7 @@ export default function start({ createGame, store }: GameContext) {
 		}
 	}});
 
+	const bom = createBom(game, ko);
 	const tour = townMap(ko);
 	const panel = createLanternHud(game.interact, ko);
 	const focusMapButton = document.querySelector<HTMLButtonElement>('[data-town-map]');
@@ -453,6 +457,7 @@ export default function start({ createGame, store }: GameContext) {
 		}
 		talk.update(dt);
 		neighbors.update(dt);
+		bom.update(dt, time);
 		const chatting = neighbors.talking;
 		const treat = tray.update(dt, reduced.matches);
 		if (treat.bite) game.emote('happy', 1.1);

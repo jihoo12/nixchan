@@ -13,6 +13,7 @@ This covers:
   - src/assets/home/          her house's room
   - src/assets/experimental/  the 3D path's sky gate
   - src/assets/monochrome/    the grey place's walls and pieces
+  - src/games/lantern-mart/models/bom.vrm   Bom, Lantern Town's VRoid friend by the mart
 
 Nixchan's illustrations first appeared in https://github.com/jihoo12/jihoo12.github.io, under the
 same license.
