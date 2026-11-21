@@ -55,6 +55,9 @@ export function fbm(x: number, z: number, octaves: number, seed = 0) {
 
 export const smooth = (a: number, b: number, t: number) => ease(Math.min(1, Math.max(0, (t - a) / (b - a))));
 
+/** Where the sun fell from: the peak under the ring in the sky, and how high and wide it is. */
+export const PEAK = { x: 320, z: -555, rise: 72, width: 120 };
+
 /** How high the land is at (x, z). The sea is at 0. */
 export function height(x: number, z: number) {
 	// Land and sea, in broad sweeps.
@@ -66,10 +69,17 @@ export function height(x: number, z: number) {
 	const ridge = 1 - Math.abs(fbm(x / 260, z / 260, 4, 4));
 	// Home is on a broad stretch of land, whatever the sweeps say; further off, the sea comes and goes.
 	const mainland = 13 * Math.exp(-(x * x + z * z) / (520 * 520));
-	let h = 5 + mainland + continent * 16 + hills * 7 + mountains * ridge * ridge * 46;
+	// And knolls: round hills standing up out of the fields, good places to set the sun down.
+	const knoll = smooth(0.5, 0.85, noise(x / 75, z / 75, 11));
+	let h = 5 + mainland + continent * 16 + hills * 7 + knoll * (14 + hills * 6) + mountains * ridge * ridge * 46;
 	// Where she starts is always a gentle hill above the sea.
 	const home = Math.exp(-(x * x + z * z) / (90 * 90));
 	h = h * (1 - home) + Math.max(h, 6 + hills * 3) * home;
+	// The peak the sun has to be taken up, always on land.
+	const dp = ((x - PEAK.x) ** 2 + (z - PEAK.z) ** 2) / (PEAK.width * PEAK.width);
+	const peak = Math.exp(-dp);
+	h = Math.max(h, 8) * smooth(0, 0.35, peak) + h * (1 - smooth(0, 0.35, peak));
+	h += PEAK.rise * peak + hills * 4 * peak;
 	return h;
 }
 

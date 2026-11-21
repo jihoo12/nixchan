@@ -42,9 +42,9 @@ export interface Lift {
 export interface Land {
 	group: THREE.Group;
 	world: World;
-	/** What stands in it, to walk round (and for landmarks to add to). */
+	/** What stands in it, to walk round. */
 	grid: Grid<Obstacle>;
-	/** Columns of wind that lift her glider (landmarks add them). */
+	/** Columns of wind that lift her glider. */
 	lifts: Lift[];
 	/** The height of the ground, triangle for triangle as drawn. */
 	groundAt(x: number, z: number): number;
@@ -66,7 +66,24 @@ export function obstacleTop(f: Obstacle, x: number, z: number) {
 	return -Infinity;
 }
 
-export function createLandMaker(toon: Toon) {
+/** A flower's parts (stem, petals, middle), as plain triangles, and the colours they come in. */
+const FLOWER = (() => {
+	const parts = [
+		new THREE.CylinderGeometry(0.025, 0.035, 0.42, 4).translate(0, 0.21, 0),
+		new THREE.OctahedronGeometry(0.14, 0).scale(1, 0.5, 1).translate(0, 0.45, 0),
+		new THREE.OctahedronGeometry(0.06, 0).translate(0, 0.51, 0),
+	].map((g) => {
+		const flat = g.toNonIndexed();
+		flat.computeVertexNormals();
+		return { pos: flat.attributes.position.array as Float32Array, nor: flat.attributes.normal.array as Float32Array };
+	});
+	return { parts, verts: parts.reduce((n, p) => n + p.pos.length / 3, 0) };
+})();
+const STEM = new THREE.Color('#4f9a44');
+const PETALS = ['#fff3a8', '#ffb3c8', '#ffffff', '#b9c8ff', '#ffcf7a'].map((c) => new THREE.Color(c));
+const MIDDLE = new THREE.Color('#ffb53d');
+
+export function createLandMaker(toon: Toon, bloom?: THREE.Material) {
 	const ground = toon({ vertexColors: true });
 	const bark = toon({ color: '#8a5a3b' });
 	const leaves = toon({ color: '#ffffff' });
@@ -82,7 +99,7 @@ export function createLandMaker(toon: Toon) {
 	const c = new THREE.Color();
 	const UP = new THREE.Vector3(0, 1, 0);
 
-	/** Makes the land of a chunk, with no trees or boulders within `clear` (where a landmark goes). */
+	/** Makes the land of a chunk, with no trees or boulders within `clear`. */
 	function make(place: ChunkPlace, clear?: { x: number; z: number; r: number }): Land {
 		const { x0, z0, cx, cz } = place;
 		// Heights, one more all round than the chunk's own.
@@ -212,6 +229,54 @@ export function createLandMaker(toon: Toon) {
 			if (im.count) group.add(im);
 		}
 
+		// Flowers in the grass, that only grow where the day is (bloom's shader sees to that).
+		let flowers: THREE.BufferGeometry | null = null;
+		if (bloom) {
+			const fr = rng(cx, cz, 303);
+			const spots: { x: number; y: number; z: number; s: number; c: THREE.Color; turn: number }[] = [];
+			for (let k = 0; k < 110; k++) {
+				const x = x0 + fr() * SIZE;
+				const z = z0 + fr() * SIZE;
+				const pick = fr();
+				const size = 1.3 + fr() * 1.1;
+				const turn = fr() * 6;
+				const y = groundAt(x, z);
+				// In clumps, on the meadows more than in the woods.
+				if (y < 1.1 || y > 38 || slopeAt(x, z) > 0.6 || noise(x / 14, z / 14, 8) < 0.38 + woods(x, z) * 0.12) continue;
+				spots.push({ x, y, z, s: size, c: PETALS[Math.floor(noise(x / 30, z / 30, 6) * 4.99 + pick * 0.6) % PETALS.length], turn });
+			}
+			if (spots.length) {
+				const n = spots.length * FLOWER.verts;
+				const pos = new Float32Array(n * 3);
+				const nor = new Float32Array(n * 3);
+				const col = new Float32Array(n * 3);
+				const root = new Float32Array(n * 3);
+				let v = 0;
+				for (const f of spots) {
+					const cos = Math.cos(f.turn);
+					const sin = Math.sin(f.turn);
+					FLOWER.parts.forEach((part, pi) => {
+						const tint = pi === 0 ? STEM : pi === 1 ? f.c : MIDDLE;
+						for (let i = 0; i < part.pos.length; i += 3, v++) {
+							const px = part.pos[i] * f.s;
+							const pz = part.pos[i + 2] * f.s;
+							pos.set([f.x + px * cos - pz * sin, f.y - 0.05 + part.pos[i + 1] * f.s, f.z + px * sin + pz * cos], v * 3);
+							nor.set([part.nor[i] * cos - part.nor[i + 2] * sin, part.nor[i + 1], part.nor[i] * sin + part.nor[i + 2] * cos], v * 3);
+							col.set([tint.r, tint.g, tint.b], v * 3);
+							root.set([f.x, f.y - 0.1, f.z], v * 3);
+						}
+					});
+				}
+				flowers = new THREE.BufferGeometry();
+				flowers.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+				flowers.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+				flowers.setAttribute('color', new THREE.BufferAttribute(col, 3));
+				flowers.setAttribute('root', new THREE.BufferAttribute(root, 3));
+				flowers.computeBoundingSphere();
+				group.add(new THREE.Mesh(flowers, bloom));
+			}
+		}
+
 		// A few boulders to climb on.
 		const rocks = Math.floor(r() * 3.2);
 		for (let i = 0; i < rocks; i++) {
@@ -266,6 +331,7 @@ export function createLandMaker(toon: Toon) {
 			groundAt,
 			dispose() {
 				geo.dispose();
+				flowers?.dispose();
 				for (const im of [trunks, rounds, cones]) im.dispose();
 			},
 		};
