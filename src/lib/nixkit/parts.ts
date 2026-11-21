@@ -13,6 +13,7 @@
 //   parts.add({ at: [0, 0, 14], size: [2, 1, 2], kill: true });                // back to the checkpoint
 //   parts.pickup({ at: [0, 2, 8], onPick: () => coins++ });
 import * as THREE from 'three';
+import { createGrid } from './grid';
 import type { Toon } from './look';
 import { damp } from './util';
 import type { World } from './world';
@@ -48,7 +49,8 @@ export interface PartSpec {
 export interface Part {
 	spec: PartSpec;
 	mesh: THREE.Mesh;
-	/** Where its middle is now (it may be moving). */
+	/** Where its middle is now (it may be moving). Leave it be: it's filed by where it was put and
+	 * how far its `move` takes it, so a part moved by hand isn't found where it's gone. */
 	pos: THREE.Vector3;
 	/** How fast it's moving. */
 	vel: THREE.Vector3;
@@ -90,8 +92,20 @@ const GRIP = 0.3;
 const WAIST = 1.0;
 const TAU = Math.PI * 2;
 
+/** How wide the cells are that the parts are filed in (nixkit/grid.ts), so each question about
+ * where she is only looks at the parts nearby, however many there are. */
+const CELL = 8;
+
 export function createParts(scene: THREE.Scene, toon: Toon) {
 	const parts: Part[] = [];
+	const grid = createGrid<Part>(CELL);
+	// The parts that do something every frame, so the frame needn't look through the rest.
+	const movers: Part[] = [];
+	const lively: Part[] = [];
+	// Which was added first, so that where two parts would do as well (as tall as each other), the
+	// same one wins as when every part was looked through in turn.
+	const order = new Map<Part, number>();
+	let added = 0;
 	const pickups: { spec: PickupSpec; mesh: THREE.Object3D; taken: boolean; spin: number }[] = [];
 	let spawn = { pos: new THREE.Vector3(), heading: 0 };
 	let onKill: () => void = () => {};
@@ -106,9 +120,9 @@ export function createParts(scene: THREE.Scene, toon: Toon) {
 	/** The solid part she'd be standing on at (x, z), at height y: the one whose top is just there. */
 	const under = (x: number, z: number, y: number) => {
 		let best: Part | null = null;
-		for (const p of parts) {
+		for (const p of grid.at(x, z)) {
 			if (!p.solid || !covers(p, x, z) || Math.abs(p.top - y) > 0.12) continue;
-			if (!best || p.top > best.top) best = p;
+			if (!best || p.top > best.top || (p.top === best.top && order.get(p)! < order.get(best)!)) best = p;
 		}
 		return best;
 	};
@@ -116,12 +130,12 @@ export function createParts(scene: THREE.Scene, toon: Toon) {
 	const world: World = {
 		groundAt(x, z, y) {
 			let g = -Infinity;
-			for (const p of parts) if (p.solid && covers(p, x, z) && (y === undefined || p.bottom <= y + WAIST)) g = Math.max(g, p.top);
+			for (const p of grid.at(x, z)) if (p.solid && covers(p, x, z) && (y === undefined || p.bottom <= y + WAIST)) g = Math.max(g, p.top);
 			return g;
 		},
 		ceilingAt(x, z, y) {
 			let c = Infinity;
-			for (const p of parts) if (p.solid && covers(p, x, z) && p.bottom > y + WAIST) c = Math.min(c, p.bottom);
+			for (const p of grid.at(x, z)) if (p.solid && covers(p, x, z) && p.bottom > y + WAIST) c = Math.min(c, p.bottom);
 			return c;
 		},
 		nearby: () => [],
@@ -166,11 +180,24 @@ export function createParts(scene: THREE.Scene, toon: Toon) {
 				scene.remove(mesh);
 				geo.dispose();
 				material.dispose();
-				const i = parts.indexOf(part);
-				if (i >= 0) parts.splice(i, 1);
+				for (const list of [parts, movers, lively]) {
+					const i = list.indexOf(part);
+					if (i >= 0) list.splice(i, 1);
+				}
+				grid.remove(part);
+				order.delete(part);
 			},
 		};
 		parts.push(part);
+		order.set(part, added++);
+		// Filed under everywhere it reaches, all the way along its slide if it moves, so it needn't be
+		// filed again as it goes.
+		const reach = w / 2 + GRIP;
+		const deep = (spec.shape === 'cylinder' ? w : d) / 2 + GRIP;
+		const [bx, , bz] = spec.move?.by ?? [0, 0, 0];
+		grid.insert(part, base.x + Math.min(0, bx) - reach, base.z + Math.min(0, bz) - deep, base.x + Math.max(0, bx) + reach, base.z + Math.max(0, bz) + deep);
+		if (spec.move) movers.push(part);
+		if (spec.bounce || spec.vanish) lively.push(part);
 		return part;
 	};
 
@@ -296,9 +323,8 @@ export function createParts(scene: THREE.Scene, toon: Toon) {
 		},
 		/** Moves the moving parts on to `time`. Call before she moves, so she stands where they are. */
 		move(dt: number, time: number) {
-			for (const p of parts as (Part & { base: THREE.Vector3 })[]) {
-				const m = p.spec.move;
-				if (!m) continue;
+			for (const p of movers as (Part & { base: THREE.Vector3 })[]) {
+				const m = p.spec.move!;
 				const t = (time / m.period + (m.phase ?? 0)) * TAU;
 				const s = 0.5 - 0.5 * Math.cos(t);
 				const ds = (0.5 * Math.sin(t) * TAU) / m.period;
@@ -315,9 +341,9 @@ export function createParts(scene: THREE.Scene, toon: Toon) {
 			const on = her.grounded ? under(pos.x, pos.z, pos.y) : null;
 			// What she's in (for parts that aren't solid): her feet to her head, inside its box.
 			let into: Part | null = null;
-			for (const p of parts) {
+			for (const p of grid.at(pos.x, pos.z)) {
 				if (p.spec.solid !== false || !covers(p, pos.x, pos.z)) continue;
-				if (pos.y + 1.6 > p.bottom && pos.y < p.top) into = p;
+				if (pos.y + 1.6 > p.bottom && pos.y < p.top && (!into || order.get(p)! > order.get(into)!)) into = p;
 			}
 			const now = on ?? into;
 			bounced = Math.max(0, bounced - dt);
@@ -342,7 +368,7 @@ export function createParts(scene: THREE.Scene, toon: Toon) {
 				bounced = 0.2;
 				on.mesh.scale.y = 0.6;
 			}
-			for (const p of parts as (Part & { gone: number; standing: number })[]) {
+			for (const p of lively as (Part & { gone: number; standing: number })[]) {
 				// Squashed bounce pads spring back.
 				if (p.spec.bounce) p.mesh.scale.y = damp(p.mesh.scale.y, 1, 10, dt);
 				const v = p.spec.vanish;
@@ -382,6 +408,8 @@ export function createParts(scene: THREE.Scene, toon: Toon) {
 				}
 			}
 		},
+		/** The parts that might reach (x, z), out of all of them: what the world asks about. */
+		near: (x: number, z: number): readonly Part[] => grid.at(x, z),
 		/** Every part, to look through. */
 		all: parts as readonly Part[],
 	};
