@@ -110,8 +110,12 @@ export function createTalk(camera: THREE.Camera, ui: TalkUi = talkUiFromPage()) 
 		if (k === 'arrowleft' || k === 'arrowup') chosen = (chosen + choices.length - 1) % Math.max(choices.length, 1);
 		else if (k === 'arrowright' || k === 'arrowdown') chosen = (chosen + 1) % Math.max(choices.length, 1);
 		else if (k === 'e' || k === ' ' || k === 'enter') {
-			if (shown < typing.length) shown = typing.length;
-			else if (choices[chosen]) return choices[chosen].run();
+			if (shown < typing.length) {
+				// Hurried along: all their words at once (update() only writes them while typing).
+				shown = typing.length;
+				if (ui.text) ui.text.textContent = typing;
+				speaker?.onTyped?.();
+			} else if (choices[chosen]) return choices[chosen].run();
 			else if (!choices.length) return close();
 		} else if (/^[1-9]$/.test(k) && choices[Number(k) - 1]) return choices[Number(k) - 1].run();
 		drawChoices();
