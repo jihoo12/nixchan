@@ -139,6 +139,46 @@ The parts are one world; the island's terrain, rocks, trees and sky island are a
 `combineWorlds(terrain, parts.world)` makes one world of several: she stands on the highest ground
 any of them has, and walks round what stands in all of them.
 
+## Big worlds: chunks
+
+A world too big to have all at once can be cut into square chunks that come and go round her
+(`chunks.ts`). The game says what's in a chunk; the kit loads those near her, nearest first and a
+few a frame (`perFrame`, `busy`), and lets go of those she's left behind:
+
+```ts
+import { createChunks } from '../../lib/nixkit/chunks';
+
+const chunks = createChunks({
+	size: 64,       // metres across a chunk
+	radius: 220,    // load what's within this far of her (let go past radius + half a chunk, or `keep`)
+	load({ cx, cz, x0, z0, size }) {        // may return a promise (a fetch, a worker)
+		const hills = makeHills(x0, z0, size);
+		return { object: hills.mesh, world: hills.world, update: (dt, t) => {}, dispose: () => hills.dispose() };
+	},
+});
+const game = createGame({ spawn, world: (parts) => combineWorlds(chunks.world, parts.world) });
+chunks.attach(game.engine, () => game.player.pos);
+```
+
+A chunk's `world` is in the world's own coordinates, and is asked about at points in its chunk
+and up to `reach` (4 m) past its edge, so a rock or a bridge on the line between two can belong to
+either. Somewhere whose chunk hasn't come yet isn't `inside` the world: she stops at its edge
+rather than falling through ground that isn't there. `attach` holds the game until the chunks
+round her have come; after a `teleport`, do the same with `game.engine.waitFor(chunks.settle(x, z))`.
+`inside` in the options is the edge of the world, if it has one; `sea` and `fallOut` are as in a
+`World`.
+
+`world` as a function, as above, is how to have parts in a world of your own: `createGame`
+hands it the parts it's made.
+
+Parts are filed in a grid of 8 m cells (`grid.ts`), so a world of thousands of parts costs her
+no more to stand in than one of a dozen. `createGrid(cell)` is there for a game's own things too:
+`insert(item, minX, minZ, maxX, maxZ)`, then `at(x, z)` for what might reach a point.
+
+Three things a very big world may still want that the kit doesn't do yet: fewer details far off
+(LOD, or a cheap far version of each chunk), instancing for things there are many of, and moving
+the origin along with her for worlds tens of kilometres across (a few kilometres is fine as it is).
+
 ## The engine
 
 Under `createGame` is an engine (`engine.ts`) that owns the renderer, the scene and the camera
@@ -245,6 +285,8 @@ so the page styles them as it likes.
 - `camera.ts`: the camera that follows her, and `createFocus`, who it frames her with
 - `controls.ts`: keyboard, mouse and touch, and `createKeyRouter`, keys in layers
 - `parts.ts`: parts and pickups, and the world they make
+- `chunks.ts`: a big world in chunks that load and unload round her
+- `grid.ts`: a grid of cells, for finding what's near a point
 - `world.ts`: what a world is, and `combineWorlds`
 - `hud.ts`: what's shown over the game
 - `portal.ts`: portals to other pages

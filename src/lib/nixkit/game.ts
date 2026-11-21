@@ -26,7 +26,7 @@ import { createHud } from './hud';
 import type { EmoteMenu } from './emotions';
 import { makeToon } from './look';
 import { createNixchan, type BodyAction, type FirstPersonOptions } from './nixchan';
-import { createParts } from './parts';
+import { createParts, type Parts } from './parts';
 import { createChairs, type ChairOptions } from './chairs';
 import type { World } from './world';
 import type { NixClip } from '../experimental/nix-figure';
@@ -39,8 +39,9 @@ export interface GameOptions {
 	modelUrl: string;
 	/** Where she starts, and which way she faces (0 is towards +z). */
 	spawn: { pos: THREE.Vector3; heading: number };
-	/** A world of its own; without one, she's in the game's world of parts. */
-	world?: World;
+	/** A world of its own; without one, she's in the game's world of parts. Given as a function,
+	 * it's handed the parts to put in it too (`(parts) => combineWorlds(chunks.world, parts.world)`). */
+	world?: World | ((parts: Parts) => World);
 	/** Whether she can open her glider (she can't, by default: in a world of parts it's cheating). */
 	canGlide?: () => boolean;
 	/** Whether she can dash. */
@@ -85,7 +86,7 @@ export function createGame(opts: GameOptions) {
 	// The world: parts, unless the game brings its own. They move before she does, and what she's
 	// touching is worked out once she has.
 	const parts = createParts(scene, toon);
-	const world = opts.world ?? parts.world;
+	const world = typeof opts.world === 'function' ? opts.world(parts) : opts.world ?? parts.world;
 	const chairs = createChairs({ world, player: () => player, available: opts.chairs?.available });
 	const characterWorld: World = {
 		...world,
