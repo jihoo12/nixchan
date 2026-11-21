@@ -46,6 +46,8 @@ export interface GameOptions {
 	canGlide?: () => boolean;
 	/** Whether she can dash. */
 	canDash?: () => boolean;
+	/** Whether she has something in her arms: she walks with it held out. */
+	carrying?: () => boolean;
 	/** Opt in to an eye-level view (V / HUD button). Third person remains the default. */
 	firstPerson?: FirstPersonOptions;
 	/** Opt in to a player reaction menu (B / HUD). Scripted reactions work without it. */
@@ -137,6 +139,7 @@ export function createGame(opts: GameOptions) {
 		player: {
 			respawnAt: () => parts.spawn,
 			carriedBy: (x, z, y) => parts.carriedBy(x, z, y),
+			carrying: opts.carrying,
 		},
 		onModelFail: () => opts.onFail?.('model'),
 	});
