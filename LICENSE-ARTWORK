@@ -14,6 +14,7 @@ This covers:
   - src/assets/experimental/  the 3D path's sky gate
   - src/assets/monochrome/    the grey place's walls and pieces
   - src/games/lantern-mart/models/bom.vrm   Bom, Lantern Town's VRoid friend by the mart
+  - src/games/ember-spar/models/noeul.vrm   Noeul, the ember mage Nixchan spars with on the rooftop
 
 Nixchan's illustrations first appeared in https://github.com/jihoo12/jihoo12.github.io, under the
 same license.
