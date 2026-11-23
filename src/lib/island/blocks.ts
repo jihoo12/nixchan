@@ -12,8 +12,8 @@
 // E sets it there and Q takes the top one of the column in front of her back into the bag. With a
 // mouse, where it goes is wherever the pointer is (within her reach): pointing at the ground puts a
 // block there, at the top of a stack puts one on top, at its side starts (or adds to) the stack next
-// to it. A click sets it, a right-click takes back the block pointed at. On a touch screen, or with
-// the pointer off the island, it's the cell in front of her, as before.
+// to it. On a touch screen or before using the mouse, it's the cell in front of her.
+// A missed mouse ray never falls back to placing in front of her.
 import * as THREE from 'three';
 import type { NixFigure } from '../experimental/nix-figure';
 import type { Offer } from '../nixkit/interact';
@@ -21,6 +21,7 @@ import type { Inventory } from './inventory';
 import type { Toon } from './look';
 import { loadJSON, saveJSON } from './save';
 import { skyCeiling } from './skyisle';
+import { BUILD_RAY_FAR, BUILD_REACH, castBuildSurface, type createBuildAim } from './build-aim';
 import { WORLD_EDGE, deckAt, terrainAt } from './terrain';
 
 export const STONE_BLOCK = 'stone-block';
@@ -33,10 +34,6 @@ const PAD = 0.3;
 const REACH_UP = 2.6;
 const REACH_DOWN = 1.6;
 const MAX_BLOCKS = 2000;
-/** How far from her (across the ground) the pointer can set or take a block. */
-const POINT_REACH = 6;
-/** How far out from the camera the pointer looks for the ground. */
-const POINT_FAR = 70;
 
 interface Column {
 	i: number;
@@ -98,9 +95,8 @@ export interface BlocksContext {
 	 * garden, the forge, the stones), and clear of trees and rocks. */
 	open: (x: number, z: number) => boolean;
 	toast: (text: string) => void;
-	/** For aiming with the mouse: the camera, and the canvas the pointer moves over. */
-	camera: THREE.Camera;
-	canvas: HTMLCanvasElement;
+	/** The same mouse input and visibility test as the other construction tools. */
+	aim: ReturnType<typeof createBuildAim>;
 	selectBuild: () => void;
 }
 
@@ -234,36 +230,21 @@ export function createBlocks(ctx: BlocksContext) {
 	/** Whether her middle is within the ground of cell (i, j), so a block there would be under her. */
 	const standingIn = (i: number, j: number) => Math.abs(ctx.pos.x - (i + 0.5)) < 0.5 + PAD + 0.05 && Math.abs(ctx.pos.z - (j + 0.5)) < 0.5 + PAD + 0.05;
 
-	// The mouse, while it's over the island (a finger, or the pointer leaving, hands back to her facing).
-	const pointer = { on: false, ndc: new THREE.Vector2() };
-	ctx.canvas.addEventListener('pointermove', (e) => {
-		pointer.on = e.pointerType === 'mouse';
-		const r = ctx.canvas.getBoundingClientRect();
-		pointer.ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
-	});
-	ctx.canvas.addEventListener('pointerleave', () => (pointer.on = false));
-	ctx.canvas.addEventListener('pointerdown', (e) => {
-		if (e.pointerType !== 'mouse') pointer.on = false;
-	});
-
-	const ray = new THREE.Raycaster();
 	const box = new THREE.Box3();
 	const hit = new THREE.Vector3();
-	const probe = new THREE.Vector3();
 	/** The ground (or the sea) at (x, z), leaving the blocks out: they're met as boxes. */
 	const surface = (x: number, z: number) => Math.max(terrainAt(x, z), deckAt(x, z), 0);
 	/** What the pointer's on: a block column (and which face of it), or the ground; or null. */
-	const pointed = (): { column: Column; normal: THREE.Vector3 } | { ground: THREE.Vector3 } | null => {
-		ray.setFromCamera(pointer.ndc, ctx.camera);
-		const { origin, direction } = ray.ray;
+	const pointed = (ray: THREE.Ray): { column: Column; normal: THREE.Vector3 } | { ground: THREE.Vector3 } | null => {
+		const { origin } = ray;
 		// The nearest stack it passes into, of those near her.
 		let best: { column: Column; normal: THREE.Vector3 } | null = null;
-		let bestT = POINT_FAR;
+		let bestT = BUILD_RAY_FAR;
 		for (const c of columns.values()) {
-			if (Math.hypot(c.i + 0.5 - ctx.pos.x, c.j + 0.5 - ctx.pos.z) > POINT_REACH + 8) continue;
+			if (Math.hypot(c.i + 0.5 - ctx.pos.x, c.j + 0.5 - ctx.pos.z) > BUILD_REACH + 8) continue;
 			box.min.set(c.i, c.foot, c.j);
 			box.max.set(c.i + 1, topOf(c), c.j + 1);
-			if (!ray.ray.intersectBox(box, hit)) continue;
+			if (!ray.intersectBox(box, hit)) continue;
 			const t = hit.distanceTo(origin);
 			if (t >= bestT) continue;
 			bestT = t;
@@ -278,25 +259,9 @@ export function createBlocks(ctx: BlocksContext) {
 			faces.sort((p, q) => Math.abs(p[0]) - Math.abs(q[0]));
 			best = { column: c, normal: faces[0][1] };
 		}
-		// The ground, nearer than that: stepped along, then narrowed down.
-		let prev = 0;
-		for (let t = 0.5; t < bestT; t += 0.25) {
-			probe.copy(origin).addScaledVector(direction, t);
-			if (probe.y > surface(probe.x, probe.z)) {
-				prev = t;
-				continue;
-			}
-			let lo = prev;
-			let hi = t;
-			for (let k = 0; k < 8; k++) {
-				const mid = (lo + hi) / 2;
-				probe.copy(origin).addScaledVector(direction, mid);
-				if (probe.y > surface(probe.x, probe.z)) lo = mid;
-				else hi = mid;
-			}
-			return { ground: probe.copy(origin).addScaledVector(direction, hi) };
-		}
-		return best;
+		const floor = castBuildSurface(ray, surface, bestT);
+		if (ctx.aim.solid(ray, floor?.distance ?? bestT)) return null;
+		return floor ? { ground: floor.point } : best;
 	};
 
 	interface Aim {
@@ -327,10 +292,11 @@ export function createBlocks(ctx: BlocksContext) {
 		else spot = { bottom, top };
 		return { i, j, column, spot };
 	};
-	const away = (i: number, j: number) => Math.hypot(i + 0.5 - ctx.pos.x, j + 0.5 - ctx.pos.z) > POINT_REACH;
-	const aimAt = (usePointer = pointer.on): Aim | null => {
-		if (usePointer) {
-			const at = pointed();
+	const away = (i: number, j: number) => Math.hypot(i + 0.5 - ctx.pos.x, j + 0.5 - ctx.pos.z) > BUILD_REACH;
+	const aimAt = (): Aim | null => {
+		const cursor = ctx.aim.ray();
+		if (cursor.mode === 'mouse') {
+			const at = cursor.ray ? pointed(cursor.ray) : null;
 			if (!at) return null;
 			if ('ground' in at) {
 				const i = Math.floor(at.ground.x);
@@ -378,7 +344,7 @@ export function createBlocks(ctx: BlocksContext) {
 	};
 	const take = () => {
 		if (!ctx.canAct()) return false;
-		const column = aimAt(on && pointer.on)?.take;
+		const column = aimAt()?.take;
 		if (!column) return false;
 		if (!inventory.fits(STONE_BLOCK)) {
 			ctx.toast('Her bag is too full to take it.');
@@ -400,7 +366,7 @@ export function createBlocks(ctx: BlocksContext) {
 		const aim = aimAt();
 		const left = inventory.count(STONE_BLOCK);
 		if (!left) return { label: aim?.take ? 'Out of blocks (Q takes one back)' : 'Out of blocks · make some at the forge' };
-		if (!aim?.place) return { label: pointer.on ? 'Point at where it should go' : 'Turn to where it should go' };
+		if (!aim?.place) return { label: ctx.aim.mode === 'mouse' ? 'Point at an open spot within reach' : 'Turn to where it should go' };
 		if (typeof aim.place.spot === 'string') return { label: aim.place.spot };
 		return { label: `Place a block (${left})`, go: place };
 	};

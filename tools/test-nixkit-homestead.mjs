@@ -101,7 +101,10 @@ test('the house, saved garden, forge and village connect on foot using actual wo
 		keeper: { name: 'Pebble', talk: () => { traded = true; } } });
 	const forge = createForge({ ...ctx, site: FORGE_SITE, onUpgrade() {} });
 	const house = createHouse({ ...ctx, site: HOUSE_SITE });
-	const machines = createMachines({ ...ctx, garden: farm.garden, swimming: () => false, selectBuild() {} });
+	let aim = { mode: 'facing' }, grounded = true;
+	const machines = createMachines({ ...ctx, garden: farm.garden, swimming: () => false, selectBuild() {},
+		canAct: () => grounded, aim: () => aim });
+	const sprinklerRing = scene.children.at(-1);
 
 	assert.deepEqual(farm.garden.plots.slice(0, 2), plots, 'crop slots hydrate unchanged');
 	assert.equal(inventory.count('tool-can'), 1);
@@ -151,6 +154,67 @@ test('the house, saved garden, forge and village connect on foot using actual wo
 	placeSprinkler.go();
 	assert.equal(inventory.count('sprinkler'), 0);
 	assert.equal(JSON.parse(storage.get('island-machines')).sprinklers.length, 1);
+
+	// Pointer placement uses the actual rotated garden, not the slot nearest the avatar's forward aim.
+	const backPlots = [farm.garden.cols, farm.garden.cols + 1, 2 * farm.garden.cols, 2 * farm.garden.cols + 1]
+		.map(farm.garden.plotLocal);
+	const back = farm.garden.world(
+		backPlots.reduce((sum, point) => sum + point.lx, 0) / 4,
+		backPlots.reduce((sum, point) => sum + point.lz, 0) / 4,
+	);
+	const first = V(sprinkler.x, sprinkler.z), second = V(back.x, back.z);
+	const midpoint = first.clone().lerp(second, .5);
+	pos.copy(midpoint);
+	figure.group.rotation.y = Math.atan2(first.x - pos.x, first.z - pos.z);
+	const savedSlots = () => JSON.parse(storage.get('island-machines')).sprinklers.map(({ slot }) => slot);
+	assert.equal(sprinklerRing.geometry.type, 'RingGeometry');
+	assert.equal(inventory.add('sprinkler'), true);
+	machines.start();
+	aim = { mode: 'mouse', hit: first };
+	machines.update(0, 0);
+	assert.equal(sprinklerRing.visible, false, 'occupied pointer target does not snap to a free neighbor');
+	assert.equal(machines.buildOffer()?.go, undefined);
+	aim = { mode: 'mouse', hit: second };
+	machines.update(0, 0);
+	assert.equal(sprinklerRing.visible, true);
+	assert.ok(sprinklerRing.position.distanceTo(second.clone().add(new THREE.Vector3(0, .04, 0))) < 1e-7);
+	const staleOffer = machines.buildOffer();
+	assert.equal(typeof staleOffer?.go, 'function');
+	aim = { mode: 'mouse', hit: null };
+	machines.update(0, 0);
+	assert.equal(sprinklerRing.visible, false, 'misses clear the preview without using the avatar facing');
+	staleOffer.go();
+	assert.deepEqual(savedSlots(), [0], 'moving the cursor before E invalidates its old offer');
+	assert.equal(inventory.count('sprinkler'), 1);
+	aim = { mode: 'mouse', hit: second };
+	grounded = false;
+	machines.update(0, 0);
+	assert.equal(sprinklerRing.visible, false);
+	assert.equal(machines.buildOffer(), null);
+	grounded = true;
+	pos.copy(second).add(new THREE.Vector3(0, 2, 0));
+	assert.equal(machines.buildOffer()?.go, undefined, 'a far lower plot is not within reach');
+	pos.copy(second).add(new THREE.Vector3(3, 0, 0));
+	assert.equal(machines.buildOffer()?.go, undefined, 'a far-away target is not within reach');
+	pos.copy(midpoint);
+	aim = { mode: 'mouse', hit: second.clone().add(new THREE.Vector3(0, .9, 0)) };
+	assert.equal(machines.buildOffer()?.go, undefined, 'a ray above the plot cannot select it');
+	aim = { mode: 'mouse', hit: { x: second.x, y: second.y, z: second.z, kind: 'blocked' } };
+	assert.equal(machines.buildOffer()?.go, undefined, 'a collider over a free plot still blocks placement');
+	aim = { mode: 'mouse', hit: second };
+	machines.buildOffer().go();
+	assert.deepEqual(savedSlots(), [0, 2]);
+	assert.equal(inventory.count('sprinkler'), 0);
+	aim = { mode: 'mouse', hit: null };
+	machines.take();
+	assert.deepEqual(savedSlots(), [0, 2], 'a removal miss does not take the nearest object');
+	aim = { mode: 'mouse', hit: { x: second.x + .35, y: second.y, z: second.z, kind: 'blocked' } };
+	machines.take();
+	assert.deepEqual(savedSlots(), [0, 2], 'a nearby separate blocker does not grab a sprinkler');
+	aim = { mode: 'mouse', hit: { x: second.x, y: second.y + .62, z: second.z, kind: 'blocked' } };
+	machines.take();
+	assert.deepEqual(savedSlots(), [0], 'Q can point at the sprinkler head and only takes the aimed slot');
+	assert.equal(inventory.count('sprinkler'), 1);
 
 	assert.deepEqual(forge.veinSource.veins(),
 		ORE_VEINS.map(([x, y, z], i) => ({ id: `vein-${i}`, x, y, z })), 'persistent drill IDs and their world coordinates');

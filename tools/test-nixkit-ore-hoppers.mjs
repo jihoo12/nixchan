@@ -27,7 +27,7 @@ const belts = [...beltRun(7), ...beltRun(1)];
 const windmills = [{ x: 14.5, z: 0 }];
 const drill = (vein, flight = [], stored = 0) => ({ vein, yaw: 0, from: 10_000, stored, flight });
 
-function fixture(t, initial, startingItems = {}) {
+function fixture(t, initial, startingItems = {}, withAim = false) {
 	const saved = new Map([[powerKey, JSON.stringify(initial)]]);
 	const oldDocument = globalThis.document;
 	const oldStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
@@ -42,7 +42,7 @@ function fixture(t, initial, startingItems = {}) {
 		if (oldStorage) Object.defineProperty(globalThis, 'localStorage', oldStorage);
 		else delete globalThis.localStorage;
 	});
-	let now = 10_000, open = true;
+	let now = 10_000, open = true, aim = { mode: 'facing' };
 	t.mock.method(Date, 'now', () => now);
 	const bag = new Map(Object.entries(startingItems));
 	const definitions = new Map(), denied = new Set(), picked = [];
@@ -62,19 +62,19 @@ function fixture(t, initial, startingItems = {}) {
 	const ripe = new Map(veins.map((v) => [v.id, 1e9]));
 	const regrowMs = 1_000_000;
 	const init = () => {
-		const scene = new THREE.Scene(), pos = new THREE.Vector3();
+		const scene = new THREE.Scene(), pos = new THREE.Vector3(), features = [];
 		const power = createPower({
 			scene, renderer: { init: () => new Promise(() => {}) }, toon: (p) => new THREE.MeshStandardMaterial(p),
 			inventory, pos, figure: { group: new THREE.Group(), node: () => null }, modelUrl: '', ore: { id: 'ore', color: '#b79771' },
 			veins: { veins: () => veins, ripeAt: (id) => ripe.get(id), take: (id, at) => ripe.set(id, at + regrowMs), regrowMs },
-			hopper, groundAt: terrainAt, addFeature() {}, removeFeature() {}, canAct: () => true, canCarry: () => true, toast() {},
+			hopper, ...(withAim ? { aim: () => aim } : {}), groundAt: terrainAt, addFeature(feature) { features.push(feature); }, removeFeature() {}, canAct: () => true, canCarry: () => true, toast() {},
 			open: () => open, openForBelt: () => open, selectBuild: (kind) => (picked.push(kind), true),
 		});
-		return { power, scene, at: ({x,z}) => pos.set(x, terrainAt(x, z), z) };
+		return { power, scene, features, at: ({x,z}) => pos.set(x, terrainAt(x, z), z) };
 	};
 	return {
 		init, read: () => JSON.parse(saved.get(powerKey)), count: inventory.count, ready: (...ids) => ids.forEach((id) => ripe.set(id, now)),
-		advance: (ms) => (now += ms), allowBuild: (value) => (open = value), definitions, picked, denied,
+		advance: (ms) => (now += ms), setAim: (next) => (aim = next), allowBuild: (value) => (open = value), definitions, picked, denied,
 	};
 }
 
@@ -210,4 +210,95 @@ test('E never removes occupied belt or windmill; Q can recover either with an em
 	assert.equal(power.takeBuild('belt'),true);
 	assert.equal(f.count('belt'),1);
 	assert.equal(f.read().belts.length,belts.length-1);
+});
+
+const mouse = (x, z, kind = 'surface', lift = 0) => ({ mode: 'mouse', hit: { x, y: terrainAt(x,z) + lift, z, kind } });
+const emptyPower = { windmills: [], drills: [], belts: [], hopper: 0 };
+
+test('pointer hopper targets the real hit, rejects miss/blocked/distant hits, and Q follows cursor', (t) => {
+	const f = fixture(t, emptyPower, { [ORE_HOPPER]: 1 }, true);
+	const {power, at} = f.init();
+	at({x:14.5,z:4});
+	assert.equal(power.select(ORE_HOPPER),true);
+	f.setAim(mouse(16.3, 4.15));
+	const stale = power.buildOffer().go;
+	assert.equal(typeof stale,'function');
+	for (const aim of [{mode:'mouse',hit:null}, mouse(16.3,4.15,'blocked'), mouse(24.3,4.15), mouse(16.3,4.15,'surface',1.5)]) {
+		f.setAim(aim);
+		assert.equal(power.buildOffer().go,undefined);
+		stale();
+		assert.equal(power.hoppers(),0);
+		assert.equal(f.count(ORE_HOPPER),1);
+	}
+	f.setAim(mouse(16.3,4.15));
+	power.buildOffer().go();
+	assert.deepEqual(f.read().hoppers.map(({x,z})=>[x,z]),[[16.3,4.15]],'the aimed world position wins over character facing');
+	f.setAim({mode:'mouse',hit:null});
+	assert.equal(power.takeBuild(ORE_HOPPER),false);
+	f.setAim(mouse(16.3,4.15,'blocked',0.7));
+	assert.equal(power.buildOffer().go,undefined);
+	assert.equal(power.takeBuild(ORE_HOPPER),true);
+	assert.equal(power.hoppers(),0);
+	f.setAim({mode:'facing'});
+	power.buildOffer().go();
+	assert.deepEqual(f.read().hoppers.map(({x,z})=>[x,z]),[[14.5,6.2]],'touch/facing still builds in front of her');
+});
+
+test('pointer belt snaps to cursor cell while heading supplies belt orientation; only a surface counts', (t) => {
+	const f = fixture(t,emptyPower,{belt:2},true);
+	const {power,at}=f.init();
+	at({x:14.5,z:4});
+	assert.equal(power.select('belt'),true);
+	f.setAim(mouse(16.95,4.17,'blocked'));
+	assert.equal(power.buildOffer().go,undefined);
+	f.setAim(mouse(16.95,4.17));
+	power.buildOffer().go();
+	assert.deepEqual(f.read().belts,[[16,4,0]],'+z direction comes from facing, not the eastward mouse ray');
+	f.setAim(mouse(16.95,4.17,'surface',0.14));
+	assert.match(power.buildOffer().label,/Take the belt back/);
+	assert.equal(power.takeBuild('belt'),true);
+	assert.deepEqual(f.read().belts,[]);
+});
+
+test('pointer drills only snap close to a pointed vein in player reach and Q cannot remove a nearby unpointed drill', (t) => {
+	const f = fixture(t,emptyPower,{drill:2},true);
+	const {power,at,features}=f.init();
+	at({x:14.5,z:2});
+	assert.equal(power.select('drill'),true);
+	f.setAim(mouse(14.5,5.5));
+	assert.equal(power.buildOffer().go,undefined,'aimed vein is too far from player');
+	f.setAim(mouse(14.5,1));
+	assert.equal(power.buildOffer().go,undefined,'aimed ground is not close enough to a vein');
+	f.setAim(mouse(14.5,-0.5,'blocked',0.35));
+	assert.equal(power.buildOffer().go,undefined,'occluding solid cannot install free drill');
+	f.setAim(mouse(14.5,-0.5,'surface',0.65));
+	power.buildOffer().go();
+	assert.deepEqual(f.read().drills.map(d=>d.vein),['vein-0']);
+	at(veins[0]);
+	f.setAim(mouse(17.5,-0.5));
+	assert.equal(power.takeBuild('drill'),false);
+	f.setAim(mouse(14.5,-0.5,'blocked',0.15));
+	assert.equal(power.takeBuild('drill'),false,'an unrelated collider at the vein center is not a drill component');
+	const leg = features.find(feature => feature.r === 0.15);
+	f.setAim(mouse(leg.x,leg.z,'blocked'));
+	assert.match(power.buildOffer().label,/Take back the drill/);
+	assert.equal(power.takeBuild('drill'),true);
+	assert.deepEqual(f.read().drills,[]);
+});
+
+test('pointer windmill places on dry high ground and never falls back to the nearby machine on Q', (t) => {
+	const f = fixture(t,emptyPower,{windmill:1},true);
+	const {power,at}=f.init();
+	at({x:14.5,z:4});
+	assert.equal(power.select('windmill'),true);
+	f.setAim(mouse(17.4,4.1));
+	power.buildOffer().go();
+	assert.deepEqual(f.read().windmills,[{x:17.4,z:4.1}]);
+	at({x:17.4,z:4.1});
+	f.setAim({mode:'mouse',hit:null});
+	assert.equal(power.takeBuild('windmill'),false);
+	f.setAim(mouse(17.4,4.1,'blocked',2.4));
+	assert.match(power.buildOffer().label,/Take back the windmill/);
+	assert.equal(power.takeBuild('windmill'),true);
+	assert.deepEqual(f.read().windmills,[]);
 });

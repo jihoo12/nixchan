@@ -29,6 +29,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { NixFigure } from '../experimental/nix-figure';
 import type { Feature } from './features';
+import { BUILD_REACH, type PlacementAim } from './build-aim';
 import type { Offer } from '../nixkit/interact';
 import type { Inventory } from './inventory';
 import type { Toon } from './look';
@@ -70,6 +71,9 @@ const HOPPER_FLOOR = 0.35;
  * the drill she's carrying to go on it. */
 const AHEAD = 2.2;
 const DRILL_REACH = 3;
+const DRILL_SNAP = 1.25;
+const POINTER_GROUND_TOLERANCE = 0.38;
+const NO_POINTER_TARGET = 'Aim at ground or a build target within reach';
 /** How close a belt has to start to a drill's bin to take its ore, and come to the hopper to give it. */
 const PICK_UP = 1.3;
 const HAND_IN = 1.0;
@@ -118,6 +122,8 @@ export interface PowerContext {
 	removeFeature: (f: Feature) => void;
 	/** Where she is. */
 	pos: THREE.Vector3;
+	/** First visible mouse hit, or facing mode (touch and keyboard fallback). */
+	aim?: () => PlacementAim;
 	/** Whether she's on her feet and free (not busy, not swimming, not up on Cloudrest). */
 	canAct: () => boolean;
 	/** Whether she can keep carrying: out of the water, and down on the island. */
@@ -821,7 +827,7 @@ export function createPower(ctx: PowerContext) {
 		held: new Map<string, THREE.Object3D>(),
 		ghosts: new Map<string, THREE.Object3D>(),
 		/** Where it would go, and whether it can. */
-		spot: null as { x: number; y: number; z: number; ok: boolean; why?: string; vein?: Vein; belt?: Belt; existing?: Belt } | null,
+		spot: null as BuildSpot | null,
 	};
 	const glass = new THREE.MeshBasicMaterial({ color: '#bff0ff', transparent: true, opacity: 0.45, depthWrite: false });
 	const glassNo = new THREE.MeshBasicMaterial({ color: '#ff9a9a', transparent: true, opacity: 0.35, depthWrite: false });
@@ -907,66 +913,114 @@ export function createPower(ctx: PowerContext) {
 	};
 	const freeVeins = () => veins.filter((v) => !state.drills.some((d) => d.vein === v.id));
 
-	const aim = new THREE.Vector3();
-	const findSpot = () => {
-		const turn = ctx.figure.group.getWorldDirection(aim);
-		if (carry.kind === 'windmill') {
-			const x = ctx.pos.x + turn.x * AHEAD;
-			const z = ctx.pos.z + turn.z * AHEAD;
+	type BuildSpot = {
+		x: number; y: number; z: number; ok: boolean; why?: string;
+		vein?: Vein; belt?: Belt; existing?: Belt; receiver?: HopperSite;
+		drill?: Drill; windmill?: Windmill;
+	};
+	const direction = new THREE.Vector3();
+	const readAim = (): PlacementAim => ctx.aim?.() ?? { mode: 'facing' };
+	const pointerReach = (x: number, z: number) => Math.hypot(x - ctx.pos.x, z - ctx.pos.z) <= BUILD_REACH;
+	const findSpot = (aim = readAim()): BuildSpot | null => {
+		const kind = carry.kind;
+		if (!kind) return null;
+		const pointer = aim.mode === 'mouse';
+		const hit = aim.mode === 'mouse' ? aim.hit : null;
+		if (pointer && (!hit || ![hit.x, hit.y, hit.z].every(Number.isFinite) || !pointerReach(hit.x, hit.z))) return null;
+		const turn = ctx.figure.group.getWorldDirection(direction);
+		const at = (distance: number) => hit ?? { x: ctx.pos.x + turn.x * distance, z: ctx.pos.z + turn.z * distance };
+		const blocked = hit?.kind === 'blocked';
+		const isCollider = (x: number, z: number) => blocked && !!hit && Math.hypot(hit.x - x, hit.z - z) < 0.06;
+		const pointsAtGround = !hit || (!blocked && Math.abs(hit.y - terrainAt(hit.x, hit.z)) <= POINTER_GROUND_TOLERANCE);
+		const pointedAt = (x: number, z: number, r: number, low: number, high: number) =>
+			!!hit && pointerReach(x, z) && Math.hypot(hit.x - x, hit.z - z) <= r && hit.y >= low && hit.y <= high;
+		if (kind === 'windmill') {
+			const existingWindmill = state.windmills.find((w) => {
+				if (!pointer) return nearWindmillToTake(w);
+				const y = ctx.groundAt(w.x, w.z);
+				return Math.abs(ctx.pos.y - y) < 2.5 && (blocked ? isCollider(w.x, w.z) : pointedAt(w.x, w.z, 1.05, y - 0.35, y + TOWER_TOP + 1.6));
+			});
+			if (existingWindmill) return { ...existingWindmill, y: ctx.groundAt(existingWindmill.x, existingWindmill.z), ok: false, windmill: existingWindmill, why: 'Take back the windmill (Q)' };
+			if (!pointsAtGround) return null;
+			const { x, z } = at(AHEAD);
 			const y = terrainAt(x, z);
 			let why: string | undefined;
 			if (!count('windmill')) why = 'No windmill in your bag';
 			else if (state.windmills.length >= MAX_WINDMILLS) why = 'There are already six windmills set up';
 			else if (y < WINDY) why = 'Too sheltered here: a windmill wants high ground';
+			else if (pointer && (Math.abs(y - ctx.pos.y) > 1.15 || Math.hypot(x, z) > WORLD_EDGE - 0.7)) why = NO_POINTER_TARGET;
 			else if (slopeUp(x, z) < 0.8) why = 'Too steep here for a windmill';
 			else if (!ctx.open(x, z) || state.windmills.some((w) => Math.hypot(w.x - x, w.z - z) < 3) || beltsNear(x, z, 1.4).length)
 				why = 'No room for a windmill here';
 			return { x, y: ctx.groundAt(x, z), z, ok: !why, why };
 		}
-		if (carry.kind === 'ore-hopper') {
-			const x = ctx.pos.x + turn.x * AHEAD;
-			const z = ctx.pos.z + turn.z * AHEAD;
+		if (kind === 'ore-hopper') {
+			const { x, z } = at(AHEAD);
+			const receiver = state.hoppers.find((h) => {
+				const floor = terrainAt(h.x, h.z);
+				return Math.abs(floor - ctx.pos.y) < 1.8 && (pointer ? (blocked ? isCollider(h.x, h.z) : pointedAt(h.x, h.z, 0.85, floor - 0.3, floor + 1.25)) : Math.hypot(x - h.x, z - h.z) < 0.85);
+			});
+			if (receiver) return { x: receiver.x, y: terrainAt(receiver.x, receiver.z), z: receiver.z, ok: false, why: 'Take back this ore hopper (Q)', receiver };
+			if (!pointsAtGround) return null;
 			const y = terrainAt(x, z);
-			const receiver = state.hoppers.find((h) => Math.hypot(x - h.x, z - h.z) < 0.85 && Math.abs(terrainAt(h.x, h.z) - ctx.pos.y) < 1.8);
 			let why: string | undefined;
-			if (receiver) why = 'Take back this ore hopper (Q)';
-			else if (!count('ore-hopper')) why = 'No ore hopper in your bag';
+			if (!count('ore-hopper')) why = 'No ore hopper in your bag';
 			else if (state.hoppers.length >= MAX_ORE_HOPPERS) why = 'There are already four built ore hoppers';
 			else if (y < 0.3 || Math.abs(y - ctx.pos.y) > 1.15 || Math.hypot(x, z) > WORLD_EDGE - 0.7 || slopeUp(x, z) < 0.8)
 				why = 'An ore hopper wants level dry ground';
 			else if (!ctx.open(x, z) || [ctx.hopper, ...state.hoppers].some((p) => Math.hypot(p.x - x, p.z - z) < 1.1)
 				|| belts.has(key(Math.floor(x), Math.floor(z))) || beltsNear(x, z, 0.6).length)
 				why = 'No room for an ore hopper here';
-			return { x, y, z, ok: !why, why, receiver };
+			return { x, y, z, ok: !why, why };
 		}
-		if (carry.kind === 'belt') {
-			// The cell in front of her, the belt running the way she faces.
-			const i = Math.floor(ctx.pos.x + turn.x * 1.1);
-			const j = Math.floor(ctx.pos.z + turn.z * 1.1);
+		if (kind === 'belt') {
+			// The aimed cell determines position; her own heading still determines direction.
+			if (!pointsAtGround) return null;
+			const aimCell = at(1.1);
+			const i = Math.floor(aimCell.x), j = Math.floor(aimCell.z);
 			const dir = Math.abs(turn.x) > Math.abs(turn.z) ? (turn.x > 0 ? 1 : 3) : turn.z > 0 ? 0 : 2;
 			const { x, z } = centre({ i, j });
+			const y = terrainAt(x, z);
+			if (pointer && (!pointerReach(x, z) || Math.abs(y - ctx.pos.y) > 1.5)) return null;
 			const existing = belts.get(key(i, j));
 			let why: string | undefined;
 			if (!existing) {
-				if (terrainAt(x, z) < 0.3 || !ctx.openForBelt(x, z) || slopeUp(x, z) < 0.7) why = 'No belt can go here';
-				else if (Math.abs(terrainAt(x, z) - ctx.pos.y) > 1.5) why = 'Turn to where it should go';
+				if (y < 0.3 || !ctx.openForBelt(x, z) || slopeUp(x, z) < 0.7) why = 'No belt can go here';
+				else if (Math.abs(y - ctx.pos.y) > 1.5) why = 'Turn to where it should go';
 				else if (belts.size >= MAX_BELTS) why = 'That’s as many belts as the island can take';
 			}
-			return { x, y: terrainAt(x, z), z, ok: !why, why, belt: { i, j, dir }, existing };
+			return { x, y, z, ok: !why && !existing, why, belt: { i, j, dir }, existing };
 		}
-		// A drill goes on the free vein nearest a little in front of her.
-		const fx = ctx.pos.x + turn.x * 0.8;
-		const fz = ctx.pos.z + turn.z * 0.8;
+		// Facing mode searches ahead as before. Mouse mode only snaps to the pointed vein.
+		if (!pointer) {
+			const existingDrill = state.drills.find(nearDrill);
+			const v = existingDrill && veinOf(existingDrill.vein);
+			if (v) return { x: v.x, y: v.y + 0.1, z: v.z, ok: false, drill: existingDrill, why: 'Take back the drill (Q)' };
+		}
+		if (blocked) {
+			const view = drillViews.find((v) => v.features.some((part) => isCollider(part.x, part.z)));
+			const v = view && veinOf(view.d.vein);
+			if (view && v && Math.hypot(v.x - ctx.pos.x, v.z - ctx.pos.z) <= DRILL_REACH && Math.abs(ctx.pos.y - v.y) < 2.5)
+				return { x: v.x, y: v.y + 0.1, z: v.z, ok: false, drill: view.d, why: 'Take back the drill (Q)' };
+			return null;
+		}
+		const target = at(0.8);
 		let best: Vein | null = null;
-		let bestD = DRILL_REACH;
-		for (const v of freeVeins()) {
-			const d = Math.hypot(v.x - fx, v.z - fz);
-			if (d < bestD && Math.abs(ctx.pos.y - v.y) < 2.5) {
-				best = v;
-				bestD = d;
-			}
+		let bestD = pointer ? DRILL_SNAP : DRILL_REACH;
+		let drill: Drill | undefined;
+		for (const v of (pointer ? veins : freeVeins())) {
+			const installed = pointer ? state.drills.find((d) => d.vein === v.id) : undefined;
+			const d = Math.hypot(v.x - target.x, v.z - target.z);
+			if (d >= bestD || Math.abs(ctx.pos.y - v.y) >= 2.5) continue;
+			if (pointer && (Math.hypot(v.x - ctx.pos.x, v.z - ctx.pos.z) > DRILL_REACH
+				|| !pointedAt(v.x, v.z, DRILL_SNAP, v.y - 0.35, v.y + (installed ? BIT_TOP + 0.9 : 1.4)))) continue;
+			best = v;
+			bestD = d;
+			drill = installed;
 		}
-		return best ? { x: best.x, y: best.y + 0.1, z: best.z, ok: !!count('drill'), vein: best, why: count('drill') ? undefined : 'No drill in your bag' } : null;
+		if (!best) return null;
+		return { x: best.x, y: best.y + 0.1, z: best.z, ok: !drill && !!count('drill'), vein: best, drill,
+			why: drill ? 'Take back the drill (Q)' : count('drill') ? undefined : 'No drill in your bag' };
 	};
 
 	const setDown = () => {
@@ -1104,22 +1158,23 @@ export function createPower(ctx: PowerContext) {
 		if (carry.kind !== kind || !ctx.canAct() || !ctx.canCarry()) return false;
 		if (kind === 'belt') return takeBelt();
 		if (kind === 'ore-hopper') return takeHopper();
-		const thing = kind === 'drill' ? state.drills.find(nearDrill) : state.windmills.find(nearWindmillToTake);
+		const spot = findSpot();
+		const thing = kind === 'drill' ? spot?.drill : spot?.windmill;
 		return !!thing && pickUp(kind, thing);
 	};
 
 	// In build mode E only places. Ordinary exploration E collects already mined ore.
 	const buildOffer = (): Offer | null => {
 		if (!ctx.canAct() || !ctx.canCarry() || !carry.kind) return null;
-		const s = findSpot();
+		const aim = readAim();
+		const s = findSpot(aim);
+		if (!s && aim.mode === 'mouse') return { label: NO_POINTER_TARGET };
 		if (carry.kind === 'belt') {
 			if (!s) return { label: 'Turn to where it should go' };
 			if (s.existing) return { label: 'Take the belt back (Q)' };
 			if (!count('belt')) return { label: 'Out of belts' };
 			return s.ok ? { label: `Lay a belt (${count('belt')})`, go: setDown } : { label: s.why ?? '' };
 		}
-		if (carry.kind === 'windmill' && state.windmills.some(nearWindmillToTake)) return { label: 'Take back the windmill (Q)' };
-		if (carry.kind === 'drill' && state.drills.some(nearDrill)) return { label: 'Take back the drill (Q)' };
 		if (s?.ok) {
 			if (carry.kind === 'windmill') return { label: 'Set the windmill up here', go: setDown };
 			if (carry.kind === 'ore-hopper') return { label: 'Build ore hopper here', go: setDown };
@@ -1179,8 +1234,8 @@ export function createPower(ctx: PowerContext) {
 		}
 		for (const [kind, ghost] of carry.ghosts) {
 			const s = carry.kind === kind ? carry.spot : null;
-			// A belt's ghost shows where one would go, or which way an existing one would turn.
-			const show = !!s && (kind !== 'belt' || (!!s.belt && !s.existing && (s.ok || !!s.why)));
+			// No placement ghost when aiming at an item to recover or missing the ground.
+			const show = !!s && !s.receiver && !s.windmill && !s.drill && (kind !== 'belt' || (!!s.belt && !s.existing && (s.ok || !!s.why)));
 			ghost.visible = show;
 			if (!s || !show) continue;
 			if (kind === 'belt' && s.belt) {

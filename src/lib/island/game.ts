@@ -34,7 +34,7 @@ import { createHands } from '../nixkit/hands';
 import { createNixchan } from '../nixkit/nixchan';
 import { createExplore } from './explore';
 import { createFarm } from './farm';
-import { addFeature, groundAt, islandWorld, removeFeature, roomy } from './features';
+import { addFeature, groundAt, islandWorld, nearby, removeFeature, roomy } from './features';
 import { ASHEN_ORE, ORE, createForge, type Upgrade } from './forge';
 import { MAX_SPRINKLERS, createMachines } from './machines';
 import { createFishing, SPECIES } from './fishing';
@@ -42,6 +42,7 @@ import { createInteractions } from '../nixkit/interact';
 import { createInventory } from './inventory';
 import { buildLandmarks, buildPier } from './landmarks';
 import { createCampfireRest } from './campfire-rest';
+import { createBuildAim } from './build-aim';
 import { BUILD_ITEMS, createBuildMode, type BuildItem } from './build-mode';
 import { pick } from './lang';
 import { createLookout } from './lookout';
@@ -187,6 +188,11 @@ export async function startIsland() {
 	});
 	const { player, controls, orbit, keys } = nix;
 	const { figure, pos } = player;
+	const buildAim = createBuildAim({
+		canvas, camera, player: pos, nearby,
+		ground: (x, z) => Math.max(groundAt(x, z), 0),
+		solidFloor: (x, z) => Math.max(terrainAt(x, z), deckAt(x, z)),
+	});
 	let ready = false;
 	nix.loaded.then(
 		() => {
@@ -445,6 +451,7 @@ export async function startIsland() {
 		figure,
 		swimming: () => player.swimming,
 		selectBuild: () => fromBag('sprinkler'),
+		aim: buildAim.sample,
 	});
 	// Stone blocks to build with: anywhere out on the island but the places that are kept clear.
 	const keptClear = layout.places.filter((p) => ['lighthouse', 'camp', 'stones', 'garden', 'house', 'village', 'forge', 'windspout'].includes(p.id));
@@ -459,8 +466,7 @@ export async function startIsland() {
 		open: (x, z) => roomy(x, z, 0.7) && !power.beltAt(x, z) && keptClear.every((p) => Math.hypot(p.x - x, p.z - z) > p.r + 1),
 		toast: (text) => fishing.toast(text),
 		selectBuild: () => fromBag(STONE_BLOCK),
-		camera,
-		canvas,
+		aim: buildAim,
 	});
 	// Windmills up in the hills, and the drills they power on the ore veins.
 	const power = createPower({
@@ -491,6 +497,7 @@ export async function startIsland() {
 		toast: (text) => fishing.toast(text),
 		closeMenu: () => menu.close(),
 		selectBuild: fromBag,
+		aim: buildAim.sample,
 	});
 	for (const id of ['can', 'rod', 'glider', 'helper', 'lantern', 'prism'] as const) if (forge.has(id)) showUpgrade(id);
 	farm.setMachines(machines.machines);
