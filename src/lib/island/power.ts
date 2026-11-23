@@ -108,6 +108,8 @@ export interface PowerContext {
 	veins: VeinSource;
 	/** Where the hopper stands, by the forge. */
 	hopper: { x: number; z: number; yaw: number };
+	/** Optional former endpoint: existing belt routes and the shared ore stock remain usable. */
+	legacyHopper?: { x: number; z: number; yaw: number };
 	groundAt: (x: number, z: number) => number;
 	addFeature: (f: Feature) => void;
 	removeFeature: (f: Feature) => void;
@@ -153,6 +155,7 @@ interface Saved {
 interface Route {
 	start: number;
 	cells: Belt[];
+	terminal: 'forge' | 'legacy';
 	length: number;
 	ms: number;
 }
@@ -227,8 +230,15 @@ export function createPower(ctx: PowerContext) {
 		const v = veinOf(d.vein)!;
 		return { x: v.x + Math.cos(d.yaw) * lx + Math.sin(d.yaw) * lz, z: v.z - Math.sin(d.yaw) * lx + Math.cos(d.yaw) * lz };
 	};
-	const hopperAt = new THREE.Vector3(ctx.hopper.x, terrainAt(ctx.hopper.x, ctx.hopper.z), ctx.hopper.z);
-	ctx.addFeature({ x: hopperAt.x, z: hopperAt.z, r: 0.55, top: hopperAt.y + 0.9 });
+	const hopperAnchors = [{ id: 'forge' as const, ...ctx.hopper }];
+	const legacy = ctx.legacyHopper;
+	const previous = legacy && Math.hypot(legacy.x - ctx.hopper.x, legacy.z - ctx.hopper.z) > 0.1
+		? [{ id: 'legacy' as const, ...legacy }] : [];
+	const hoppers = [...hopperAnchors, ...previous].map((anchor) => {
+		const at = new THREE.Vector3(anchor.x, terrainAt(anchor.x, anchor.z), anchor.z);
+		ctx.addFeature({ x: at.x, z: at.z, r: 0.55, top: at.y + 0.9 });
+		return { id: anchor.id, at, yaw: anchor.yaw, lamps: [] as THREE.Mesh[], heap: new THREE.Group(), shown: -1 };
+	});
 	/** The height of a belt's top at (x, z). */
 	const beltTop = (x: number, z: number) => beltGround(x, z) + 0.02;
 	/** The belts near (x, z), within `r` of their middles. */
@@ -285,9 +295,20 @@ export function createPower(ctx: PowerContext) {
 		const last = cells[cells.length - 1];
 		const c = centre(last);
 		const [di, dj] = DIRS[last.dir];
-		if (Math.hypot(c.x + di * 0.5 - hopperAt.x, c.z + dj * 0.5 - hopperAt.z) > HAND_IN) return null;
+		// Select a single terminal for this directional chain. Both feed the same stock.
+		const outX = c.x + di * 0.5, outZ = c.z + dj * 0.5;
+		let terminal: Route['terminal'] | null = null;
+		let nearest = Infinity;
+		for (const hopper of hoppers) {
+			const distance = Math.hypot(outX - hopper.at.x, outZ - hopper.at.z);
+			if (distance <= HAND_IN && distance < nearest) {
+				terminal = hopper.id;
+				nearest = distance;
+			}
+		}
+		if (!terminal) return null;
 		const length = cells.length - 0.5;
-		return { start: key(first.i, first.j), cells, length, ms: (length / BELT_SPEED) * 1000 };
+		return { start: key(first.i, first.j), cells, terminal, length, ms: (length / BELT_SPEED) * 1000 };
 	};
 	/** Works out again which belts have power, and which drills' belts run to the hopper. */
 	const rewire = () => {
@@ -380,7 +401,7 @@ export function createPower(ctx: PowerContext) {
 		for (const d of state.drills) {
 			const was = before.get(d);
 			const is = routeOf(d);
-			if (was && (!is || is.start !== was.start || is.length !== was.length)) {
+			if (was && (!is || is.start !== was.start || is.length !== was.length || is.terminal !== was.terminal)) {
 				state.hopper += d.flight.length;
 				d.flight = [];
 			}
@@ -593,14 +614,17 @@ export function createPower(ctx: PowerContext) {
 	for (const w of state.windmills) showWindmill(w);
 	for (const d of state.drills) showDrill(d);
 
-	// The hopper, and the ore in it.
-	const hopper = { lamps: [] as THREE.Mesh[], heap: new THREE.Group(), shown: -1 };
-	{
+	// The public forge hopper displays the one shared stock. The old receiver is still
+	// a real endpoint and collection point, but it does not display a second copy of the pile.
+	for (const hopper of hoppers) {
 		const group = new THREE.Group();
-		group.position.copy(hopperAt);
-		group.rotation.y = ctx.hopper.yaw;
-		hopper.heap.position.y = HOPPER_FLOOR;
-		group.add(hopper.heap);
+		group.name = hopper.id === 'forge' ? 'Forge ore hopper' : 'Old ore receiver';
+		group.position.copy(hopper.at);
+		group.rotation.y = hopper.yaw;
+		if (hopper.id === 'forge') {
+			hopper.heap.position.y = HOPPER_FLOOR;
+			group.add(hopper.heap);
+		}
 		ctx.scene.add(group);
 		onModels(() => {
 			const o = make('Hopper');
@@ -1000,8 +1024,9 @@ export function createPower(ctx: PowerContext) {
 			return { label, go: () => pickUp('drill', d) };
 		}
 		for (const w of state.windmills) if (near(w.x, w.z, 1.6)) return { label: 'Pick up the windmill', go: () => pickUp('windmill', w) };
-		if (near(hopperAt.x, hopperAt.z, 1.5)) {
-			return state.hopper ? { label: `Collect the ore (${state.hopper})`, go: collectHopper } : { label: inFlight() ? 'The hopper: ore is on its way' : 'The hopper is empty' };
+		for (const hopper of hoppers) if (near(hopper.at.x, hopper.at.z, 1.5)) {
+			const label = hopper.id === 'legacy' ? 'Old receiver' : 'The hopper';
+			return state.hopper ? { label: hopper.id === 'legacy' ? `Collect the shared ore (${state.hopper})` : `Collect the ore (${state.hopper})`, go: collectHopper } : { label: inFlight() ? `${label}: ore is on its way` : `${label} is empty` };
 		}
 		return null;
 	};
@@ -1113,13 +1138,15 @@ export function createPower(ctx: PowerContext) {
 				fillHeap(v.heap, heap);
 			}
 		}
-		const inHopper = Math.min(state.hopper, 18);
-		if (inHopper !== hopper.shown) {
-			hopper.shown = inHopper;
-			fillHeap(hopper.heap, inHopper, 0.22);
+		for (const hopper of hoppers) {
+			const inHopper = Math.min(state.hopper, 18);
+			if (hopper.id === 'forge' && inHopper !== hopper.shown) {
+				hopper.shown = inHopper;
+				fillHeap(hopper.heap, inHopper, 0.22);
+			}
+			const hopperLit = state.drills.some((d) => routeOf(d)?.terminal === hopper.id);
+			for (const lamp of hopper.lamps) lamp.material = hopperLit ? lampOn : lampOff;
 		}
-		const hopperLit = state.drills.some((d) => routeOf(d));
-		for (const lamp of hopper.lamps) lamp.material = hopperLit ? lampOn : lampOff;
 		drawChevrons(time);
 		drawLumps(now, time);
 	};

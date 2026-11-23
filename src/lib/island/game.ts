@@ -45,6 +45,9 @@ import { createCampfireRest } from './campfire-rest';
 import { createLookout } from './lookout';
 import { createLookoutCamera } from './lookout-camera';
 import { planIsland } from './layout';
+import { OLD_ORE_HOPPER } from './orefield';
+import { buildSettlementScene } from './settlement-scene';
+import { FORGE_SITE, GARDEN_SITE, HOUSE_SITE, MARKET_SITE, SETTLEMENT_PATH, VILLAGE_GREEN } from './settlements';
 import { makeToon } from './look';
 import { createMenu } from './menu';
 import { createNpc } from './npc';
@@ -111,6 +114,7 @@ export async function startIsland() {
 	buildPier(scene, toon, theme);
 	const layout = planIsland();
 	scatter(scene, toon, layout);
+	buildSettlementScene(scene, toon, { paths: [{ points: SETTLEMENT_PATH, width: 2.3 }], green: VILLAGE_GREEN });
 
 	// ---------- Nixchan, and how she's steered ----------
 
@@ -352,8 +356,9 @@ export async function startIsland() {
 		toon,
 		inventory,
 		modelUrl: canvas.dataset.farmModel ?? '',
-		centre: layout.GARDEN,
-		angle: layout.GARDEN_ANGLE,
+		centre: GARDEN_SITE,
+		angle: GARDEN_SITE.yaw,
+		market: MARKET_SITE,
 		groundAt,
 		addFeature,
 		pos,
@@ -366,7 +371,7 @@ export async function startIsland() {
 		powerReach: REACH,
 	});
 
-	// The forge, near the garden: ore to mine in the hills (E), and the anvil to make things at.
+	// The forge in the cottage’s side yard: ore to mine in the hills (E), and the anvil to make things at.
 	const forge = createForge({
 		renderer,
 		scene,
@@ -375,10 +380,8 @@ export async function startIsland() {
 		figure,
 		inventory,
 		modelUrl: canvas.dataset.forgeModel ?? '',
-		near: layout.GARDEN,
+		site: FORGE_SITE,
 		places: layout.places,
-		clearOfPlaces: layout.clearOfPlaces,
-		roomy,
 		addFeature,
 		pos,
 		canAct: () => ready && player.grounded && !player.swimming && !fishing.active && !farm.busy && !farm.shopOpen && !menu.isOpen && !talk.talking,
@@ -408,17 +411,14 @@ export async function startIsland() {
 	};
 	const lantern = createLantern({ scene, toon, theme, pos, turn: () => player.turn });
 
-	// Her house, near the garden too (and put after the forge, so it keeps out of its way), where she
-	// changes clothes at the mirror on the porch.
+	// The cottage faces the garden across the homestead, with a working wardrobe on the porch.
 	const house = createHouse({
 		scene,
 		toon,
 		figure,
 		modelUrl: canvas.dataset.houseModel ?? '',
-		near: layout.GARDEN,
+		site: HOUSE_SITE,
 		places: layout.places,
-		clearOfPlaces: layout.clearOfPlaces,
-		roomy,
 		addFeature,
 		pos,
 		canAct: () => ready && player.grounded && !player.swimming && !fishing.active && !farm.busy && !farm.shopOpen && !forge.busy && !forge.dialogOpen && !menu.isOpen && !talk.talking,
@@ -450,7 +450,7 @@ export async function startIsland() {
 		closeMenu: () => menu.close(),
 	});
 	// Stone blocks to build with: anywhere out on the island but the places that are kept clear.
-	const keptClear = layout.places.filter((p) => ['lighthouse', 'camp', 'stones', 'garden', 'forge', 'windspout'].includes(p.id));
+	const keptClear = layout.places.filter((p) => ['lighthouse', 'camp', 'stones', 'garden', 'house', 'village', 'forge', 'windspout'].includes(p.id));
 	const blocks = createBlocks({
 		scene,
 		toon,
@@ -476,6 +476,7 @@ export async function startIsland() {
 		ore: { id: ORE, color: '#c0703f' },
 		veins: forge.veinSource,
 		hopper: forge.hopperSpot,
+		legacyHopper: OLD_ORE_HOPPER,
 		groundAt,
 		addFeature,
 		removeFeature,

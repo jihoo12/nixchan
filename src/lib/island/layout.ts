@@ -4,7 +4,9 @@
 import * as THREE from 'three';
 import { groundAt } from './features';
 import { CROWN, MAIN, TEMPLE, WINDSPOUT } from './skyisle';
-import { COAST, H, HALF, ISLET, N, PIER, PIER_ANGLE, PIER_DIR, STEP, islandHeight, mainHeight, slopeUp, terrainAt } from './terrain';
+import { COAST, H, HALF, ISLET, N, PIER, PIER_ANGLE, PIER_DIR, STEP, islandHeight, mainHeight, naturalSlopeUp, naturalTerrainAt } from './terrain';
+import { GARDEN_SITE, VILLAGE_SITE } from './settlements';
+import { pick } from './lang';
 import { TAU, rng } from '../nixkit/util';
 
 export interface Place {
@@ -44,10 +46,10 @@ export function planIsland() {
 	const farFromPlaces = (x: number, z: number, gap: number) => places.every((p) => Math.hypot(p.x - x, p.z - z) > gap);
 	const farFromStart = (x: number, z: number, gap: number) => Math.hypot(x - START.x, z - START.z) > gap;
 	const flatAround = (x: number, z: number, radius: number, tolerance: number) => {
-		const g = terrainAt(x, z);
+		const g = naturalTerrainAt(x, z);
 		for (let k = 0; k < 8; k++) {
 			const a = (k * TAU) / 8;
-			if (Math.abs(terrainAt(x + Math.cos(a) * radius, z + Math.sin(a) * radius) - g) > tolerance) return false;
+			if (Math.abs(naturalTerrainAt(x + Math.cos(a) * radius, z + Math.sin(a) * radius) - g) > tolerance) return false;
 		}
 		return true;
 	};
@@ -57,7 +59,7 @@ export function planIsland() {
 			const r = Math.sqrt(prand()) * 87;
 			const x = Math.cos(a) * r;
 			const z = Math.sin(a) * r;
-			if (ok(x, z, terrainAt(x, z))) return { x, z };
+			if (ok(x, z, naturalTerrainAt(x, z))) return { x, z };
 		}
 		return fallback;
 	};
@@ -80,30 +82,31 @@ export function planIsland() {
 	})();
 	places.push({ id: 'lighthouse', name: 'Lighthouse Point', ...LIGHT, r: 9, clear: 4.5 });
 	const CAMP = findSpot(
-		(x, z, g) => g > 2.4 && g < 6.5 && slopeUp(x, z) > 0.95 && flatAround(x, z, 4, 0.8) && farFromStart(x, z, 22) && farFromPlaces(x, z, 24),
+		(x, z, g) => g > 2.4 && g < 6.5 && naturalSlopeUp(x, z) > 0.95 && flatAround(x, z, 4, 0.8) && farFromStart(x, z, 22) && farFromPlaces(x, z, 24),
 		{ x: -45, z: 38 },
 	);
 	places.push({ id: 'camp', name: 'Campfire Clearing', ...CAMP, r: 7, clear: 5.5 });
 	const STONES = findSpot(
-		(x, z, g) => g > 4 && g < 12 && slopeUp(x, z) > 0.9 && flatAround(x, z, 5.2, 1.4) && farFromStart(x, z, 22) && farFromPlaces(x, z, 22),
+		(x, z, g) => g > 4 && g < 12 && naturalSlopeUp(x, z) > 0.9 && flatAround(x, z, 5.2, 1.4) && farFromStart(x, z, 22) && farFromPlaces(x, z, 22),
 		{ x: 15, z: -52 },
 	);
 	places.push({ id: 'stones', name: 'The Standing Stones', ...STONES, r: 8, clear: 7 });
 	places.push({ id: 'islet', name: 'Lonely Islet', x: ISLET.x, z: ISLET.z, r: ISLET.r * 0.75, clear: 0 });
 	places.push({ id: 'buoy', name: 'The Far Buoy', x: BUOY.x, z: BUOY.z, r: 5, clear: 0 });
-	// Her garden, on flat grass a short walk inland from where she starts, its plots facing the beach.
-	const GARDEN = findSpot(
+	// Reproduce the original garden exclusion for the independent scenery RNG. New lawns
+	// and paths cull the affected props afterwards rather than reseeding the entire island.
+	const formerGarden = findSpot(
 		(x, z, g) => {
 			const d = Math.hypot(x - START.x, z - START.z);
-			return d > 14 && d < 40 && g > 1.6 && g < 5.5 && slopeUp(x, z) > 0.9 && flatAround(x, z, 6.5, 0.9) && farFromPlaces(x, z, 18);
+			return d > 14 && d < 40 && g > 1.6 && g < 5.5 && naturalSlopeUp(x, z) > 0.9 && flatAround(x, z, 6.5, 0.9) && farFromPlaces(x, z, 18);
 		},
 		{ x: START.x * 0.7, z: START.z * 0.7 },
 	);
-	const GARDEN_ANGLE = Math.atan2(START.x - GARDEN.x, START.z - GARDEN.z);
-	places.push({ id: 'garden', name: "Nixchan's Garden", ...GARDEN, r: 8, clear: 8.5 });
+	const sceneryBaseline = [...places, { ...formerGarden, clear: 8.5 }];
+	places.push({ id: 'garden', name: "Nixchan's Garden", x: GARDEN_SITE.x, z: GARDEN_SITE.z, r: 7, clear: 6 });
+	places.push({ id: 'village', name: pick({ en: 'Market Village', ko: '장터 마을' }), x: VILLAGE_SITE.x, z: VILLAGE_SITE.z, r: 8, clear: 0 });
 	// The trees and rocks were laid out before there was a sky island, and keep to the places above
 	// so that none of them moves. The Windspout stands where none of them is in its way.
-	const scattered = [...places];
 	places.push({ id: 'windspout', name: 'The Windspout', x: WINDSPOUT.x, z: WINDSPOUT.z, r: WINDSPOUT.r, clear: 0 });
 	places.push({ id: 'sky', name: 'Cloudrest', x: MAIN.x, z: MAIN.z, r: MAIN.r * 0.75, clear: 0, above: MAIN.y - 3 });
 	places.push({ id: 'temple', name: 'Temple of the Winds', x: TEMPLE.x, z: TEMPLE.z, r: 8, clear: 0, above: MAIN.y - 3 });
@@ -116,12 +119,10 @@ export function planIsland() {
 		LIGHT,
 		CAMP,
 		STONES,
-		GARDEN,
-		GARDEN_ANGLE,
 		places,
 		prand,
-		/** Whether (x, z) is clear of every place by `gap` beyond the room it keeps round itself. */
-		clearOfPlaces: (x: number, z: number, gap: number) => scattered.every((p) => Math.hypot(p.x - x, p.z - z) > p.clear + gap),
+		/** The exclusions of the original seeded scenery pass. */
+		clearOfSceneryBaseline: (x: number, z: number, gap: number) => sceneryBaseline.every((p) => Math.hypot(p.x - x, p.z - z) > p.clear + gap),
 		clearOfStart: (x: number, z: number, gap: number) => Math.hypot(x - START.x, z - START.z) > gap,
 	};
 }

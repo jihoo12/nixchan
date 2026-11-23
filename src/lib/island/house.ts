@@ -1,4 +1,4 @@
-// Nixchan's house: a little cottage a short walk from her garden, with a covered porch out front
+// Nixchan's house: a little cottage just behind her garden, with a covered porch out front
 // where her wardrobe and a tall standing mirror are. Standing at the mirror, E opens the wardrobe:
 // a panel beside her, to change the colour of her hoodie, her hat, and its colour, while the camera
 // looks over her shoulder at her in the mirror (a real one: three's reflector node, only switched on
@@ -19,8 +19,8 @@ import type { Offer } from '../nixkit/interact';
 import type { Place } from './layout';
 import type { Toon } from './look';
 import { loadText, saveText } from './save';
-import { slopeUp, terrainAt } from './terrain';
-import { TAU, damp, rng } from '../nixkit/util';
+import { terrainAt } from './terrain';
+import { damp } from '../nixkit/util';
 import { to as inSite } from '../base';
 
 // The sizes in tools/island-house/build.py.
@@ -49,11 +49,9 @@ export interface HouseContext {
 	toon: Toon;
 	figure: NixFigure;
 	modelUrl: string;
-	/** The garden, which the house is put near, facing it. */
-	near: { x: number; z: number };
+	/** The cottage's fixed place on the homestead, with the porch facing the garden. */
+	site: { x: number; z: number; yaw: number };
 	places: Place[];
-	clearOfPlaces: (x: number, z: number, gap: number) => boolean;
-	roomy: (x: number, z: number, gap: number) => boolean;
 	addFeature: (f: Feature) => void;
 	pos: THREE.Vector3;
 	canAct: () => boolean;
@@ -65,31 +63,7 @@ export function createHouse(ctx: HouseContext) {
 
 	// ---------- where it goes ----------
 
-	// Flat, open ground a short walk from the garden (and not too near the forge), the same every
-	// visit, its porch towards the garden.
-	const site = (() => {
-		const rand = rng(57);
-		const forge = ctx.places.find((p) => p.id === 'forge');
-		const flat = (x: number, z: number) => {
-			const g = terrainAt(x, z);
-			for (let k = 0; k < 12; k++) {
-				const a = (k * TAU) / 12;
-				for (const r of [2.5, 4.5]) if (Math.abs(terrainAt(x + Math.cos(a) * r, z + Math.sin(a) * r) - g) > 0.6) return false;
-			}
-			return true;
-		};
-		for (let tries = 0; tries < 6000; tries++) {
-			const a = rand() * TAU;
-			const r = 16 + rand() * 26;
-			const x = ctx.near.x + Math.cos(a) * r;
-			const z = ctx.near.z + Math.sin(a) * r;
-			const g = terrainAt(x, z);
-			if (g < 1.6 || g > 9 || slopeUp(x, z) < 0.93 || !flat(x, z) || !ctx.roomy(x, z, 6) || !ctx.clearOfPlaces(x, z, 6)) continue;
-			if (forge && Math.hypot(forge.x - x, forge.z - z) < 18) continue;
-			return { x, z, yaw: Math.atan2(ctx.near.x - x, ctx.near.z - z) };
-		}
-		return { x: ctx.near.x - 20, z: ctx.near.z, yaw: Math.PI / 2 };
-	})();
+	const { site } = ctx;
 	/** A point in the house's own frame, out in the world. */
 	const world = (lx: number, lz: number) => ({
 		x: site.x + Math.cos(site.yaw) * lx + Math.sin(site.yaw) * lz,
