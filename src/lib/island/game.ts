@@ -41,6 +41,7 @@ import { createFishing, SPECIES } from './fishing';
 import { createInteractions } from '../nixkit/interact';
 import { createInventory } from './inventory';
 import { buildLandmarks, buildPier } from './landmarks';
+import { createCampfireRest } from './campfire-rest';
 import { planIsland } from './layout';
 import { makeToon } from './look';
 import { createMenu } from './menu';
@@ -57,7 +58,7 @@ import { scatter } from './scatter';
 import { createSkyIsle, skyWaterAt } from './skyisle';
 import { createSky } from './sky';
 import { createTalk } from './talk';
-import { ISLET, PIER_DIR, deckAt, terrainMesh } from './terrain';
+import { ISLET, PIER_DIR, deckAt, terrainAt, terrainMesh } from './terrain';
 import { createTheme, isNight } from './theme';
 import { createWater } from './water';
 import { to as inSite } from '../base';
@@ -127,11 +128,13 @@ export async function startIsland() {
 	]);
 	// Nixchan, her controls and the camera that follows her (nixkit/nixchan.ts), on the island's
 	// terrain. E and Q are the island's own (below), so they don't wave or dash by themselves.
+	let campfireRest: ReturnType<typeof createCampfireRest> | null = null;
 	const nix = createNixchan(engine, {
 		canvas,
 		modelUrl: canvas.dataset.model ?? '',
 		spawn: { pos: layout.START, heading },
 		world: islandWorld,
+		active: () => !campfireRest?.active,
 		toon,
 		look: nodeLook,
 		touch: ui,
@@ -239,6 +242,33 @@ export async function startIsland() {
 	// ---------- things to do ----------
 
 	const interactions = createInteractions();
+	const motion = matchMedia('(prefers-reduced-motion: reduce)');
+	const campfire = campfireRest = createCampfireRest({
+		world: islandWorld, terrain: terrainAt, seats: landmarks.campfireSeats, player,
+		reduced: () => motion.matches,
+		available: () => ready && !engine.paused && !fishing.active && !farm.busy && !farm.shopOpen
+			&& !forge.busy && !forge.dialogOpen && !talk.talking && !menu.isOpen && !house.dressing
+			&& !hands.holding() && !blocks.on && !power.laying && !wall.breaking && !skyIsle.aboard
+			&& Math.hypot(player.vel.x, player.vel.z) < 2.25,
+	});
+	interactions.add(campfire.offer);
+	keys.intercept((key, e) => {
+		if (!campfire.active || !['e', 'f', 'b', 'q'].includes(key) || e.altKey || e.ctrlKey || e.metaKey) return false;
+		if (key === 'e' && !e.repeat && !e.shiftKey && !engine.paused)
+			campfire.stand();
+		e.preventDefault();
+		return true;
+	}, 62);
+	engine.add({
+		order: ORDER.player + 1,
+		update(dt, time) {
+			if (!campfire.active) return;
+			const move = controls.move();
+			const stand = !!(controls.state.jumpQueued || move.forward || move.right);
+			controls.state.jumpQueued = controls.state.dashQueued = controls.state.waveQueued = false;
+			campfire.update(dt, time, stand);
+		},
+	});
 
 	// Her bag: fish, seeds, crops and her watering can.
 	const inventory = createInventory({

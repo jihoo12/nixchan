@@ -15,18 +15,15 @@ const current = unlocalize(Astro.url.pathname);
 const alternate = Astro.props.alternate ?? localize(current, other);
 // Only Nixchan's page comes in Korean; the 3D pages are one page each, in the remembered language.
 const links = [
-	{ label: t.home, href: localize('/', lang), active: current === '/', drop: 26 },
-	{ label: t.island, href: to('/island/'), active: current.startsWith('/island'), drop: 44 },
-	{ label: t.path, href: to('/experimental/'), active: current.startsWith('/experimental'), drop: 18 },
-	{ label: t.gallery, href: to('/gallery/'), active: current.startsWith('/gallery'), drop: 30 },
-	{ label: t.snow, href: to('/play/snowmagic/'), active: current.startsWith('/play/snowmagic'), drop: 36 },
+	{ label: t.home, href: localize('/about/', lang), active: current.startsWith('/about'), drop: 26 },
+	{ label: t.island, href: to(`/island/?lang=${lang}`), active: current.startsWith('/island'), drop: 44 },
 ];
 ---
 <header class="signs wrap">
 	<a class="sign brand" style="--drop:30px" href={localize('/', lang)} aria-label={t.homeLabel}><Image class="brand-mark" src={face} alt="" width={64} height={64} loading="eager" /><span class="brand-word">nixchan<span class="period">.</span></span></a>
 	<nav aria-label={t.main}>
 		{links.map((link) => (
-			<a class:list={['sign', { active: link.active, 'home-link': link.href === localize('/', lang) }]} style={`--drop:${link.drop}px`} href={link.href} aria-current={link.active ? 'page' : undefined}>{link.label}</a>
+			<a class:list={['sign', { active: link.active, 'home-link': link.href === localize('/about/', lang) }]} style={`--drop:${link.drop}px`} href={link.href} aria-current={link.active ? 'page' : undefined}>{link.label}</a>
 		))}
 	</nav>
 	<div class="right">

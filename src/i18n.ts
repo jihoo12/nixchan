@@ -1,11 +1,11 @@
 // The site is English first; Korean pages live under /ko/ with the same paths (inside the base,
-// lib/base.ts: /nixchan/ko/…). Only Nixchan's own page has both; the 3D pages read the language
+// lib/base.ts: /nixchan/ko/…). Her profile is available in both; the 3D pages read the language
 // that was remembered (island/lang.ts).
 import { BASE } from './lib/base';
 
 export type Lang = 'en' | 'ko';
 
-/** For `[...lang]` routes: one English page at the root and one Korean page under /ko/. */
+/** For `[...lang]` routes: the unprefixed English path and its Korean counterpart under /ko/. */
 export const langPaths = () => [{ params: { lang: undefined } }, { params: { lang: 'ko' } }];
 
 /** The language of a `[...lang]` route. */
@@ -33,6 +33,6 @@ export const pairAlternates = (path: string) => [
 export const ogLocale = (lang: Lang) => (lang === 'ko' ? 'ko_KR' : 'en_US');
 
 export const nav = {
-	en: { home: 'Nixchan', island: 'Island', path: '3D path', gallery: 'Gallery', snow: 'Snow magic', jihoo: 'jihoo ↗', main: 'Main navigation', homeLabel: 'Nixchan home', clock: 'Switch between day and night', switchTo: '한국어', switchLabel: '한국어로 보기' },
-	ko: { home: '닉스쨩', island: '섬', path: '3D 길', gallery: '갤러리', snow: '눈 마법', jihoo: 'jihoo ↗', main: '주 메뉴', homeLabel: '닉스쨩 홈', clock: '낮과 밤 바꾸기', switchTo: 'EN', switchLabel: 'View in English' },
+	en: { home: 'Nixchan', island: 'Island', jihoo: 'jihoo ↗', main: 'Main navigation', homeLabel: 'Nixchan home', clock: 'Switch between day and night', switchTo: '한국어', switchLabel: '한국어로 보기' },
+	ko: { home: '닉스쨩', island: '섬', jihoo: 'jihoo ↗', main: '주 메뉴', homeLabel: '닉스쨩 홈', clock: '낮과 밤 바꾸기', switchTo: 'EN', switchLabel: 'View in English' },
 } satisfies Record<Lang, Record<string, string>>;

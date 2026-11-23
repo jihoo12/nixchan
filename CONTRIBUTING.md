@@ -1,4 +1,13 @@
-# Making a game with Nixchan
+# Contributing to Nixchan's Island
+
+The live site now focuses on the Island. For contributions to the Island, check the development
+commands in the [README](README.md#development) and the repository instructions in [AGENTS.md](AGENTS.md).
+The previous Gallery submission workflow is retained below for reference only: standalone
+game submissions no longer get a published play page or a Gallery portal.
+
+---
+
+## Archive: Making a game with Nixchan
 
 Anyone can add a game to this site. A game is a folder in `src/games/`. Open a pull request that
 adds one, and once it's merged the game gets its own page at `/nixchan/play/<id>/` and a portal in

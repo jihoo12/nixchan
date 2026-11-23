@@ -33,11 +33,11 @@ Consult these guides before working on related tasks:
 - [Adding styles or using Tailwind](https://docs.astro.build/en/guides/styling/)
 - [Supporting multiple languages](https://docs.astro.build/en/guides/internationalization/)
 
-## Making a game
+## Island and archival games
 
-Games with Nixchan live in `src/games/<id>/`, one folder each, made with Nixkit (`src/lib/nixkit/`).
-To add one, follow `CONTRIBUTING.md`: copy `src/games/_template/`, change only files in that
-folder, and run `npm run check:games` and `npm run build` before finishing.
+The Island is the public game. Its code is under `src/lib/island/`; do not remove Nixkit helpers or
+linked locations that the Island relies on. The standalone games in `src/games/<id>/` are archived
+in source, not published as playable pages. Keep their existing tests and credits intact.
 
 ## Links
 

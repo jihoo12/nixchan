@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { SHARDS } from '../monochrome/world';
 import { addFeature } from './features';
+import { campfireLogLayout } from './campfire-rest';
 import type { Layout } from './layout';
 import { glowTexture, type Toon } from './look';
 import { loadJSON } from './save';
@@ -194,21 +195,26 @@ function campfire(k: Kit, { x, z }: { x: number; z: number }) {
 	tent.rotation.y = Math.PI / 4 + tentAt.a;
 	group.add(tent);
 	addFeature({ x: x + tent.position.x, z: z + tent.position.z, r: 1.35 });
-	for (const [a, r] of [
-		[1.6, 2.1],
-		[3.0, 2.2],
-	]) {
-		const lx = Math.cos(a) * r;
-		const lz = Math.sin(a) * r;
-		const log = mesh(new THREE.CylinderGeometry(0.28, 0.28, 1.8, 8), k.mats.wood, lx, 0.24, lz);
-		log.rotation.set(0, -a + Math.PI / 2, Math.PI / 2);
+	const seats = campfireLogLayout(x, z, terrainAt);
+	for (const s of seats) {
+		const log = mesh(new THREE.CylinderGeometry(s.radius, s.radius, s.length, 8),
+			k.mats.wood, s.x - x, s.middle - g, s.z - z);
+		log.rotation.set(0, -s.bearing + Math.PI / 2, Math.PI / 2);
+		// Follow the terrain under the two ends, rather than floating above the slope.
+		const axis = new THREE.Vector3(s.axisX, 0, s.axisZ);
+		log.quaternion.premultiply(new THREE.Quaternion().setFromUnitVectors(axis,
+			new THREE.Vector3(s.axisX, s.slope, s.axisZ).normalize()));
 		group.add(log);
-		// Two low humps along the log, so she can step up onto it.
-		for (const t of [-0.55, 0.55])
-			addFeature({ x: x + lx - Math.sin(a) * t, z: z + lz + Math.cos(a) * t, r: 0.5, dome: { base: terrainAt(x + lx, z + lz), top: 0.5 } });
+		for (const t of [-0.55, 0.55]) {
+			const x = s.x + s.axisX * t, z = s.z + s.axisZ * t;
+			const top = s.y + s.slope * t;
+			const base = terrainAt(x, z);
+			addFeature({ x, z, r: 0.5, dome: { base, top: Math.max(.26, top - base) } });
+		}
 	}
 	k.scene.add(group);
 	addFeature({ x, z, r: 0.85 });
+	return seats;
 }
 
 /** The standing stones: a ring on the hills round an altar, with a crystal turning over it. The
@@ -348,7 +354,7 @@ export function buildLandmarks(scene: THREE.Scene, toon: Toon, theme: Theme, lay
 	buoy(kit, layout.BUOY);
 	lighthouse(kit, layout.LIGHT);
 	summitFlag(kit, layout.SUMMIT);
-	campfire(kit, layout.CAMP);
+	const campfireSeats = campfire(kit, layout.CAMP);
 	standingStones(kit, layout.STONES, layout.prand);
 	isletChest(kit, her);
 
@@ -359,6 +365,7 @@ export function buildLandmarks(scene: THREE.Scene, toon: Toon, theme: Theme, lay
 	});
 
 	return {
+		campfireSeats,
 		update(time: number, dt: number) {
 			for (const tick of animated) tick(time, dt);
 		},

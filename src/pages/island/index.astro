@@ -12,23 +12,22 @@ import powerModel from '../../assets/island/power.glb?url';
 import tortoiseModel from '../../assets/island/tortoise.glb?url';
 import houseModel from '../../assets/island/house.glb?url';
 
-const title = "Nixchan's island (experimental)";
+const title = "Nixchan's Island";
 const description = "Roam a little toon island with Nixchan: climb, swim, glide, fish, grow a garden and find what's out there.";
 ---
 <!doctype html>
 <html lang="en">
 	<head>
 		<BaseHead title={title} description={description} />
-		<meta name="robots" content="noindex" />
 	</head>
 	<body class="isle">
 		<canvas class="stage" data-stage data-model={nixModel} data-fish-model={fishModel} data-farm-model={farmModel} data-otter-model={otterModel} data-sky-model={skyModel} data-forge-model={forgeModel} data-power-model={powerModel} data-tortoise-model={tortoiseModel} data-house-model={houseModel} aria-label="Nixchan on her island"></canvas>
 
 		<header class="bar">
-			<a class="brand" href={to('/')}>nixchan<span class="period">.</span></a>
-			<span class="badge">island · experimental</span>
+			<span class="brand">nixchan<span class="period">.</span></span>
+			<span class="badge">island</span>
 			<span class="spacer"></span>
-			<a class="pill" href={to('/gallery/?from=island')}>Gallery</a>
+			<a class="pill" data-island-about href={to('/about/')}>About</a>
 			<button class="pill" type="button" data-open="bag" aria-label="Bag (I)">Bag</button>
 			<button class="pill help" type="button" data-open="help" aria-label="Help (H)">?</button>
 		</header>
@@ -353,6 +352,14 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 
 <script>
 	import { startIsland } from '../../lib/island/game';
+	import { lang } from '../../lib/island/lang';
+	import { to } from '../../lib/base';
+
+	const about = document.querySelector<HTMLAnchorElement>('[data-island-about]');
+	if (about && lang === 'ko') {
+		about.textContent = '소개';
+		about.href = to('/ko/about/');
+	}
 
 	// No day-and-night button here: to pass the time, she sleeps in her bed at home (home/room.ts).
 	startIsland();
