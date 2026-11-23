@@ -35,8 +35,8 @@ export interface MachinesContext {
 	figure: NixFigure;
 	/** Whether she's in the water (where she can't carry anything). */
 	swimming: () => boolean;
-	/** Shuts the bag, when she takes a sprinkler out of it. */
-	closeMenu: () => void;
+	/** Use the same build selector as the B palette. */
+	selectBuild: () => void;
 }
 
 export const SPRINKLER = 'sprinkler';
@@ -94,10 +94,7 @@ export function createMachines(ctx: MachinesContext) {
 		actions: [
 			{
 				label: 'Carry it',
-				run: () => {
-					startCarrying();
-					ctx.closeMenu();
-				},
+				run: ctx.selectBuild,
 			},
 		],
 	});
@@ -224,12 +221,7 @@ export function createMachines(ctx: MachinesContext) {
 	}
 	const freeSlots = () => SLOTS.map((_, i) => i).filter((slot) => !state.sprinklers.some((k) => k.slot === slot));
 	function startCarrying() {
-		if (!inventory.has(SPRINKLER)) return;
-		if (!freeSlots().length) {
-			ctx.toast('There are sprinklers everywhere they can go already.');
-			return;
-		}
-		carry.on = true;
+		carry.on = inventory.has(SPRINKLER) && freeSlots().length > 0;
 	}
 	const stopCarrying = () => {
 		carry.on = false;
@@ -254,6 +246,7 @@ export function createMachines(ctx: MachinesContext) {
 		return best;
 	};
 	const setDown = (slot: number) => {
+		if (!carry.on || !ctx.canAct() || slot !== pickSlot()) return;
 		if (!inventory.remove(SPRINKLER)) return stopCarrying();
 		state.sprinklers.push({ slot, at: Date.now() });
 		save();
@@ -267,7 +260,7 @@ export function createMachines(ctx: MachinesContext) {
 		}
 	};
 	const pickUp = (slot: number) => {
-		if (!inventory.fits(SPRINKLER)) {
+		if (!inventory.add(SPRINKLER)) {
 			ctx.toast('Your bag is too full to take it.');
 			return;
 		}
@@ -276,9 +269,8 @@ export function createMachines(ctx: MachinesContext) {
 		state.sprinklers = state.sprinklers.filter((k) => k.slot !== slot);
 		save();
 		hideSprinkler(slot);
-		inventory.add(SPRINKLER);
-		carry.on = true;
-		ctx.toast('Picked up the sprinkler. Carry it to where it should go.');
+		startCarrying();
+		ctx.toast('Picked up the sprinkler.');
 	};
 
 	let crateView: THREE.Group | null = null;
@@ -439,26 +431,21 @@ export function createMachines(ctx: MachinesContext) {
 
 	const near = (p: THREE.Vector3, r: number) => Math.hypot(p.x - ctx.pos.x, p.z - ctx.pos.z) < r;
 	const crateCount = () => Object.values(state.crate).reduce((a, b) => a + b, 0);
-	const nearGarden = (r: number) => {
-		const c = garden.world(0, 0.6);
-		return Math.hypot(c.x - ctx.pos.x, c.z - ctx.pos.z) < r;
+	const buildOffer = (): Offer | null => {
+		if (!ctx.canAct()) return null;
+		if (!inventory.has(SPRINKLER)) return { label: 'No sprinklers in the bag · Q to remove' };
+		if (!freeSlots().length) return { label: 'All sprinkler spots are full · Q to remove' };
+		const slot = pickSlot();
+		return slot < 0 ? { label: 'Sprinklers go where four garden plots meet' }
+			: { label: 'Set the sprinkler down here', go: () => setDown(slot) };
+	};
+	const take = () => {
+		if (!ctx.canAct()) return;
+		const placed = state.sprinklers.find(({ slot }) => near(slotAt(slot), 1.25));
+		if (placed) pickUp(placed.slot);
 	};
 	const offer = (): Offer | null => {
 		if (!ctx.canAct()) return null;
-		if (carry.on) {
-			if (carry.slot >= 0) {
-				const slot = carry.slot;
-				return { label: 'Set the sprinkler down here', go: () => setDown(slot) };
-			}
-			// Hands full in the garden: nothing else to do there till it's set down (or put away).
-			if (nearGarden(7)) return { label: 'Put the sprinkler back in the bag', go: stopCarrying };
-		} else {
-			for (const k of state.sprinklers)
-				if (near(slotAt(k.slot), 0.9)) {
-					const slot = k.slot;
-					return { label: 'Pick up the sprinkler', go: () => pickUp(slot) };
-				}
-		}
 		if (near(crateAt, 1.4)) {
 			const n = crateCount();
 			if (!n) return state.helper !== null ? { label: 'The harvest crate is empty' } : null;
@@ -490,11 +477,6 @@ export function createMachines(ctx: MachinesContext) {
 			};
 		}
 		return null;
-	};
-	/** Asked after the garden's own offers: in the garden with a sprinkler in her bag, take it out. */
-	const hint = (): Offer | null => {
-		if (carry.on || !ctx.canAct() || !inventory.has(SPRINKLER) || !freeSlots().length) return null;
-		return nearGarden(7) ? { label: 'Take out a sprinkler to set up', go: startCarrying } : null;
 	};
 
 	// ---------- every frame ----------
@@ -611,7 +593,9 @@ export function createMachines(ctx: MachinesContext) {
 	return {
 		machines,
 		offer,
-		hint,
+		buildOffer,
+		start: startCarrying,
+		take,
 		update,
 		/** Sprocket's just been made at the forge: here it comes. */
 		helperArrived() {

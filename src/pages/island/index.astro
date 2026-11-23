@@ -3,6 +3,7 @@ import { to } from '../../lib/base';
 // Nixchan's island: a little open world where the 3D Nixchan roams an island and the sea round it.
 import BaseHead from '../../components/BaseHead.astro';
 import IslandLookout from '../../components/IslandLookout.astro';
+import IslandBuild from '../../components/IslandBuild.astro';
 import nixModel from '../../assets/nixchan/nixchan-3d.glb?url';
 import fishModel from '../../assets/island/fish.glb?url';
 import farmModel from '../../assets/island/farm.glb?url';
@@ -29,6 +30,11 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 			<span class="badge">island</span>
 			<span class="spacer"></span>
 			<a class="pill" data-island-about href={to('/about/')}>About</a>
+			<button class="pill build-toggle" type="button" data-build-toggle
+				aria-label="Build (B)" aria-keyshortcuts="B" data-build-ko-label="짓기 (B)"
+				aria-expanded="false" aria-controls="island-build-picker">
+				<span data-build-ko="짓기">Build</span><kbd aria-hidden="true">B</kbd>
+			</button>
 			<button class="pill" type="button" data-open="bag" aria-label="Bag (I)">Bag</button>
 			<button class="pill help" type="button" data-open="help" aria-label="Help (H)">?</button>
 		</header>
@@ -43,14 +49,7 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 		<p class="fish-prompt act-prompt" data-act-prompt hidden><kbd>E</kbd><span data-act-text></span></p>
 		<button class="act" type="button" data-act hidden>Do</button>
 		<button class="fish" type="button" data-fish aria-label="Fish">Fish</button>
-		<div class="build" data-build hidden>
-			<button type="button" data-build-take>Take</button>
-			<button type="button" data-build-done>Done</button>
-		</div>
-		<div class="build" data-belts hidden>
-			<button type="button" data-belts-take>Take</button>
-			<button type="button" data-belts-done>Done</button>
-		</div>
+		<IslandBuild />
 		<p class="bite" data-bite hidden aria-hidden="true">!</p>
 		<div class="reel" data-reel hidden role="status">
 			<p class="reel-note" data-reel-note>Keep it steady…</p>
@@ -113,9 +112,9 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 								<dt><kbd>Space</kbd></dt><dd>Jump, or spring up out of the water</dd>
 								<dt><kbd>Space</kbd> again</dt><dd>Open the glider in mid-air, and once more to fold it</dd>
 								<dt>Drag</dt><dd>Look around; the scroll wheel zooms</dd>
-								<dt><kbd>E</kbd></dt><dd>Plant, water, harvest or use what's in front of you; otherwise wave</dd>
-								<dt><kbd>B</kbd></dt><dd>Take out stone blocks to build with, or put them away</dd>
-								<dt><kbd>Q</kbd></dt><dd>Take back a block, while you're building<span data-dash-help hidden>; otherwise dash</span></dd>
+								<dt><kbd>E</kbd></dt><dd>Place the selected piece while building; otherwise use what's in front of you or wave</dd>
+								<dt><kbd>B</kbd></dt><dd>Open or close the building toolbar</dd>
+								<dt><kbd>Q</kbd></dt><dd>Take back a placed piece while building<span data-dash-help hidden>; otherwise dash</span></dd>
 							</dl>
 							<dl class="touch">
 								<dt>Left thumb</dt><dd>Walk; push far to run</dd>
@@ -158,19 +157,19 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 							<h3>Building</h3>
 							<ol>
 								<li>The forge makes stone blocks from iron ore, six at a time.</li>
-								<li>Press <kbd class="keys">B</kbd><span class="touch">Build with them, in the bag,</span> to hold one. A see-through block shows where it will go<span class="keys">: wherever you point with the mouse, close by. Point at the ground, at the top of a stack to build it up, or at its side to start the next one. Click (or <kbd>E</kbd>) to set it</span><span class="touch">, in front of you; the action button sets it there, on the ground or on top of the stack</span>.</li>
-								<li><span class="keys">Right-click (or <kbd>Q</kbd>) puts the top block of the stack you point at back in the bag.</span><span class="touch">Take puts the top block in front of you back in the bag.</span> <kbd class="keys">B</kbd><span class="touch">Done</span> puts them away.</li>
+								<li>Press <kbd class="keys">B</kbd><span class="touch">Build</span> to open the building toolbar. Choose a stone block, belt, windmill, drill, sprinkler, or ore hopper. The toolbar shows how many are in your bag.</li>
+								<li>A see-through preview shows where the piece will go. Press <kbd class="keys">E</kbd><span class="touch">the action button</span> to place it. Use <kbd class="keys">Q</kbd><span class="touch">Take back</span> to return a placed piece to your bag. <kbd class="keys">B</kbd><span class="touch">Build</span> closes the toolbar without placing anything.</li>
 							</ol>
 							<p>One block is just low enough to jump onto, so build stairs to go higher. The garden, the forge, the stones, the lighthouse, the campfire and the Windspout are kept clear.</p>
 						</section>
 						<section>
 							<h3>Power</h3>
 							<ol>
-								<li>The forge makes windmills and drills. Take one out of the bag (Carry it) and <kbd class="keys">E</kbd><span class="touch">the action button</span> sets it down where the see-through one shows.</li>
+								<li>The forge makes windmills, drills and ore hoppers. Choose one in Build, check the preview, and place it where it fits.</li>
 								<li>A windmill wants wind, so it only goes up on high ground. Machines within 8 metres of it have power; green dots show how far, while you carry one.</li>
 								<li>Set a drill over an ore vein. With power, it mines the ore each time it grows back, even while you're away, and keeps up to 12 in its bin. Collect it with <kbd class="keys">E</kbd><span class="touch">the action button</span>.</li>
-								<li>Belts (Lay belts, in the bag) go down a cell at a time, running the way you face: <kbd class="keys">E</kbd><span class="touch">the action button</span> lays one, or turns one that runs another way, and <kbd class="keys">Q</kbd><span class="touch">Take</span> takes one back.</li>
-								<li>Lay them from beside a drill's bin all the way to the hopper beside the forge, and the ore goes along them to it. Belts carry power too: everything joined to a belt near a windmill has it.</li>
+								<li>Choose Belt in Build. Each length runs in the direction you face when you place it with <kbd class="keys">E</kbd><span class="touch">the action button</span>. To change direction, use <kbd class="keys">Q</kbd><span class="touch">Take back</span>, face the new way, and lay it again.</li>
+								<li>Run belts from a drill's bin to an ore hopper or the forge's receiver. Belts also carry power: a machine connected by belt to a nearby windmill can use it.</li>
 								<li>Stand on a belt with power and it carries you along it, round its corners, to wherever it goes.</li>
 							</ol>
 						</section>
@@ -209,9 +208,9 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 								<dt><kbd>Space</kbd></dt><dd>점프, 물속에서는 물 위로 뛰어오르기</dd>
 								<dt><kbd>Space</kbd> 한 번 더</dt><dd>공중에서 글라이더 펴기, 한 번 더 누르면 접기</dd>
 								<dt>드래그</dt><dd>둘러보기, 마우스 휠로 확대·축소</dd>
-								<dt><kbd>E</kbd></dt><dd>눈앞에 있는 것을 심고, 물 주고, 거두고, 쓰기. 아무것도 없으면 손 흔들기</dd>
-								<dt><kbd>B</kbd></dt><dd>쌓을 돌 블록 꺼내기, 또는 집어넣기</dd>
-								<dt><kbd>Q</kbd></dt><dd>짓는 중에는 블록 되가져오기<span data-dash-help hidden>, 그 밖에는 대시</span></dd>
+								<dt><kbd>E</kbd></dt><dd>짓는 중에는 고른 물건 놓기. 평소에는 눈앞의 물건 쓰기, 없으면 손 흔들기</dd>
+								<dt><kbd>B</kbd></dt><dd>짓기 메뉴 열기 또는 닫기</dd>
+								<dt><kbd>Q</kbd></dt><dd>짓는 중에는 놓은 물건 회수하기<span data-dash-help hidden>, 그 밖에는 대시</span></dd>
 							</dl>
 							<dl class="touch">
 								<dt>왼손 엄지</dt><dd>걷기, 멀리 밀면 달리기</dd>
@@ -254,19 +253,19 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 							<h3>짓기</h3>
 							<ol>
 								<li>대장간에서 철광석으로 돌 블록을 한 번에 여섯 개씩 만들어요.</li>
-								<li><kbd class="keys">B</kbd><span class="touch">가방의 '쌓기'</span>를 누르면 블록을 하나 들어요. 반투명한 블록이 놓일 자리를 보여 줘요<span class="keys">. 가까운 곳에서 마우스로 가리키는 곳이에요. 땅을 가리키거나, 쌓인 블록 위를 가리켜 더 높이 쌓거나, 옆면을 가리켜 옆에 새로 쌓아요. 클릭(또는 <kbd>E</kbd>)하면 놓여요</span><span class="touch">. 바로 앞, 땅이나 쌓인 블록 위예요. 액션 버튼을 누르면 거기 놓여요</span>.</li>
-								<li><span class="keys">오른쪽 클릭(또는 <kbd>Q</kbd>)하면 가리킨 더미의 맨 위 블록이 가방으로 돌아와요.</span><span class="touch">'가져오기'를 누르면 바로 앞 더미의 맨 위 블록이 가방으로 돌아와요.</span> <kbd class="keys">B</kbd><span class="touch">'완료'</span>를 누르면 집어넣어요.</li>
+								<li><kbd class="keys">B</kbd><span class="touch">‘짓기’</span>를 누르면 짓기 메뉴가 열려요. 돌 블록, 벨트, 풍차, 드릴, 스프링클러, 광석 수거함 중 하나를 고르세요. 가방에 몇 개 있는지도 보여요.</li>
+								<li>반투명한 미리보기로 놓일 자리를 확인하고 <kbd class="keys">E</kbd><span class="keys">를</span><span class="touch">액션 버튼을</span> 눌러 놓아요. <kbd class="keys">Q</kbd><span class="touch">‘회수하기’</span>로 놓은 물건을 가방에 넣을 수 있어요. 아무것도 놓지 않고 닫으려면 <kbd class="keys">B</kbd><span class="keys">를</span><span class="touch">‘짓기’를</span> 다시 누르세요.</li>
 							</ol>
 							<p>블록 하나는 딱 뛰어오를 수 있는 높이라서, 계단을 쌓으면 더 높이 올라갈 수 있어요. 정원, 대장간, 선돌, 등대, 모닥불, 바람기둥 주변에는 지을 수 없어요.</p>
 						</section>
 						<section>
 							<h3>동력</h3>
 							<ol>
-								<li>대장간에서 풍차와 드릴을 만들어요. 가방에서 하나를 꺼내면('들기') 반투명한 모습이 보이는 곳에 <kbd class="keys">E</kbd><span class="keys">로</span><span class="touch">액션 버튼으로</span> 내려놓을 수 있어요.</li>
+								<li>대장간에서 풍차, 드릴, 광석 수거함를 만들어요. 짓기 메뉴에서 고른 뒤 미리보기로 자리를 확인하고 놓아요.</li>
 								<li>풍차는 바람이 필요해서 높은 곳에만 세울 수 있어요. 풍차에서 8미터 안에 있는 기계에 동력이 들어가요. 기계를 들고 있는 동안 초록 점으로 범위가 보여요.</li>
 								<li>드릴은 광맥 위에 놓아요. 동력이 있으면 광석이 다시 생길 때마다 캐고, 자리를 비운 동안에도 통에 12개까지 모아 둬요. <kbd class="keys">E</kbd><span class="keys">로</span><span class="touch">액션 버튼으로</span> 챙겨요.</li>
-								<li>벨트(가방의 '벨트 깔기')는 한 칸씩 바라보는 방향으로 깔려요. <kbd class="keys">E</kbd><span class="keys">로</span><span class="touch">액션 버튼으로</span> 하나 깔거나 다른 쪽으로 가는 벨트를 돌리고, <kbd class="keys">Q</kbd><span class="touch">'가져오기'</span>로 되가져와요.</li>
-								<li>드릴 통 옆에서 대장간 옆 호퍼나 예전 광석 수거함까지 쭉 깔면 광석이 벨트를 타고 호퍼로 가요. 벨트는 동력도 날라요. 풍차 가까이의 벨트에 이어진 건 모두 동력이 들어가요.</li>
+								<li>짓기 메뉴에서 벨트를 고르세요. 벨트는 <kbd class="keys">E</kbd><span class="keys">를</span><span class="touch">액션 버튼을</span> 누를 때 바라보는 방향으로 한 칸씩 놓여요. 방향을 바꾸려면 <kbd class="keys">Q</kbd><span class="touch">‘회수하기’</span>로 가방에 넣고 새 방향을 보며 다시 놓아요.</li>
+								<li>드릴 통에서 광석 수거함나 대장간 수거함까지 벨트를 이으면 광석이 옮겨져요. 벨트는 동력도 전달해서 가까운 풍차와 벨트로 연결된 기계도 작동해요.</li>
 								<li>동력이 들어간 벨트 위에 서면, 모퉁이를 돌아 벨트 끝까지 실어다 줘요.</li>
 							</ol>
 						</section>
@@ -363,6 +362,16 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 		about.href = to('/ko/about/');
 	}
 
+	if (lang === 'ko') {
+		document.querySelector<HTMLElement>('[data-build-picker]')?.setAttribute('lang', 'ko');
+		for (const node of document.querySelectorAll<HTMLElement>('[data-build-ko]'))
+			node.textContent = node.dataset.buildKo ?? '';
+		for (const node of document.querySelectorAll<HTMLElement>('[data-build-ko-label]'))
+			node.setAttribute('aria-label', node.dataset.buildKoLabel ?? '');
+		for (const node of document.querySelectorAll<HTMLElement>('[data-build-ko-title]'))
+			node.title = node.dataset.buildKoTitle ?? '';
+	}
+
 	// No day-and-night button here: to pass the time, she sleeps in her bed at home (home/room.ts).
 	startIsland();
 </script>
@@ -393,6 +402,14 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 		font: 800 15px var(--sans); box-shadow: 0 4px 0 var(--edge); cursor: pointer; text-decoration: none;
 	}
 	.pill:hover { transform: translateY(-2px); }
+	.build-toggle { display: inline-flex; align-items: center; gap: 5px; }
+	.build-toggle[aria-expanded="true"] { background: var(--star); color: #1c1a3e; }
+	.build-toggle kbd {
+		padding: 1px 4px; border-radius: 4px; background: var(--bg); color: var(--ink);
+		font: 900 10px/1.3 var(--sans);
+	}
+	@media (pointer: coarse), (max-width: 540px) { .build-toggle kbd { display: none; } }
+	@media (pointer: coarse) { .build-toggle { min-height: 44px; } }
 
 	/* A place's name fades in across the top of the screen as she arrives there. */
 	.banner {
@@ -517,15 +534,6 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 	}
 	.act[hidden] { display: none !important; }
 	.act:active { transform: translateY(3px); box-shadow: 0 2px 0 #c99a2e; }
-
-	/* Building, on a touch screen: take a block back, or put them away. (Keys do it otherwise.) */
-	.build { display: none; position: fixed; z-index: 25; right: 24px; bottom: 344px; gap: 8px; }
-	.build[hidden] { display: none !important; }
-	.build button {
-		height: 44px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--surface); color: var(--ink);
-		font: 900 15px var(--sans); box-shadow: 0 4px 0 var(--edge); touch-action: none;
-	}
-	.build button:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--edge); }
 
 	/* The market stand: seeds to buy on one side, what she has to sell on the other. */
 	.shop .atlas-card { width: min(720px, 100%); }
@@ -756,7 +764,6 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 		.help span.touch { display: inline; }
 		.fish { display: block; }
 		.act { display: block; }
-		.build { display: flex; }
 		.act-prompt:not([hidden]) { display: block !important; bottom: 18px; }
 		.act-prompt kbd { display: none; }
 		.fish-prompt { display: none !important; }
@@ -780,5 +787,10 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 		.tabs button { padding: 7px 10px; font-size: 15px; }
 		.bar { gap: 8px; }
 		.pill { padding: 8px 11px; }
+	}
+	@media (max-width: 400px) {
+		.bar { gap: 6px; padding-inline: 10px; }
+		.brand { font-size: 24px; }
+		.pill { padding-inline: 8px; font-size: 14px; }
 	}
 </style>

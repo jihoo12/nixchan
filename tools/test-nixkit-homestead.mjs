@@ -23,8 +23,7 @@ const { createInventory } = await import('../src/lib/island/inventory.ts');
 const { createMachines } = await import('../src/lib/island/machines.ts');
 const { addFeature, removeFeature, groundAt, nearby, within } = await import('../src/lib/island/features.ts');
 const { HOUSE_SITE, GARDEN_SITE, FORGE_SITE, MARKET_SITE, SETTLEMENT_PATH } = await import('../src/lib/island/settlements.ts');
-const { naturalTerrainAt, terrainAt } = await import('../src/lib/island/terrain.ts');
-const { ORE_VEINS, OLD_ORE_HOPPER } = await import('../src/lib/island/orefield.ts');
+const { ORE_VEINS } = await import('../src/lib/island/orefield.ts');
 hooks.deregister();
 
 const V = (x, z) => new THREE.Vector3(x, groundAt(x, z), z);
@@ -102,7 +101,7 @@ test('the house, saved garden, forge and village connect on foot using actual wo
 		keeper: { name: 'Pebble', talk: () => { traded = true; } } });
 	const forge = createForge({ ...ctx, site: FORGE_SITE, onUpgrade() {} });
 	const house = createHouse({ ...ctx, site: HOUSE_SITE });
-	const machines = createMachines({ ...ctx, garden: farm.garden, swimming: () => false });
+	const machines = createMachines({ ...ctx, garden: farm.garden, swimming: () => false, selectBuild() {} });
 
 	assert.deepEqual(farm.garden.plots.slice(0, 2), plots, 'crop slots hydrate unchanged');
 	assert.equal(inventory.count('tool-can'), 1);
@@ -135,7 +134,24 @@ test('the house, saved garden, forge and village connect on foot using actual wo
 	farm.offer().go();
 	assert.equal(traded, true);
 	assert.ok(Math.hypot(house.doorStep.x - HOUSE_SITE.x, house.doorStep.z - HOUSE_SITE.z) < 2);
-	assert.equal(terrainAt(OLD_ORE_HOPPER.x, OLD_ORE_HOPPER.z), naturalTerrainAt(OLD_ORE_HOPPER.x, OLD_ORE_HOPPER.z));
+	// Reclaim an already installed sprinkler with the build action, then place it again.
+	const neighbors = [0, 1, farm.garden.cols, farm.garden.cols + 1].map(farm.garden.plotLocal);
+	const sprinkler = farm.garden.world(
+		neighbors.reduce((sum, point) => sum + point.lx, 0) / 4,
+		neighbors.reduce((sum, point) => sum + point.lz, 0) / 4,
+	);
+	pos.copy(V(sprinkler.x, sprinkler.z));
+	assert.doesNotMatch(machines.offer()?.label ?? '', /pick up/i);
+	machines.take();
+	assert.equal(inventory.count('sprinkler'), 1);
+	assert.equal(JSON.parse(storage.get('island-machines')).sprinklers.length, 0);
+	machines.start();
+	const placeSprinkler = machines.buildOffer();
+	assert.match(placeSprinkler?.label, /Set the sprinkler down/);
+	placeSprinkler.go();
+	assert.equal(inventory.count('sprinkler'), 0);
+	assert.equal(JSON.parse(storage.get('island-machines')).sprinklers.length, 1);
+
 	assert.deepEqual(forge.veinSource.veins(),
 		ORE_VEINS.map(([x, y, z], i) => ({ id: `vein-${i}`, x, y, z })), 'persistent drill IDs and their world coordinates');
 });

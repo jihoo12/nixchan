@@ -6,7 +6,7 @@ import type { Layout } from './layout';
 import { colored, palmGeometry, pineGeometry, rockGeometry, roundTreeGeometry, type Toon } from './look';
 import { ISLET, naturalSlopeUp, naturalTerrainAt, nearPier, terrainAt } from './terrain';
 import { clearOfSettlements } from './settlements';
-import { ORE_VEINS, OLD_ORE_HOPPER } from './orefield';
+import { ORE_VEINS } from './orefield';
 import { TAU, fbm, rng } from '../nixkit/util';
 
 export function scatter(scene: THREE.Scene, toon: Toon, layout: Layout) {
@@ -17,8 +17,7 @@ export function scatter(scene: THREE.Scene, toon: Toon, layout: Layout) {
 	const baseline = (f: Feature) => { generated.push(f); addFeature(f); };
 	const clear = (x: number, z: number, gap: number) =>
 		clearOfSettlements(x, z, gap)
-		&& ORE_VEINS.every(([vx, , vz]) => Math.hypot(x - vx, z - vz) > 1.1 + gap)
-		&& Math.hypot(x - OLD_ORE_HOPPER.x, z - OLD_ORE_HOPPER.z) > .55 + gap;
+		&& ORE_VEINS.every(([vx, , vz]) => Math.hypot(x - vx, z - vz) > 1.1 + gap);
 	const rand = rng(12);
 	const randomLand = (radius: number) => {
 		const a = rand() * TAU;

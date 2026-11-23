@@ -60,3 +60,14 @@ test('the Island, linked areas and translated profile remain; retired pages are 
 	assert.ok(assets.some((file) => /^nixchan-3d\..*\.glb$/.test(file)));
 	assert.ok(assets.every((file) => !/\.vrm$/.test(file)), 'no standalone games’ VRM assets should ship');
 });
+
+test('the built island has one keyboard and touch building palette for every construction item', () => {
+	const islandHtml = html('island/');
+	assert.equal((islandHtml.match(/data-build-toggle/g) ?? []).length, 1);
+	assert.equal((islandHtml.match(/data-build-picker/g) ?? []).length, 1);
+	assert.match(islandHtml, /data-build-remove/);
+	assert.match(islandHtml, /data-act hidden/);
+	assert.doesNotMatch(islandHtml, /data-belts(?:-take|-done)?[ =>]|data-build-(?:take|done)/);
+	for (const id of ['stone-block', 'belt', 'windmill', 'drill', 'sprinkler', 'ore-hopper'])
+		assert.ok(islandHtml.includes(`data-build-item="${id}"`), id);
+});

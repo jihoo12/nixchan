@@ -11,16 +11,29 @@ export interface Offer {
 
 export type OfferSource = () => Offer | null;
 
-export function createInteractions() {
+export function createInteractions({ override }: { override?: () => Offer | null | undefined } = {}) {
 	const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel);
 	const ui = { prompt: $('[data-act-prompt]'), text: $('[data-act-text]'), button: $<HTMLButtonElement>('[data-act]') };
 	const sources: OfferSource[] = [];
 	let current: Offer | null = null;
 
+	const find = () => {
+		const foreground = override?.();
+		if (foreground !== undefined) return foreground;
+		for (const source of sources) {
+			const offer = source();
+			if (offer) return offer;
+		}
+		return null;
+	};
+
 	/** Does what's on offer, if anything is; returns whether it did. */
 	const press = () => {
-		if (!current?.go) return false;
-		current.go();
+		// An exclusive mode can open, change item, or close between frames. Both touch and
+		// keyboard must resolve the current mode, never use an offer cached before the switch.
+		const action = override ? find() : current;
+		if (!action?.go) return false;
+		action.go();
 		current = null;
 		return true;
 	};
@@ -39,11 +52,7 @@ export function createInteractions() {
 		press,
 		/** Asks the sources what's on offer now, and shows it. */
 		update() {
-			current = null;
-			for (const source of sources) {
-				current = source();
-				if (current) break;
-			}
+			current = find();
 			const label = current?.label ?? '';
 			ui.prompt?.toggleAttribute('hidden', !current);
 			ui.prompt?.classList.toggle('inactive', !current?.go);

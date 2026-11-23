@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
 import { nodeLook } from '../nixkit/figure-nodes';
-import { blockGround, createBlocks } from './blocks';
+import { STONE_BLOCK, blockGround, createBlocks } from './blocks';
 import { createEngine, ORDER } from '../nixkit/engine';
 import { createHands } from '../nixkit/hands';
 import { createNixchan } from '../nixkit/nixchan';
@@ -42,10 +42,11 @@ import { createInteractions } from '../nixkit/interact';
 import { createInventory } from './inventory';
 import { buildLandmarks, buildPier } from './landmarks';
 import { createCampfireRest } from './campfire-rest';
+import { BUILD_ITEMS, createBuildMode, type BuildItem } from './build-mode';
+import { pick } from './lang';
 import { createLookout } from './lookout';
 import { createLookoutCamera } from './lookout-camera';
 import { planIsland } from './layout';
-import { OLD_ORE_HOPPER } from './orefield';
 import { buildSettlementScene } from './settlement-scene';
 import { FORGE_SITE, GARDEN_SITE, HOUSE_SITE, MARKET_SITE, SETTLEMENT_PATH, VILLAGE_GREEN } from './settlements';
 import { makeToon } from './look';
@@ -55,7 +56,7 @@ import { canDash, createOwl } from './owl';
 import { createFourthWall } from './fourthwall';
 import { createHouse } from './house';
 import { createTortoise } from './tortoise';
-import { MAX_BELTS, MAX_WINDMILLS, REACH, beltCarry, createPower } from './power';
+import { MAX_BELTS, MAX_ORE_HOPPERS, MAX_WINDMILLS, ORE_HOPPER, REACH, beltCarry, createPower } from './power';
 import { createLantern } from './lantern';
 import { createIslandRift, riftArrival } from './rift';
 import { loadJSON, saveJSON } from './save';
@@ -132,7 +133,7 @@ export async function startIsland() {
 	const hands = createHands([
 		{ holding: () => machines.carrying, stop: () => machines.stop() },
 		{ holding: () => power.carrying, stop: () => power.stop() },
-		{ holding: () => blocks.on, stop: () => blocks.stop() },
+		{ holding: () => blocks.on && inventory.has(STONE_BLOCK), stop: () => blocks.stop() },
 	]);
 	// Nixchan, her controls and the camera that follows her (nixkit/nixchan.ts), on the island's
 	// terrain. E and Q are the island's own (below), so they don't wave or dash by themselves.
@@ -213,28 +214,21 @@ export async function startIsland() {
 		return true;
 	}, 60);
 	keys.command((key, e) => {
+		if (e.repeat) return;
 		if (key === 'escape') {
-			// With nothing open to close, Esc puts her blocks away.
-			if (!menu.isOpen && !farm.shopOpen && !forge.dialogOpen) {
-				blocks.stop();
-				power.stop();
-			}
+			building?.close();
 			menu.close();
 			farm.closeShop();
 			forge.closeDialog();
-		}
-		if (e.repeat) return;
-		// E does whatever there is to do here, and otherwise she waves.
-		if (key === 'e') {
-			if (!interactions.press()) controls.state.waveQueued = true;
-		} else if (key === 'f') fishing.press();
-		else if (key === 'b') blocks.toggle();
+		} else if (key === 'e') {
+			const didAct = interactions.press();
+			if (!building?.active && !didAct) controls.state.waveQueued = true;
+		} else if (key === 'b') building?.toggle();
 		else if (key === 'q') {
-			// Q takes back a belt or a block while she's laying or building; otherwise it's a dash.
-			if (power.laying) power.takeBelt();
-			else if (blocks.on) blocks.take();
+			if (building?.active) building.remove();
 			else controls.state.dashQueued = true;
-		}
+		} else if (key === 'f' && !building?.active) fishing.press();
+		else if (building?.active && /^[1-6]$/.test(key)) building.select(BUILD_ITEMS[Number(key) - 1]);
 		else if (key === 'm') menu.toggle('map');
 		else if (key === 'i') menu.toggle('bag');
 		else if (key === 'h' || key === '?') menu.toggle('help');
@@ -250,11 +244,12 @@ export async function startIsland() {
 
 	// ---------- things to do ----------
 
-	const interactions = createInteractions();
+	let building: ReturnType<typeof createBuildMode> | undefined;
+	const interactions = createInteractions({ override: () => building?.offer() });
 	const campfire = campfireRest = createCampfireRest({
 		world: islandWorld, terrain: terrainAt, seats: landmarks.campfireSeats, player,
 		reduced: () => motion.matches,
-		available: () => ready && !engine.paused && !lookoutCamera.active && !fishing.active && !farm.busy && !farm.shopOpen
+		available: () => ready && !engine.paused && !lookoutCamera.active && !building?.active && !fishing.active && !farm.busy && !farm.shopOpen
 			&& !forge.busy && !forge.dialogOpen && !talk.talking && !menu.isOpen && !house.dressing
 			&& !hands.holding() && !blocks.on && !power.laying && !wall.breaking && !skyIsle.aboard
 			&& Math.hypot(player.vel.x, player.vel.z) < 2.25,
@@ -282,7 +277,7 @@ export async function startIsland() {
 	const lookout = createLookout({
 		site: landmarks.lookout, camera: lookoutCamera, pos,
 		canLook: () => ready && engine.running && player.grounded && !player.swimming && !player.dashing
-			&& !campfire.active && !fishing.active && !farm.busy && !farm.shopOpen && !forge.busy
+			&& !campfire.active && !building?.active && !fishing.active && !farm.busy && !farm.shopOpen && !forge.busy
 			&& !forge.dialogOpen && !talk.talking && !menu.isOpen && !house.dressing && !wall.breaking
 			&& !hands.holding() && !blocks.on && !power.laying && !skyIsle.aboard
 			&& Math.hypot(player.vel.x, player.vel.z) < 2.25,
@@ -335,7 +330,7 @@ export async function startIsland() {
 		waterAt: (x, z) => (skyIsle.aboard ? skyWaterAt(x, z, pos.y) : groundAt(x, z) < -0.5 ? 0 : null),
 		ripple: water.ripple,
 		pos,
-		canStand: () => ready && player.grounded && !player.swimming && !blocks.on && !farm.busy && !farm.shopOpen && !forge.busy && !forge.dialogOpen && !talk.talking && Math.hypot(player.vel.x, player.vel.z) < 0.6,
+		canStand: () => ready && !building?.active && player.grounded && !player.swimming && !blocks.on && !farm.busy && !farm.shopOpen && !forge.busy && !forge.dialogOpen && !talk.talking && Math.hypot(player.vel.x, player.vel.z) < 0.6,
 		rod: () => (forge.has('rod') ? { lo: 0.15, hi: 0.9, speed: 1.45 } : { lo: 0.25, hi: 0.85, speed: 1 }),
 		heading: () => player.heading,
 		towardCamera,
@@ -396,7 +391,9 @@ export async function startIsland() {
 						? power.drills() < power.veinCount
 						: item === 'belt'
 							? power.belts() < MAX_BELTS
-							: true,
+							: item === ORE_HOPPER
+								? power.hoppers() + inventory.count(ORE_HOPPER) < MAX_ORE_HOPPERS
+								: true,
 		drilled: (vein) => power.drilled(vein),
 	});
 	/** What an upgrade looks like on her: a steel can, a sky-blue reel, a sky-blue (or rainbow)
@@ -447,7 +444,7 @@ export async function startIsland() {
 		toast: (text) => fishing.toast(text),
 		figure,
 		swimming: () => player.swimming,
-		closeMenu: () => menu.close(),
+		selectBuild: () => fromBag('sprinkler'),
 	});
 	// Stone blocks to build with: anywhere out on the island but the places that are kept clear.
 	const keptClear = layout.places.filter((p) => ['lighthouse', 'camp', 'stones', 'garden', 'house', 'village', 'forge', 'windspout'].includes(p.id));
@@ -461,7 +458,7 @@ export async function startIsland() {
 			ready && player.grounded && !player.swimming && !skyIsle.aboard && !machines.carrying && !fishing.active && !farm.busy && !farm.shopOpen && !forge.busy && !forge.dialogOpen && !menu.isOpen && !talk.talking,
 		open: (x, z) => roomy(x, z, 0.7) && !power.beltAt(x, z) && keptClear.every((p) => Math.hypot(p.x - x, p.z - z) > p.r + 1),
 		toast: (text) => fishing.toast(text),
-		closeMenu: () => menu.close(),
+		selectBuild: () => fromBag(STONE_BLOCK),
 		camera,
 		canvas,
 	});
@@ -476,7 +473,6 @@ export async function startIsland() {
 		ore: { id: ORE, color: '#c0703f' },
 		veins: forge.veinSource,
 		hopper: forge.hopperSpot,
-		legacyHopper: OLD_ORE_HOPPER,
 		groundAt,
 		addFeature,
 		removeFeature,
@@ -494,21 +490,82 @@ export async function startIsland() {
 			roomy(x, z, 0.25) && blockGround(x, z) === -Infinity && keptClear.every((p) => p.id === 'forge' || Math.hypot(p.x - x, p.z - z) > p.r + 0.5),
 		toast: (text) => fishing.toast(text),
 		closeMenu: () => menu.close(),
+		selectBuild: fromBag,
 	});
 	for (const id of ['can', 'rod', 'glider', 'helper', 'lantern', 'prism'] as const) if (forge.has(id)) showUpgrade(id);
 	farm.setMachines(machines.machines);
 	// Gearblooms grow only where there's power.
 	farm.setPower(power.poweredAt);
-	// Smithing comes first, so E strikes while she's at it; the sprinkler hint comes last.
-	// Building comes first, so E sets a block while she has them out.
-	interactions.add(() => blocks.offer());
-	interactions.add(power.offer);
+	// One controller owns all construction. An invalid placement is still an exclusive
+	// offer, rather than letting E fall through to the shop, bed, campfire or normal wave.
+	function fromBag(item: BuildItem) {
+		menu.close();
+		return building?.select(item) ?? false;
+	}
+	const canBuild = () => ready && engine.running && player.grounded && !player.swimming
+		&& !skyIsle.aboard && !campfire.active && !lookoutCamera.active && !wall.breaking && !house.dressing
+		&& !fishing.active && !farm.busy && !farm.shopOpen && !forge.busy && !forge.dialogOpen
+		&& !menu.isOpen && !talk.talking;
+	building = createBuildMode({
+		canBuild,
+		putAway: () => { blocks.stop(); machines.stop(); power.stop(); },
+		choose(item) {
+			if (item === STONE_BLOCK) blocks.start();
+			else if (item === 'sprinkler') machines.start();
+			else power.select(item);
+		},
+		placement(item) {
+			if (item === STONE_BLOCK) return blocks.offer();
+			if (item === 'sprinkler') return machines.buildOffer();
+			return power.buildOffer();
+		},
+		take(item) {
+			if (item === STONE_BLOCK) blocks.take();
+			else if (item === 'sprinkler') machines.take();
+			else power.takeBuild(item);
+		},
+	});
+	const buildToggle = $<HTMLButtonElement>('[data-build-toggle]');
+	const buildPanel = $('[data-build-picker]');
+	const buildRemove = $<HTMLButtonElement>('[data-build-remove]');
+	const buildStatus = $('[data-build-status]');
+	const buildButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-build-item]')];
+	const refreshBuild = () => {
+		const open = !!building?.active;
+		if (buildToggle?.getAttribute('aria-expanded') !== String(open)) buildToggle?.setAttribute('aria-expanded', String(open));
+		if (buildPanel) buildPanel.hidden = !open;
+		document.body.classList.toggle('building', open);
+		if (!open) return;
+		const selected = building?.selected;
+		if (buildRemove) buildRemove.disabled = !selected;
+		for (const button of buildButtons) {
+			const id = button.dataset.buildItem as BuildItem;
+			const pressed = String(selected === id);
+			if (button.getAttribute('aria-pressed') !== pressed) button.setAttribute('aria-pressed', pressed);
+			const count = button.querySelector('[data-build-count]');
+			const number = String(inventory.count(id));
+			if (count && count.textContent !== number) count.textContent = number;
+		}
+		if (buildStatus) {
+			const line = selected
+				? pick({ en: 'Aim to place · Q to take back', ko: '방향을 맞춰 설치 · Q로 회수' })
+				: pick({ en: 'Choose something to build', ko: '설치할 물건을 고르세요' });
+			if (buildStatus.textContent !== line) buildStatus.textContent = line;
+		}
+	};
+	buildToggle?.addEventListener('click', () => { building?.toggle(); refreshBuild(); });
+	$('[data-build-close]')?.addEventListener('click', () => { building?.close(); refreshBuild(); buildToggle?.focus(); });
+	buildRemove?.addEventListener('click', () => building?.remove());
+	for (const button of buildButtons) button.addEventListener('click', () => {
+		const id = button.dataset.buildItem as BuildItem;
+		if (BUILD_ITEMS.includes(id)) building?.select(id);
+		refreshBuild();
+	});
+
+	interactions.add(power.offer); // Collect ore normally; installing and taking machines is Build-only.
 	interactions.add(forge.offer);
 	interactions.add(machines.offer);
 	interactions.add(farm.offer);
-	interactions.add(machines.hint);
-	interactions.add(() => blocks.hint());
-	interactions.add(power.hint);
 
 	// Cloudrest, up in the sky: crystals to gather (E), and a chest at the top of the spire.
 	const skyIsle = createSkyIsle({ scene, toon, theme, inventory, pos, addFeature, modelUrl: canvas.dataset.skyModel ?? '', toast: (text) => fishing.toast(text) });
@@ -660,6 +717,8 @@ export async function startIsland() {
 		root: ui.atlas,
 		close: ui.atlasClose,
 		onOpen: () => {
+			building?.close();
+			refreshBuild();
 			controls.clearKeys();
 			fishing.release();
 		},
@@ -714,7 +773,9 @@ export async function startIsland() {
 			tortoise.update(dt);
 			talk.update(dt);
 			hands.update();
+			if (building?.active && (player.swimming || skyIsle.aboard)) building.close();
 			blocks.update(time);
+			refreshBuild();
 			interactions.update();
 		},
 	});

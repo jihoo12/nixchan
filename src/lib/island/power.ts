@@ -33,7 +33,7 @@ import type { Offer } from '../nixkit/interact';
 import type { Inventory } from './inventory';
 import type { Toon } from './look';
 import { loadJSON, saveJSON } from './save';
-import { slopeUp, terrainAt } from './terrain';
+import { slopeUp, terrainAt, WORLD_EDGE } from './terrain';
 import { createPictures } from '../nixkit/thumbnail';
 import type { WebGPURenderer } from 'three/webgpu';
 import { TAU, damp } from '../nixkit/util';
@@ -41,6 +41,9 @@ import { TAU, damp } from '../nixkit/util';
 export const WINDMILL = 'windmill';
 export const DRILL = 'drill';
 export const BELT = 'belt';
+export const ORE_HOPPER = 'ore-hopper';
+export const MAX_ORE_HOPPERS = 4;
+export type PowerBuildKind = 'windmill' | 'drill' | 'belt' | 'ore-hopper';
 export const MAX_WINDMILLS = 6;
 export const MAX_BELTS = 400;
 /** How far a windmill's power reaches, and how far from a belt with power a machine has it too. */
@@ -107,9 +110,9 @@ export interface PowerContext {
 	ore: { id: string; color: string };
 	veins: VeinSource;
 	/** Where the hopper stands, by the forge. */
-	hopper: { x: number; z: number; yaw: number };
-	/** Optional former endpoint: existing belt routes and the shared ore stock remain usable. */
-	legacyHopper?: { x: number; z: number; yaw: number };
+	hopper: HopperSite;
+	/** Inventory shortcuts and the drill hint open the same build controls as B. */
+	selectBuild?: (kind: PowerBuildKind) => boolean;
 	groundAt: (x: number, z: number) => number;
 	addFeature: (f: Feature) => void;
 	removeFeature: (f: Feature) => void;
@@ -145,17 +148,23 @@ interface Belt {
 	j: number;
 	dir: number;
 }
+interface HopperSite {
+	x: number;
+	z: number;
+	yaw: number;
+}
 interface Saved {
 	windmills: Windmill[];
 	drills: Drill[];
 	belts: [number, number, number][];
 	hopper: number;
+	hoppers: HopperSite[];
 }
 /** The way from a drill's bin to the hopper: the cells it runs through, and how long it takes. */
 interface Route {
 	start: number;
 	cells: Belt[];
-	terminal: 'forge' | 'legacy';
+	terminal: HopperSite;
 	length: number;
 	ms: number;
 }
@@ -194,7 +203,7 @@ export function createPower(ctx: PowerContext) {
 
 	belts.clear();
 	const state: Omit<Saved, 'belts'> = (() => {
-		const s: Omit<Saved, 'belts'> = { windmills: [], drills: [], hopper: 0 };
+		const s: Omit<Saved, 'belts'> = { windmills: [], drills: [], hopper: 0, hoppers: [] };
 		const saved = loadJSON('power') as Partial<Saved> | undefined;
 		if (!saved || typeof saved !== 'object') return s;
 		if (Array.isArray(saved.windmills))
@@ -218,10 +227,21 @@ export function createPower(ctx: PowerContext) {
 				if (Math.abs(i) > 400 || Math.abs(j) > 400 || belts.size >= MAX_BELTS) continue;
 				belts.set(key(i, j), { i, j, dir });
 			}
+		if (Array.isArray(saved.hoppers)) {
+			for (const h of saved.hoppers) {
+				if (s.hoppers.length >= MAX_ORE_HOPPERS) break;
+				if (!h || !Number.isFinite(h.x) || !Number.isFinite(h.z) || Math.hypot(h.x, h.z) > WORLD_EDGE) continue;
+				if ([ctx.hopper, ...s.hoppers].some((p) => Math.hypot(p.x - h.x, p.z - h.z) < 1.1)) continue;
+				s.hoppers.push({ x: h.x, z: h.z, yaw: num(h.yaw, 0) });
+			}
+		}
 		s.hopper = Math.max(0, Math.floor(num(saved.hopper, 0)));
 		return s;
 	})();
-	const save = () => saveJSON('power', { ...state, belts: [...belts.values()].map((b) => [b.i, b.j, b.dir]) });
+	const save = () => {
+		const { hoppers, ...rest } = state;
+		saveJSON('power', { ...rest, ...(hoppers.length ? { hoppers } : {}), belts: [...belts.values()].map((b) => [b.i, b.j, b.dir]) });
+	};
 
 	// ---------- where things are ----------
 
@@ -230,15 +250,6 @@ export function createPower(ctx: PowerContext) {
 		const v = veinOf(d.vein)!;
 		return { x: v.x + Math.cos(d.yaw) * lx + Math.sin(d.yaw) * lz, z: v.z - Math.sin(d.yaw) * lx + Math.cos(d.yaw) * lz };
 	};
-	const hopperAnchors = [{ id: 'forge' as const, ...ctx.hopper }];
-	const legacy = ctx.legacyHopper;
-	const previous = legacy && Math.hypot(legacy.x - ctx.hopper.x, legacy.z - ctx.hopper.z) > 0.1
-		? [{ id: 'legacy' as const, ...legacy }] : [];
-	const hoppers = [...hopperAnchors, ...previous].map((anchor) => {
-		const at = new THREE.Vector3(anchor.x, terrainAt(anchor.x, anchor.z), anchor.z);
-		ctx.addFeature({ x: at.x, z: at.z, r: 0.55, top: at.y + 0.9 });
-		return { id: anchor.id, at, yaw: anchor.yaw, lamps: [] as THREE.Mesh[], heap: new THREE.Group(), shown: -1 };
-	});
 	/** The height of a belt's top at (x, z). */
 	const beltTop = (x: number, z: number) => beltGround(x, z) + 0.02;
 	/** The belts near (x, z), within `r` of their middles. */
@@ -297,12 +308,12 @@ export function createPower(ctx: PowerContext) {
 		const [di, dj] = DIRS[last.dir];
 		// Select a single terminal for this directional chain. Both feed the same stock.
 		const outX = c.x + di * 0.5, outZ = c.z + dj * 0.5;
-		let terminal: Route['terminal'] | null = null;
+		let terminal: HopperSite | null = null;
 		let nearest = Infinity;
-		for (const hopper of hoppers) {
-			const distance = Math.hypot(outX - hopper.at.x, outZ - hopper.at.z);
+		for (const hopper of [ctx.hopper, ...state.hoppers]) {
+			const distance = Math.hypot(outX - hopper.x, outZ - hopper.z);
 			if (distance <= HAND_IN && distance < nearest) {
-				terminal = hopper.id;
+				terminal = hopper;
 				nearest = distance;
 			}
 		}
@@ -411,6 +422,18 @@ export function createPower(ctx: PowerContext) {
 		drawBelts();
 	};
 	rewire();
+	// Former saves could have ore headed to a fixed endpoint that no longer exists.
+	// Recover each already mined lump once. The stock may temporarily exceed the
+	// scheduling cap on a migrated save; clamping it would destroy that ore.
+	let recovered = 0;
+	for (const d of state.drills) if (!routes.has(d) && d.flight.length) {
+		recovered += d.flight.length;
+		d.flight = [];
+	}
+	if (recovered) {
+		state.hopper += recovered;
+		save();
+	}
 	settleAll();
 	save();
 
@@ -480,6 +503,8 @@ export function createPower(ctx: PowerContext) {
 				if (o) icons.draw(kind, o, new THREE.Vector3(0.7, 0.45, 1));
 			}
 			icons.draw('belt', beltPiece(), new THREE.Vector3(0.8, 0.9, 1));
+			const hopper = make('Hopper');
+			if (hopper) icons.draw(ORE_HOPPER, hopper, new THREE.Vector3(0.75, 0.5, 1));
 			inventory.render();
 		},
 		() => {
@@ -491,28 +516,38 @@ export function createPower(ctx: PowerContext) {
 		id: WINDMILL,
 		name: 'Windmill',
 		kind: 'tool',
-		description: `Made at the forge. Set it up on high ground, where the wind blows, and it powers machines within ${REACH} metres of it, and belts that run near it. One already set up can be picked up again with E, to move it.`,
+		description: `Made at the forge. Set it up on high ground, where the wind blows, and it powers machines within ${REACH} metres of it, and belts that run near it. In windmill build mode, Q takes one back.`,
 		color: '#b07a4f',
 		icon: () => icons.get('windmill') ?? null,
-		actions: [{ label: 'Carry it', run: () => (start('windmill'), ctx.closeMenu()) }],
+		actions: [{ label: 'Build windmill', run: () => selectBuild('windmill') }],
 	});
 	inventory.register({
 		id: DRILL,
 		name: 'Drill',
 		kind: 'tool',
-		description: `Made at the forge. Set it over an ore vein in the hills; with power, it mines the ore each time it grows back and keeps up to ${BIN_HOLDS} in its bin for you, or sends it down belts that run to the hopper by the forge.`,
+		description: `Made at the forge. Set it over an ore vein in the hills; with power, it mines the ore each time it grows back and keeps up to ${BIN_HOLDS} in its bin for you, or sends it down belts that run to an ore hopper.`,
 		color: '#4f5675',
 		icon: () => icons.get('drill') ?? null,
-		actions: [{ label: 'Carry it', run: () => (start('drill'), ctx.closeMenu()) }],
+		actions: [{ label: 'Build drill', run: () => selectBuild('drill') }],
 	});
 	inventory.register({
 		id: BELT,
 		name: 'Belt',
 		kind: 'material',
-		description: 'Made at the forge. Lay them a cell at a time, the way you face, from beside a drill’s bin to the hopper by the forge, and the ore goes along them. Belts carry power too, from a windmill to everything along them.',
+		description: 'Made at the forge. Lay them a cell at a time, the way you face, from beside a drill’s bin to an ore hopper, and the ore goes along them. Belts carry power too, from a windmill to everything along them.',
 		color: '#3a3550',
 		icon: () => icons.get('belt') ?? null,
-		actions: [{ label: 'Lay belts', run: () => (start('belt'), ctx.closeMenu()) }],
+		actions: [{ label: 'Build belts', run: () => selectBuild('belt') }],
+	});
+
+	inventory.register({
+		id: ORE_HOPPER,
+		name: 'Ore hopper',
+		kind: 'tool',
+		description: 'Made at the forge. Build it where a line of belts ends. All ore hoppers share one stock; collect that ore at any of them. Q takes back a hopper you built.',
+		color: '#876451',
+		icon: () => icons.get('ore-hopper') ?? null,
+		actions: [{ label: 'Build ore hopper', run: () => selectBuild('ore-hopper') }],
 	});
 
 	// ---------- what stands on the island ----------
@@ -614,25 +649,41 @@ export function createPower(ctx: PowerContext) {
 	for (const w of state.windmills) showWindmill(w);
 	for (const d of state.drills) showDrill(d);
 
-	// The public forge hopper displays the one shared stock. The old receiver is still
-	// a real endpoint and collection point, but it does not display a second copy of the pile.
-	for (const hopper of hoppers) {
+	// Only the forge hopper displays the shared pile; added receivers only show their lamps.
+	const hopperViews = new Map<HopperSite, { group: THREE.Group; lamps: THREE.Mesh[]; heap: THREE.Group; shown: number; feature: Feature }>();
+	const showHopper = (site: HopperSite) => {
+		const y = terrainAt(site.x, site.z);
 		const group = new THREE.Group();
-		group.name = hopper.id === 'forge' ? 'Forge ore hopper' : 'Old ore receiver';
-		group.position.copy(hopper.at);
-		group.rotation.y = hopper.yaw;
-		if (hopper.id === 'forge') {
-			hopper.heap.position.y = HOPPER_FLOOR;
-			group.add(hopper.heap);
+		group.name = site === ctx.hopper ? 'Forge ore hopper' : 'Built ore hopper';
+		group.position.set(site.x, y, site.z);
+		group.rotation.y = site.yaw;
+		const heap = new THREE.Group();
+		if (site === ctx.hopper) {
+			heap.position.y = HOPPER_FLOOR;
+			group.add(heap);
 		}
+		const feature = { x: site.x, z: site.z, r: 0.55, top: y + 0.9 };
+		const view = { group, lamps: [] as THREE.Mesh[], heap, shown: -1, feature };
+		hopperViews.set(site, view);
 		ctx.scene.add(group);
+		ctx.addFeature(feature);
 		onModels(() => {
-			const o = make('Hopper');
-			if (!o) return;
-			group.add(o);
-			hopper.lamps = lampsOf(o);
+			if (!hopperViews.has(site)) return;
+			const model = make('Hopper');
+			if (!model) return;
+			group.add(model);
+			view.lamps = lampsOf(model);
 		});
-	}
+	};
+	const hideHopper = (site: HopperSite) => {
+		const view = hopperViews.get(site);
+		if (!view) return;
+		view.group.removeFromParent();
+		ctx.removeFeature(view.feature);
+		hopperViews.delete(site);
+	};
+	showHopper(ctx.hopper);
+	for (const site of state.hoppers) showHopper(site);
 
 	// ---------- the belts ----------
 
@@ -764,7 +815,7 @@ export function createPower(ctx: PowerContext) {
 
 	// ---------- carrying ----------
 
-	type Kind = 'windmill' | 'drill' | 'belt';
+	type Kind = PowerBuildKind;
 	const carry = {
 		kind: null as Kind | null,
 		held: new Map<string, THREE.Object3D>(),
@@ -798,6 +849,11 @@ export function createPower(ctx: PowerContext) {
 			const ghost = whole(kind);
 			if (ghost) carry.ghosts.set(kind, ghostOf(ghost));
 		}
+		const hopper = make('Hopper');
+		if (hopper) {
+			carry.ghosts.set('ore-hopper', ghostOf(hopper.clone(true)));
+			holdOf('ore-hopper', hopper, 0.45);
+		}
 	});
 	holdOf('belt', beltPiece(), 0.4);
 	carry.ghosts.set('belt', ghostOf(beltPiece()));
@@ -824,20 +880,26 @@ export function createPower(ctx: PowerContext) {
 		return from + DOTS;
 	};
 
-	const itemOf = (kind: Kind) => (kind === 'windmill' ? WINDMILL : kind === 'drill' ? DRILL : BELT);
+	const itemOf = (kind: Kind) => kind;
 	const count = (kind: Kind) => inventory.count(itemOf(kind));
-	function start(kind: Kind) {
-		if (!count(kind)) return;
+	const placed = (kind: Kind) => kind === 'belt' ? belts.size : kind === 'windmill' ? state.windmills.length
+		: kind === 'drill' ? state.drills.length : state.hoppers.length;
+	function start(kind: Kind): boolean {
+		if (!count(kind) && !placed(kind)) return false;
 		if (!ctx.canCarry()) {
-			ctx.toast(kind === 'windmill' ? 'A windmill goes up on the island, on high ground.' : kind === 'drill' ? 'A drill goes over an ore vein, up in the hills.' : 'Belts go down on the island.');
-			return;
-		}
-		if (kind === 'drill' && !freeVeins().length) {
-			ctx.toast('There are drills on every vein already.');
-			return;
+			ctx.toast(kind === 'windmill' ? 'A windmill goes up on the island, on high ground.' : kind === 'drill' ? 'A drill goes over an ore vein, up in the hills.' : 'Build on dry ground down on the island.');
+			return false;
 		}
 		carry.kind = kind;
-		if (kind === 'belt') ctx.toast('Belts run the way you face. E lays one; E on one facing another way turns it; Q takes one back.');
+		carry.spot = null;
+		if (kind === 'belt') ctx.toast('Belts run the way you face. E lays one; Q takes one back.');
+		return true;
+	}
+	function selectBuild(kind: Kind) {
+		if (ctx.selectBuild) return ctx.selectBuild(kind);
+		const selected = start(kind);
+		if (selected) ctx.closeMenu();
+		return selected;
 	}
 	const stop = () => {
 		carry.kind = null;
@@ -853,11 +915,29 @@ export function createPower(ctx: PowerContext) {
 			const z = ctx.pos.z + turn.z * AHEAD;
 			const y = terrainAt(x, z);
 			let why: string | undefined;
-			if (y < WINDY) why = 'Too sheltered here: a windmill wants high ground';
+			if (!count('windmill')) why = 'No windmill in your bag';
+			else if (state.windmills.length >= MAX_WINDMILLS) why = 'There are already six windmills set up';
+			else if (y < WINDY) why = 'Too sheltered here: a windmill wants high ground';
 			else if (slopeUp(x, z) < 0.8) why = 'Too steep here for a windmill';
 			else if (!ctx.open(x, z) || state.windmills.some((w) => Math.hypot(w.x - x, w.z - z) < 3) || beltsNear(x, z, 1.4).length)
 				why = 'No room for a windmill here';
 			return { x, y: ctx.groundAt(x, z), z, ok: !why, why };
+		}
+		if (carry.kind === 'ore-hopper') {
+			const x = ctx.pos.x + turn.x * AHEAD;
+			const z = ctx.pos.z + turn.z * AHEAD;
+			const y = terrainAt(x, z);
+			const receiver = state.hoppers.find((h) => Math.hypot(x - h.x, z - h.z) < 0.85 && Math.abs(terrainAt(h.x, h.z) - ctx.pos.y) < 1.8);
+			let why: string | undefined;
+			if (receiver) why = 'Take back this ore hopper (Q)';
+			else if (!count('ore-hopper')) why = 'No ore hopper in your bag';
+			else if (state.hoppers.length >= MAX_ORE_HOPPERS) why = 'There are already four built ore hoppers';
+			else if (y < 0.3 || Math.abs(y - ctx.pos.y) > 1.15 || Math.hypot(x, z) > WORLD_EDGE - 0.7 || slopeUp(x, z) < 0.8)
+				why = 'An ore hopper wants level dry ground';
+			else if (!ctx.open(x, z) || [ctx.hopper, ...state.hoppers].some((p) => Math.hypot(p.x - x, p.z - z) < 1.1)
+				|| belts.has(key(Math.floor(x), Math.floor(z))) || beltsNear(x, z, 0.6).length)
+				why = 'No room for an ore hopper here';
+			return { x, y, z, ok: !why, why, receiver };
 		}
 		if (carry.kind === 'belt') {
 			// The cell in front of her, the belt running the way she faces.
@@ -886,23 +966,20 @@ export function createPower(ctx: PowerContext) {
 				bestD = d;
 			}
 		}
-		return best ? { x: best.x, y: best.y + 0.1, z: best.z, ok: true, vein: best } : null;
+		return best ? { x: best.x, y: best.y + 0.1, z: best.z, ok: !!count('drill'), vein: best, why: count('drill') ? undefined : 'No drill in your bag' } : null;
 	};
 
 	const setDown = () => {
-		const s = carry.spot;
 		const kind = carry.kind;
-		if (!s?.ok || !kind) return;
+		if (!kind || !ctx.canAct() || !ctx.canCarry()) return;
+		const s = findSpot();
+		if (!s?.ok) return;
 		if (kind === 'belt' && s.belt) {
 			const b = s.belt;
-			if (s.existing) {
-				change(() => (s.existing!.dir = b.dir));
-				return;
-			}
+			if (s.existing) return;
 			if (!inventory.remove(BELT)) return stop();
 			change(() => belts.set(key(b.i, b.j), b));
 			if (!count('belt')) {
-				stop();
 				ctx.toast('That was the last belt.');
 			}
 			return;
@@ -914,24 +991,47 @@ export function createPower(ctx: PowerContext) {
 			showWindmill(w);
 			const now = state.drills.filter((d) => powered(d)).length;
 			ctx.toast(now ? `It's turning! ${now === 1 ? 'A drill' : `${now} drills`} near it ${now === 1 ? 'has' : 'have'} power.` : `It's turning! Machines within ${REACH} metres of it have power.`);
+		} else if (kind === 'ore-hopper') {
+			const site = { x: s.x, z: s.z, yaw: Math.atan2(ctx.pos.x - s.x, ctx.pos.z - s.z) };
+			change(() => state.hoppers.push(site));
+			showHopper(site);
+			inventory.render();
+			ctx.toast('Ore hopper set up. Finish a line of belts at it to send ore here.');
 		} else if (s.vein) {
 			const d: Drill = { vein: s.vein.id, yaw: Math.atan2(ctx.pos.x - s.vein.x, ctx.pos.z - s.vein.z), from: Date.now(), stored: 0, flight: [] };
 			change(() => state.drills.push(d));
 			showDrill(d);
 			ctx.toast(powered(d) ? 'The drill hums into life over the ore.' : `Set up! It needs a windmill within ${REACH} metres, or a belt with power, to run.`);
 		}
-		if (!count(kind) || (kind === 'drill' && !freeVeins().length) || (kind === 'windmill' && state.windmills.length >= MAX_WINDMILLS)) stop();
+		if (!count(kind) && !placed(kind)) stop();
 	};
 	/** Q: takes back the belt in front of her. */
 	const takeBelt = () => {
-		const b = carry.spot?.existing;
-		if (carry.kind !== 'belt' || !b) return false;
+		if (carry.kind !== 'belt' || !ctx.canAct() || !ctx.canCarry()) return false;
+		const b = findSpot()?.existing;
+		if (!b) return false;
 		if (!inventory.add(BELT)) {
 			ctx.toast('Your bag is too full to take it.');
 			return false;
 		}
 		change(() => belts.delete(key(b.i, b.j)));
 		inventory.render();
+		return true;
+	};
+
+	/** Q in hopper build mode: only user-built receivers can be taken back. */
+	const takeHopper = () => {
+		if (carry.kind !== 'ore-hopper' || !ctx.canAct() || !ctx.canCarry()) return false;
+		const receiver = findSpot()?.receiver;
+		if (!receiver) return false;
+		if (!inventory.add(ORE_HOPPER)) {
+			ctx.toast('Your bag is too full to take it.');
+			return false;
+		}
+		change(() => (state.hoppers = state.hoppers.filter((h) => h !== receiver)));
+		hideHopper(receiver);
+		inventory.render();
+		ctx.toast('Ore hopper returned to your bag. Any ore already on the belt is safe.');
 		return true;
 	};
 
@@ -955,6 +1055,7 @@ export function createPower(ctx: PowerContext) {
 		const n = state.hopper;
 		if (!n) return;
 		if (!inventory.add(ctx.ore.id, n)) {
+			save(); // Keep deliveries and mining settled by this attempt even if the bag is full.
 			ctx.toast('Your bag is too full for the ore.');
 			return;
 		}
@@ -964,89 +1065,80 @@ export function createPower(ctx: PowerContext) {
 		inventory.render();
 		ctx.toast(n > 1 ? `${n} lumps of iron ore from the hopper!` : 'A lump of iron ore from the hopper.');
 	};
-	const pickUp = (kind: 'windmill' | 'drill', thing: Windmill | Drill) => {
-		if (!inventory.fits(itemOf(kind))) {
+	const pickUp = (kind: 'windmill' | 'drill', thing: Windmill | Drill): boolean => {
+		if (!inventory.add(itemOf(kind))) {
 			ctx.toast('Your bag is too full to take it.');
-			return;
+			return false;
 		}
 		if (kind === 'windmill') {
 			change(() => (state.windmills = state.windmills.filter((w) => w !== thing)));
 			hideWindmill(thing as Windmill);
-			inventory.add(WINDMILL);
 		} else {
 			const d = thing as Drill;
 			settleAll();
 			if (d.stored && !inventory.add(ctx.ore.id, d.stored)) {
+				inventory.remove(DRILL);
+				save(); // settleAll may already have recorded a vein harvest.
 				ctx.toast('Your bag is too full for the ore in its bin.');
-				return;
+				return false;
 			}
-			// What it's sent off along the belts still gets there.
+			// What it has sent down the belts still gets there.
 			state.hopper += d.flight.length;
 			d.flight = [];
 			d.stored = 0;
 			change(() => (state.drills = state.drills.filter((o) => o !== d)));
 			hideDrill(d);
-			inventory.add(DRILL);
 		}
 		inventory.render();
-		carry.kind = kind;
-		ctx.toast(`Picked up the ${kind}. Carry it to where it should go.`);
+		ctx.toast(`Picked up the ${kind}. E sets it up again.`);
+		return true;
 	};
-
-	// ---------- E ----------
 
 	const near = (x: number, z: number, r: number) => Math.hypot(x - ctx.pos.x, z - ctx.pos.z) < r;
+	const nearDrill = (d: Drill) => {
+		const v = veinOf(d.vein);
+		return !!v && near(v.x, v.z, 2.4) && Math.abs(ctx.pos.y - v.y) < 2.5;
+	};
+	const nearWindmillToTake = (w: Windmill) => near(w.x, w.z, 1.6) && Math.abs(ctx.pos.y - ctx.groundAt(w.x, w.z)) < 2.5;
+	const takeBuild = (kind: Kind) => {
+		if (carry.kind !== kind || !ctx.canAct() || !ctx.canCarry()) return false;
+		if (kind === 'belt') return takeBelt();
+		if (kind === 'ore-hopper') return takeHopper();
+		const thing = kind === 'drill' ? state.drills.find(nearDrill) : state.windmills.find(nearWindmillToTake);
+		return !!thing && pickUp(kind, thing);
+	};
+
+	// In build mode E only places. Ordinary exploration E collects already mined ore.
+	const buildOffer = (): Offer | null => {
+		if (!ctx.canAct() || !ctx.canCarry() || !carry.kind) return null;
+		const s = findSpot();
+		if (carry.kind === 'belt') {
+			if (!s) return { label: 'Turn to where it should go' };
+			if (s.existing) return { label: 'Take the belt back (Q)' };
+			if (!count('belt')) return { label: 'Out of belts' };
+			return s.ok ? { label: `Lay a belt (${count('belt')})`, go: setDown } : { label: s.why ?? '' };
+		}
+		if (carry.kind === 'windmill' && state.windmills.some(nearWindmillToTake)) return { label: 'Take back the windmill (Q)' };
+		if (carry.kind === 'drill' && state.drills.some(nearDrill)) return { label: 'Take back the drill (Q)' };
+		if (s?.ok) {
+			if (carry.kind === 'windmill') return { label: 'Set the windmill up here', go: setDown };
+			if (carry.kind === 'ore-hopper') return { label: 'Build ore hopper here', go: setDown };
+			return { label: poweredAt(s.x, s.z) ? 'Set the drill on the ore' : 'Set the drill on the ore (no power here yet)', go: setDown };
+		}
+		return s?.why ? { label: s.why } : null;
+	};
 	const offer = (): Offer | null => {
-		if (!ctx.canAct()) return null;
-		if (carry.kind) {
-			const s = carry.spot;
-			if (carry.kind === 'belt') {
-				if (!s) return { label: 'Turn to where it should go' };
-				if (s.existing) {
-					if (s.belt && s.existing.dir !== s.belt.dir) return { label: 'Turn the belt this way', go: setDown };
-					return { label: 'Take the belt back (Q)', go: () => void takeBelt() };
-				}
-				if (!count('belt')) return { label: 'Out of belts' };
-				return s.ok ? { label: `Lay a belt (${count('belt')})`, go: setDown } : { label: s.why ?? '' };
-			}
-			if (s?.ok) {
-				if (carry.kind === 'windmill') return { label: 'Set the windmill up here', go: setDown };
-				return { label: poweredAt(s.x, s.z) ? 'Set the drill on the ore' : 'Set the drill on the ore (no power here yet)', go: setDown };
-			}
-			if (s?.why) return { label: s.why };
-			return null;
-		}
+		if (!ctx.canAct() || carry.kind) return null;
 		for (const d of state.drills) {
-			const v = veinOf(d.vein);
-			if (!v || !near(v.x, v.z, 2.4) || Math.abs(ctx.pos.y - v.y) > 2.5) continue;
-			if (d.stored) return { label: routeOf(d) ? `Collect the ore (${d.stored}, the rest's on the belt)` : `Collect the ore (${d.stored})`, go: () => collect(d) };
-			const label = powered(d) ? (routeOf(d) ? 'Pick up the drill (its ore goes to the hopper)' : 'Pick up the drill') : `Pick up the drill (no power: needs a windmill within ${REACH} m)`;
-			return { label, go: () => pickUp('drill', d) };
+			if (!nearDrill(d)) continue;
+			if (d.stored) return { label: `Collect the ore (${d.stored})`, go: () => collect(d) };
 		}
-		for (const w of state.windmills) if (near(w.x, w.z, 1.6)) return { label: 'Pick up the windmill', go: () => pickUp('windmill', w) };
-		for (const hopper of hoppers) if (near(hopper.at.x, hopper.at.z, 1.5)) {
-			const label = hopper.id === 'legacy' ? 'Old receiver' : 'The hopper';
-			return state.hopper ? { label: hopper.id === 'legacy' ? `Collect the shared ore (${state.hopper})` : `Collect the ore (${state.hopper})`, go: collectHopper } : { label: inFlight() ? `${label}: ore is on its way` : `${label} is empty` };
+		for (const site of [ctx.hopper, ...state.hoppers]) if (near(site.x, site.z, 1.5) && Math.abs(terrainAt(site.x, site.z) - ctx.pos.y) < 2) {
+			return state.hopper ? { label: `Collect ore (${state.hopper})`, go: collectHopper }
+				: { label: inFlight() ? 'The hopper: ore is on its way' : 'The hopper is empty' };
 		}
 		return null;
 	};
-	/** Asked after the rest: by a free vein with a drill in her bag, take it out. */
-	const hint = (): Offer | null => {
-		if (carry.kind || !ctx.canAct() || !inventory.has(DRILL)) return null;
-		for (const v of freeVeins()) if (near(v.x, v.z, 3) && Math.abs(ctx.pos.y - v.y) < 2.5) return { label: 'Take out a drill to set up', go: () => start('drill') };
-		return null;
-	};
-
-	// On a touch screen, buttons for what Q and Esc do while she's laying belts.
-	const bar = document.querySelector<HTMLElement>('[data-belts]');
-	const press = (sel: string, run: () => void) =>
-		document.querySelector<HTMLButtonElement>(sel)?.addEventListener('pointerdown', (e) => {
-			e.preventDefault();
-			run();
-		});
-	press('[data-belts-take]', () => void takeBelt());
-	press('[data-belts-done]', stop);
-
 	// ---------- every frame ----------
 
 	let clock = 0;
@@ -1071,9 +1163,8 @@ export function createPower(ctx: PowerContext) {
 		}
 
 		// What she's carrying: in her arms, and where it would go, shown there.
-		if (carry.kind && (!count(carry.kind) || !ctx.canCarry()) && !(carry.kind === 'belt' && belts.size && ctx.canCarry())) stop();
+		if (carry.kind && ((!count(carry.kind) && !placed(carry.kind)) || !ctx.canCarry())) stop();
 		carry.spot = carry.kind ? findSpot() : null;
-		if (bar && bar.hidden === (carry.kind === 'belt')) bar.hidden = carry.kind !== 'belt';
 		for (const [kind, held] of carry.held) {
 			held.visible = carry.kind === kind && count(kind) > 0;
 			const l = ctx.figure.node('HandL');
@@ -1089,7 +1180,7 @@ export function createPower(ctx: PowerContext) {
 		for (const [kind, ghost] of carry.ghosts) {
 			const s = carry.kind === kind ? carry.spot : null;
 			// A belt's ghost shows where one would go, or which way an existing one would turn.
-			const show = !!s && (kind !== 'belt' || (!!s.belt && (!s.existing || s.existing.dir !== s.belt.dir) && (!!s.existing || s.ok || !!s.why)));
+			const show = !!s && (kind !== 'belt' || (!!s.belt && !s.existing && (s.ok || !!s.why)));
 			ghost.visible = show;
 			if (!s || !show) continue;
 			if (kind === 'belt' && s.belt) {
@@ -1138,13 +1229,13 @@ export function createPower(ctx: PowerContext) {
 				fillHeap(v.heap, heap);
 			}
 		}
-		for (const hopper of hoppers) {
+		for (const [site, hopper] of hopperViews) {
 			const inHopper = Math.min(state.hopper, 18);
-			if (hopper.id === 'forge' && inHopper !== hopper.shown) {
+			if (site === ctx.hopper && inHopper !== hopper.shown) {
 				hopper.shown = inHopper;
 				fillHeap(hopper.heap, inHopper, 0.22);
 			}
-			const hopperLit = state.drills.some((d) => routeOf(d)?.terminal === hopper.id);
+			const hopperLit = state.drills.some((d) => routeOf(d)?.terminal === site);
 			for (const lamp of hopper.lamps) lamp.material = hopperLit ? lampOn : lampOff;
 		}
 		drawChevrons(time);
@@ -1153,10 +1244,13 @@ export function createPower(ctx: PowerContext) {
 
 	return {
 		offer,
-		hint,
+		buildOffer,
 		update,
 		stop,
 		takeBelt,
+		takeHopper,
+		takeBuild,
+		select: start,
 		poweredAt,
 		/** Whether this vein has a drill on it (so she doesn't mine it by hand). */
 		drilled: (id: string) => state.drills.some((d) => d.vein === id),
@@ -1173,6 +1267,8 @@ export function createPower(ctx: PowerContext) {
 		windmills: () => state.windmills.length + inventory.count(WINDMILL),
 		drills: () => state.drills.length + inventory.count(DRILL),
 		belts: () => belts.size + inventory.count(BELT),
+		/** Count of placed hoppers; the one built into the forge is not counted. */
+		hoppers: () => state.hoppers.length,
 		veinCount: veins.length,
 	};
 }

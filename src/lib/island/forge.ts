@@ -24,6 +24,7 @@ import { SHARDS } from '../monochrome/world';
 import { loadJSON, saveJSON } from './save';
 import { terrainAt } from './terrain';
 import { ORE_VEINS } from './orefield';
+import { ORE_HOPPER } from './power';
 import type { Theme } from './theme';
 import { createPictures } from '../nixkit/thumbnail';
 import type { WebGPURenderer } from 'three/webgpu';
@@ -93,7 +94,8 @@ const RECIPES: Recipe[] = [
 	{ id: 'sprinkler', kind: 'item', item: 'sprinkler', name: 'Sprinkler', about: 'Set where four plots meet, it keeps them watered. There is room in the garden for four.', needs: [[INGOT, 2]], color: '#c97b4a' },
 	{ id: 'blocks', kind: 'item', item: 'stone-block', name: 'Stone Blocks', about: 'Six blocks of dressed stone from one ore (eight if it goes perfectly), to build with out on the island.', needs: [[ORE, 1]], color: '#d8c9a8', makes: 6 },
 	{ id: 'windmill', kind: 'item', item: 'windmill', name: 'Windmill', about: 'Set up on high ground, where the wind blows, it powers the machines round it.', needs: [[INGOT, 3]], color: '#b07a4f' },
-	{ id: 'belts', kind: 'item', item: 'belt', name: 'Belts', about: 'Eight lengths of belt from one ingot (ten if it goes perfectly). Laid from a drill to the hopper beside the forge, they carry its ore, and power, along them.', needs: [[INGOT, 1]], color: '#3a3550', makes: 8 },
+	{ id: 'belts', kind: 'item', item: 'belt', name: 'Belts', about: 'Eight lengths of belt from one ingot (ten if it goes perfectly). Laid from a drill to a hopper, they carry its ore, and power, along them.', needs: [[INGOT, 1]], color: '#3a3550', makes: 8 },
+	{ id: 'ore-hopper', kind: 'item', item: ORE_HOPPER, name: 'Ore Hopper', about: 'Place it where a powered conveyor ends. The ore is shared with the forge hopper, so either can collect it.', needs: [[INGOT, 2]], color: '#a88d61' },
 	{ id: 'drill', kind: 'item', item: 'drill', name: 'Drill', about: 'Set over an ore vein near a windmill, it mines the ore each time it grows back, and keeps it for you.', needs: [[INGOT, 4], [SHARD, 2]], color: '#4f5675' },
 	{ id: 'gearbloom', kind: 'item', item: 'seed-gearbloom', name: 'Gearbloom Seeds', about: 'Three brass seeds (five if it goes perfectly), to plant in the garden. They only grow where a windmill powers the plot.', needs: [[INGOT, 1], [SHARD, 1]], color: '#e8b84a', makes: 3 },
 	{ id: 'helper', kind: 'upgrade', name: 'Sprocket, a clockwork helper', about: 'Picks ripe crops into a crate by the garden, and plants the same again from your seeds.', needs: [[INGOT, 4], [SHARD, 4]], color: '#e8b84a' },
