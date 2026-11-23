@@ -42,6 +42,8 @@ import { createInteractions } from '../nixkit/interact';
 import { createInventory } from './inventory';
 import { buildLandmarks, buildPier } from './landmarks';
 import { createCampfireRest } from './campfire-rest';
+import { createLookout } from './lookout';
+import { createLookoutCamera } from './lookout-camera';
 import { planIsland } from './layout';
 import { makeToon } from './look';
 import { createMenu } from './menu';
@@ -96,6 +98,8 @@ export async function startIsland() {
 	});
 	if (!engine) return;
 	const { renderer, scene, camera } = engine;
+	const motion = matchMedia('(prefers-reduced-motion: reduce)');
+	const lookoutCamera = createLookoutCamera(camera, { reduced: () => motion.matches });
 	const toon = makeToon();
 	const theme = createTheme();
 
@@ -152,6 +156,7 @@ export async function startIsland() {
 			if (tortoise.talking) held = tortoise.facing;
 			// Breaking the fourth wall, she turns to face whoever's watching.
 			if (wall.breaking) return towardCamera();
+			if (lookoutCamera.active) return landmarks.lookout.yaw;
 			if (farm.busy) held = farm.facing;
 			if (forge.busy) held = forge.facing;
 			if (house.dressing) held = house.facing;
@@ -242,11 +247,10 @@ export async function startIsland() {
 	// ---------- things to do ----------
 
 	const interactions = createInteractions();
-	const motion = matchMedia('(prefers-reduced-motion: reduce)');
 	const campfire = campfireRest = createCampfireRest({
 		world: islandWorld, terrain: terrainAt, seats: landmarks.campfireSeats, player,
 		reduced: () => motion.matches,
-		available: () => ready && !engine.paused && !fishing.active && !farm.busy && !farm.shopOpen
+		available: () => ready && !engine.paused && !lookoutCamera.active && !fishing.active && !farm.busy && !farm.shopOpen
 			&& !forge.busy && !forge.dialogOpen && !talk.talking && !menu.isOpen && !house.dressing
 			&& !hands.holding() && !blocks.on && !power.laying && !wall.breaking && !skyIsle.aboard
 			&& Math.hypot(player.vel.x, player.vel.z) < 2.25,
@@ -269,6 +273,24 @@ export async function startIsland() {
 			campfire.update(dt, time, stand);
 		},
 	});
+
+	// Look through the real landscape without moving or saving a new player position.
+	const lookout = createLookout({
+		site: landmarks.lookout, camera: lookoutCamera, pos,
+		canLook: () => ready && engine.running && player.grounded && !player.swimming && !player.dashing
+			&& !campfire.active && !fishing.active && !farm.busy && !farm.shopOpen && !forge.busy
+			&& !forge.dialogOpen && !talk.talking && !menu.isOpen && !house.dressing && !wall.breaking
+			&& !hands.holding() && !blocks.on && !power.laying && !skyIsle.aboard
+			&& Math.hypot(player.vel.x, player.vel.z) < 2.25,
+		halt: () => {
+			nix.halt();
+			player.vel.set(0, 0, 0);
+			controls.state.jumpQueued = controls.state.dashQueued = controls.state.waveQueued = false;
+		},
+	});
+	interactions.add(lookout.offer);
+	keys.intercept(lookout.key, 95);
+	engine.add({ order: ORDER.camera + 10, always: true, update: lookout.update });
 
 	// Her bag: fish, seeds, crops and her watering can.
 	const inventory = createInventory({

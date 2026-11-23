@@ -1,0 +1,98 @@
+<dialog class="lookout" data-lookout aria-labelledby="lookout-title" aria-describedby="lookout-hint">
+	<div class="eyepiece" data-lookout-drag aria-hidden="true"></div>
+	<div class="caption">
+		<p class="title" id="lookout-title">Lighthouse Lookout</p>
+		<p class="hint" id="lookout-hint">
+			<span data-lookout-keys>Drag or use the arrow keys to look around.</span>
+			<span data-lookout-touch>Drag the view to look around.</span>
+		</p>
+	</div>
+	<div class="lookout-actions">
+		<button type="button" data-lookout-zoom="-1" aria-label="Zoom out">−</button>
+		<button type="button" data-lookout-zoom="1" aria-label="Zoom in">+</button>
+		<button type="button" data-lookout-exit autofocus>Step back</button>
+	</div>
+</dialog>
+
+<style>
+	.lookout {
+		position: fixed;
+		inset: 0;
+		box-sizing: border-box;
+		margin: 0;
+		width: 100%;
+		height: 100%;
+		max-width: none;
+		max-height: none;
+		padding: 0;
+		border: 0;
+		color: #fff1d1;
+		background: transparent;
+		overflow: hidden;
+		font-family: var(--sans);
+	}
+	.lookout::backdrop { background: transparent; }
+	.eyepiece {
+		position: absolute;
+		inset: 0;
+		touch-action: none;
+		cursor: grab;
+		background: radial-gradient(circle closest-side,
+			transparent 83%, #08101944 91%, #07101bdd 97%, #040a10f8 100%);
+		animation: open-eyepiece 420ms ease-out both;
+	}
+	.eyepiece:active { cursor: grabbing; }
+	@keyframes open-eyepiece {
+		from { opacity: 0; }
+		45% { opacity: 1; }
+		to { opacity: 1; }
+	}
+	.lookout[data-leaving] .eyepiece {
+		animation: none;
+		opacity: 0;
+		transition: opacity 400ms ease-in;
+	}
+	.caption {
+		position: absolute;
+		top: max(16px, env(safe-area-inset-top));
+		left: 50%;
+		transform: translateX(-50%);
+		width: calc(100% - 32px);
+		text-align: center;
+		pointer-events: none;
+		text-shadow: 0 2px 6px #01050a, 0 1px 12px #01050a;
+	}
+	.title { margin: 0; font-family: var(--display); font-size: clamp(20px, 4vw, 29px); }
+	.hint { margin: 3px 0 0; font-size: 13px; }
+	[data-lookout-touch] { display: none; }
+	.lookout-actions {
+		position: absolute;
+		left: 50%;
+		bottom: max(15px, env(safe-area-inset-bottom));
+		transform: translateX(-50%);
+		display: flex;
+		gap: 6px;
+		white-space: nowrap;
+	}
+	.lookout-actions button {
+		min-width: 44px;
+		min-height: 44px;
+		padding: 0 12px;
+		border: 1px solid #c5a96d;
+		border-radius: 9px;
+		background: #13232ff2;
+		color: #fff1d1;
+		font: 800 14px var(--sans);
+		cursor: pointer;
+	}
+	.lookout-actions button:active { background: #26414a; }
+	.lookout-actions button:focus-visible { outline: 2px solid #fff1d1; outline-offset: 3px; }
+	@media (pointer: coarse) {
+		[data-lookout-keys] { display: none; }
+		[data-lookout-touch] { display: inline; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.eyepiece { animation: none; }
+		.lookout[data-leaving] .eyepiece { transition: none; }
+	}
+</style>
