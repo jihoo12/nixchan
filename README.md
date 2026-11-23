@@ -48,8 +48,9 @@ A toon island for Nixchan to roam: places to find, a map that fills in as she ex
 On the homestead, the cottage porch faces the garden across a flat yard, with the Old Forge
 in a side yard. Follow the footpath past the garden to visit Pebble's market on the village green.
 The garden uses the original crop, sprinkler and inventory saves. Press **B** or tap **Build** to
-choose any construction piece, use **E** or the action button to place it, and use **Q** or
-**Take back** to recover it. The forge can make portable ore hoppers for two iron ingots each; all
+choose any construction piece. The chooser folds away, leaving that piece selected. Use **E** or
+the action button to place it repeatedly, and **Q** or **Take back** to recover it. **B** only opens
+or hides the chooser; **Esc** or **Done** ends placement. The forge can make portable ore hoppers for two iron ingots each; all
 hoppers share the forge's ore stock. The old freestanding receiver is gone. Already mined ore is
 safe in the shared stock; place a new hopper at the end of an older conveyor to reconnect it.
 

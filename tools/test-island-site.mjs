@@ -65,9 +65,13 @@ test('the built island has one keyboard and touch building palette for every con
 	const islandHtml = html('island/');
 	assert.equal((islandHtml.match(/data-build-toggle/g) ?? []).length, 1);
 	assert.equal((islandHtml.match(/data-build-picker/g) ?? []).length, 1);
+	assert.match(islandHtml, /data-build-active[^>]*hidden/);
+	assert.match(islandHtml, /data-build-selection/);
+	assert.equal((islandHtml.match(/data-build-done/g) ?? []).length, 1);
+	assert.match(islandHtml, /data-build-close/);
 	assert.match(islandHtml, /data-build-remove/);
 	assert.match(islandHtml, /data-act hidden/);
-	assert.doesNotMatch(islandHtml, /data-belts(?:-take|-done)?[ =>]|data-build-(?:take|done)/);
+	assert.doesNotMatch(islandHtml, /data-belts(?:-take|-done)?[ =>]|data-build-take/);
 	for (const id of ['stone-block', 'belt', 'windmill', 'drill', 'sprinkler', 'ore-hopper'])
 		assert.ok(islandHtml.includes(`data-build-item="${id}"`), id);
 });

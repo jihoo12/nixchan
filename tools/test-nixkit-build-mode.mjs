@@ -21,14 +21,16 @@ test('B opens one palette; choice never installs and every category uses the sam
 		take: (item) => log.push('remove ' + item),
 	});
 	assert.equal(mode.offer(), undefined);
-	mode.toggle();
-	assert.ok(mode.active);
+	mode.togglePicker();
+	assert.ok(mode.busy);
 	assert.equal(mode.selected, null);
-	assert.equal(mode.offer().go, undefined);
+	assert.equal(mode.offer(), null, 'the chooser pauses world actions without an extra HUD hint');
 	for (const item of BUILD_ITEMS) {
 		const before = log.length;
 		mode.select(item);
 		assert.deepEqual(log.slice(before), ['put away', 'choose ' + item]);
+		assert.ok(!mode.pickerOpen, 'selecting folds the chooser');
+		assert.equal(mode.selected, item);
 		mode.offer().go();
 		mode.remove();
 		assert.deepEqual(log.slice(-2), ['place ' + item, 'remove ' + item]);
@@ -37,10 +39,10 @@ test('B opens one palette; choice never installs and every category uses the sam
 	assert.equal(mode.offer().go, undefined);
 	mode.remove();
 	assert.equal(log.at(-1), 'remove ore-hopper');
-	mode.toggle();
+	mode.finish();
 	assert.equal(mode.offer(), undefined);
 	assert.equal(mode.select('belt'), false);
-	assert.ok(!mode.active, 'a modal, swim or unsupported ground cannot start building');
+	assert.ok(!mode.busy, 'a modal, swim or unsupported ground cannot start building');
 });
 
 test('fresh E and touch never fall through to a cached normal action or an old build item', (t) => {
@@ -60,7 +62,7 @@ test('fresh E and touch never fall through to a cached normal action or an old b
 	const interactions = createInteractions({ override: mode.offer });
 	interactions.add(() => ({ label: 'Talk', go: () => log.push('talk') }));
 	interactions.update();
-	mode.toggle();
+	mode.togglePicker();
 	assert.equal(interactions.press(), false, 'no selected item: no old talk or placement');
 	assert.deepEqual(log, []);
 	mode.select('windmill');
@@ -71,7 +73,49 @@ test('fresh E and touch never fall through to a cached normal action or an old b
 	valid = false;
 	assert.equal(interactions.press(), false, 'blocked installation does not talk or remove');
 	assert.deepEqual(log, ['sprinkler']);
-	mode.close();
+	mode.finish();
 	assert.equal(interactions.press(), true);
 	assert.deepEqual(log, ['sprinkler', 'talk']);
+});
+
+test('reopen or fold the chooser without putting the piece away; Done/Esc explicitly ends placement', () => {
+	const events = [];
+	let allowed = true;
+	const mode = createBuildMode({
+		canBuild: () => allowed,
+		putAway: () => events.push('put away'),
+		choose: (item) => events.push('equip ' + item),
+		placement: (item) => ({ label: 'Place', go: () => events.push('place ' + item) }),
+		take: (item) => events.push('take ' + item),
+	});
+	mode.togglePicker();
+	mode.closePicker();
+	assert.equal(mode.offer(), undefined, 'cancelling the empty chooser arms nothing');
+	mode.togglePicker();
+	mode.select('belt');
+	mode.offer().go();
+	mode.offer().go();
+	mode.togglePicker();
+	assert.equal(mode.selected, 'belt');
+	assert.equal(mode.offer(), null);
+	mode.remove();
+	assert.deepEqual(events, ['put away', 'equip belt', 'place belt', 'place belt']);
+	mode.togglePicker();
+	assert.equal(mode.selected, 'belt');
+	mode.offer().go();
+	mode.remove();
+	mode.togglePicker();
+	mode.select('belt');
+	assert.equal(events.filter((entry) => entry === 'equip belt').length, 1);
+	allowed = false;
+	assert.equal(mode.offer().go, undefined);
+	allowed = true;
+	mode.offer().go();
+	mode.finish();
+	mode.finish();
+	assert.equal(mode.selected, null);
+	assert.equal(mode.pickerOpen, false);
+	assert.equal(mode.busy, false);
+	assert.equal(mode.offer(), undefined);
+	assert.deepEqual(events.slice(-4), ['place belt', 'take belt', 'place belt', 'put away']);
 });

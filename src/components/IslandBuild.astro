@@ -17,7 +17,7 @@ const pieces = [
 >
 	<header>
 		<h2 id="island-build-title" data-build-ko="짓기">Build</h2>
-		<button type="button" class="close" data-build-close aria-label="Close building" data-build-ko-label="짓기 닫기">
+		<button type="button" class="close" data-build-close aria-label="Close build menu" data-build-ko-label="짓기 메뉴 닫기">
 			<span aria-hidden="true">×</span>
 		</button>
 	</header>
@@ -31,40 +31,43 @@ const pieces = [
 			</button>
 		))}
 	</div>
-	<footer>
-		<span class="shortcut" aria-label="E: Place" data-build-ko-label="E: 놓기">
-			<kbd aria-hidden="true">E</kbd><span data-build-ko="놓기">Place</span>
-		</span>
-		<button type="button" class="remove" data-build-remove aria-keyshortcuts="Q">
-			<kbd aria-hidden="true">Q</kbd><span data-build-ko="회수하기">Take back</span>
-		</button>
-	</footer>
-	<p class="status" data-build-status role="status" hidden></p>
 </section>
+<div class="build-active" data-build-active role="group" aria-label="Building controls" data-build-ko-label="배치 조작" hidden>
+	<span class="selection" data-build-selection></span>
+	<button type="button" class="remove" data-build-remove aria-keyshortcuts="Q">
+		<kbd aria-hidden="true">Q</kbd><span data-build-ko="회수하기">Take back</span>
+	</button>
+	<button type="button" class="done" data-build-done aria-keyshortcuts="Escape">
+		<kbd aria-hidden="true">Esc</kbd><span data-build-ko="완료">Done</span>
+	</button>
+</div>
+<p class="status" data-build-status role="status"></p>
 
 <style>
-	.build-picker {
+	.build-picker, .build-active {
 		position: fixed;
 		z-index: 27;
+		box-sizing: border-box;
+		border: 1px solid color-mix(in srgb, var(--edge) 70%, transparent);
+		color: var(--ink);
+		background: color-mix(in srgb, var(--surface) 96%, transparent);
+		box-shadow: 0 4px 0 var(--edge), 0 12px 22px -16px var(--shadow);
+		font-family: var(--sans);
+	}
+	.build-picker {
 		top: max(64px, calc(env(safe-area-inset-top) + 48px));
 		right: max(clamp(12px, 4vw, 40px), env(safe-area-inset-right));
 		width: min(356px, calc(100% - 24px));
 		max-height: calc(100dvh - 76px);
 		overflow: auto;
 		overscroll-behavior: contain;
-		box-sizing: border-box;
 		padding: 9px 11px 10px;
-		border: 1px solid color-mix(in srgb, var(--edge) 70%, transparent);
 		border-radius: 15px;
-		color: var(--ink);
-		background: color-mix(in srgb, var(--surface) 96%, transparent);
-		box-shadow: 0 4px 0 var(--edge), 0 12px 22px -16px var(--shadow);
-		font-family: var(--sans);
 	}
 	.build-picker[hidden],
+	.build-active[hidden],
 	.build-picker [hidden] { display: none !important; }
-	.build-picker > header,
-	.build-picker > footer {
+	.build-picker > header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -74,12 +77,12 @@ const pieces = [
 		margin: 0 0 0 3px;
 		font: 900 17px var(--display);
 	}
-	.build-picker button {
+	.build-picker button, .build-active button {
 		touch-action: manipulation;
 		cursor: pointer;
 		color: var(--ink);
 	}
-	.build-picker button:focus-visible {
+	.build-picker button:focus-visible, .build-active button:focus-visible {
 		outline: 2px solid var(--accent);
 		outline-offset: 2px;
 	}
@@ -99,7 +102,7 @@ const pieces = [
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 6px;
-		margin: 4px 0 8px;
+		margin: 4px 0 0;
 	}
 	.piece {
 		display: grid;
@@ -143,38 +146,59 @@ const pieces = [
 	}
 	.piece[aria-pressed="true"] svg,
 	.piece[aria-pressed="true"] .count { color: var(--ink); }
-	.build-picker button:disabled { cursor: default; opacity: .5; }
-	.shortcut,
-	.remove {
+	.build-picker button:disabled, .build-active button:disabled { cursor: default; opacity: .5; }
+	.build-active {
+		top: max(68px, calc(env(safe-area-inset-top) + 54px));
+		left: max(clamp(12px, 4vw, 40px), env(safe-area-inset-left));
+		max-width: min(355px, calc(100% - 24px));
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: 4px;
+		border-radius: 12px;
+	}
+	.selection {
+		min-width: 0;
+		padding: 0 5px 0 7px;
+		overflow-wrap: anywhere;
+		font: 900 13px/1.25 var(--sans);
+		font-variant-numeric: tabular-nums;
+	}
+	.remove, .done {
 		display: inline-flex;
+		flex: none;
 		align-items: center;
 		gap: 5px;
-		font: 800 12px/1.2 var(--sans);
-	}
-	.shortcut { padding: 0 3px; color: var(--muted); }
-	.remove {
 		min-height: 35px;
 		padding: 3px 8px;
 		border: 1px solid var(--edge);
 		border-radius: 8px;
 		background: var(--bg);
+		font: 800 12px/1.2 var(--sans);
 	}
-	.remove:hover:not(:disabled) { border-color: var(--accent); }
-	.build-picker kbd {
+	.build-active .done { background: var(--btn-bg); color: var(--btn-ink); }
+	.remove:hover:not(:disabled), .done:hover { border-color: var(--accent); }
+	.build-active kbd {
 		display: inline-grid;
 		place-items: center;
 		min-width: 18px;
 		min-height: 18px;
+		padding-inline: 2px;
 		border-radius: 4px;
 		background: var(--surface);
 		color: var(--ink);
 		box-shadow: 0 1px 0 var(--edge);
 		font: 900 11px/1 var(--sans);
 	}
-	.status { margin: 6px 2px 1px; color: var(--muted); font: 800 12px/1.45 var(--sans); }
+	.status {
+		position: absolute; width: 1px; height: 1px; margin: -1px;
+		overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+	}
+	@media (max-width: 760px) and (min-height: 550px) {
+		.build-active { top: max(134px, calc(env(safe-area-inset-top) + 54px)); }
+	}
 	@media (pointer: coarse) {
-		.build-picker footer { justify-content: flex-end; }
-		.shortcut, .build-picker kbd { display: none; }
-		.close, .remove { min-height: 44px; min-width: 44px; }
+		.build-active kbd { display: none; }
+		.close, .remove, .done { min-height: 44px; min-width: 44px; }
 	}
 </style>

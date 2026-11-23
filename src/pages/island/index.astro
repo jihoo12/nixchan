@@ -113,8 +113,9 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 								<dt><kbd>Space</kbd> again</dt><dd>Open the glider in mid-air, and once more to fold it</dd>
 								<dt>Drag</dt><dd>Look around; the scroll wheel zooms</dd>
 								<dt><kbd>E</kbd></dt><dd>Place the selected piece while building; otherwise use what's in front of you or wave</dd>
-								<dt><kbd>B</kbd></dt><dd>Open or close the building toolbar</dd>
+								<dt><kbd>B</kbd></dt><dd>Open or close the build menu without ending placement</dd>
 								<dt><kbd>Q</kbd></dt><dd>Take back a placed piece while building<span data-dash-help hidden>; otherwise dash</span></dd>
+								<dt><kbd>Esc</kbd></dt><dd>Finish placing pieces</dd>
 							</dl>
 							<dl class="touch">
 								<dt>Left thumb</dt><dd>Walk; push far to run</dd>
@@ -157,8 +158,9 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 							<h3>Building</h3>
 							<ol>
 								<li>The forge makes stone blocks from iron ore, six at a time.</li>
-								<li>Press <kbd class="keys">B</kbd><span class="touch">Build</span> to open the building toolbar. Choose a stone block, belt, windmill, drill, sprinkler, or ore hopper. The toolbar shows how many are in your bag.</li>
-								<li>A see-through preview shows where the piece will go. Press <kbd class="keys">E</kbd><span class="touch">the action button</span> to place it. Use <kbd class="keys">Q</kbd><span class="touch">Take back</span> to return a placed piece to your bag. <kbd class="keys">B</kbd><span class="touch">Build</span> closes the toolbar without placing anything.</li>
+								<li>Press <kbd class="keys">B</kbd><span class="touch">Build</span> to open the build menu. It shows how many stone blocks, belts, windmills, drills, sprinklers, and ore hoppers you have. Choose a piece to fold the menu away and start placing it.</li>
+								<li>A see-through preview shows where the piece will go. Press <kbd class="keys">E</kbd><span class="touch">the action button</span> to place it, or use <kbd class="keys">Q</kbd><span class="touch">Take back</span> to return a placed piece to your bag.</li>
+								<li><kbd class="keys">B</kbd><span class="touch">Build</span> only opens or closes the menu. To finish placing pieces, <span class="keys">press <kbd>Esc</kbd> or </span>choose <strong>Done</strong>.</li>
 							</ol>
 							<p>One block is just low enough to jump onto, so build stairs to go higher. The garden, the forge, the stones, the lighthouse, the campfire and the Windspout are kept clear.</p>
 						</section>
@@ -209,8 +211,9 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 								<dt><kbd>Space</kbd> 한 번 더</dt><dd>공중에서 글라이더 펴기, 한 번 더 누르면 접기</dd>
 								<dt>드래그</dt><dd>둘러보기, 마우스 휠로 확대·축소</dd>
 								<dt><kbd>E</kbd></dt><dd>짓는 중에는 고른 물건 놓기. 평소에는 눈앞의 물건 쓰기, 없으면 손 흔들기</dd>
-								<dt><kbd>B</kbd></dt><dd>짓기 메뉴 열기 또는 닫기</dd>
+								<dt><kbd>B</kbd></dt><dd>짓기 메뉴만 열거나 닫기. 배치는 계속할 수 있어요</dd>
 								<dt><kbd>Q</kbd></dt><dd>짓는 중에는 놓은 물건 회수하기<span data-dash-help hidden>, 그 밖에는 대시</span></dd>
+								<dt><kbd>Esc</kbd></dt><dd>배치 끝내기</dd>
 							</dl>
 							<dl class="touch">
 								<dt>왼손 엄지</dt><dd>걷기, 멀리 밀면 달리기</dd>
@@ -253,19 +256,20 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 							<h3>짓기</h3>
 							<ol>
 								<li>대장간에서 철광석으로 돌 블록을 한 번에 여섯 개씩 만들어요.</li>
-								<li><kbd class="keys">B</kbd><span class="touch">‘짓기’</span>를 누르면 짓기 메뉴가 열려요. 돌 블록, 벨트, 풍차, 드릴, 스프링클러, 광석 수거함 중 하나를 고르세요. 가방에 몇 개 있는지도 보여요.</li>
-								<li>반투명한 미리보기로 놓일 자리를 확인하고 <kbd class="keys">E</kbd><span class="keys">를</span><span class="touch">액션 버튼을</span> 눌러 놓아요. <kbd class="keys">Q</kbd><span class="touch">‘회수하기’</span>로 놓은 물건을 가방에 넣을 수 있어요. 아무것도 놓지 않고 닫으려면 <kbd class="keys">B</kbd><span class="keys">를</span><span class="touch">‘짓기’를</span> 다시 누르세요.</li>
+								<li><kbd class="keys">B</kbd><span class="keys">를</span><span class="touch">‘짓기’를</span> 누르면 짓기 메뉴가 열려요. 돌 블록, 벨트, 풍차, 드릴, 스프링클러, 광석 수거함의 가방 속 개수가 보여요. 물건을 고르면 메뉴가 접히고 배치할 수 있어요.</li>
+								<li>반투명한 미리보기로 놓일 자리를 확인하고 <kbd class="keys">E</kbd><span class="keys">를</span><span class="touch">액션 버튼을</span> 눌러 놓아요. <kbd class="keys">Q</kbd><span class="touch">‘회수하기’</span>로 놓은 물건을 가방에 넣을 수 있어요.</li>
+								<li><kbd class="keys">B</kbd><span class="keys">는</span><span class="touch">‘짓기’는</span> 메뉴만 열거나 닫아요. 배치를 끝내려면 <span class="keys"><kbd>Esc</kbd>나 </span><strong>‘완료’</strong>를 누르세요.</li>
 							</ol>
 							<p>블록 하나는 딱 뛰어오를 수 있는 높이라서, 계단을 쌓으면 더 높이 올라갈 수 있어요. 정원, 대장간, 선돌, 등대, 모닥불, 바람기둥 주변에는 지을 수 없어요.</p>
 						</section>
 						<section>
 							<h3>동력</h3>
 							<ol>
-								<li>대장간에서 풍차, 드릴, 광석 수거함를 만들어요. 짓기 메뉴에서 고른 뒤 미리보기로 자리를 확인하고 놓아요.</li>
+								<li>대장간에서 풍차, 드릴, 광석 수거함을 만들어요. 짓기 메뉴에서 고른 뒤 미리보기로 자리를 확인하고 놓아요.</li>
 								<li>풍차는 바람이 필요해서 높은 곳에만 세울 수 있어요. 풍차에서 8미터 안에 있는 기계에 동력이 들어가요. 기계를 들고 있는 동안 초록 점으로 범위가 보여요.</li>
 								<li>드릴은 광맥 위에 놓아요. 동력이 있으면 광석이 다시 생길 때마다 캐고, 자리를 비운 동안에도 통에 12개까지 모아 둬요. <kbd class="keys">E</kbd><span class="keys">로</span><span class="touch">액션 버튼으로</span> 챙겨요.</li>
 								<li>짓기 메뉴에서 벨트를 고르세요. 벨트는 <kbd class="keys">E</kbd><span class="keys">를</span><span class="touch">액션 버튼을</span> 누를 때 바라보는 방향으로 한 칸씩 놓여요. 방향을 바꾸려면 <kbd class="keys">Q</kbd><span class="touch">‘회수하기’</span>로 가방에 넣고 새 방향을 보며 다시 놓아요.</li>
-								<li>드릴 통에서 광석 수거함나 대장간 수거함까지 벨트를 이으면 광석이 옮겨져요. 벨트는 동력도 전달해서 가까운 풍차와 벨트로 연결된 기계도 작동해요.</li>
+								<li>드릴 통에서 광석 수거함이나 대장간 수거함까지 벨트를 이으면 광석이 옮겨져요. 벨트는 동력도 전달해서 가까운 풍차와 벨트로 연결된 기계도 작동해요.</li>
 								<li>동력이 들어간 벨트 위에 서면, 모퉁이를 돌아 벨트 끝까지 실어다 줘요.</li>
 							</ol>
 						</section>
@@ -363,7 +367,8 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 	}
 
 	if (lang === 'ko') {
-		document.querySelector<HTMLElement>('[data-build-picker]')?.setAttribute('lang', 'ko');
+		for (const node of document.querySelectorAll<HTMLElement>('[data-build-picker], [data-build-active], [data-build-status]'))
+			node.lang = 'ko';
 		for (const node of document.querySelectorAll<HTMLElement>('[data-build-ko]'))
 			node.textContent = node.dataset.buildKo ?? '';
 		for (const node of document.querySelectorAll<HTMLElement>('[data-build-ko-label]'))

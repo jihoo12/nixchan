@@ -216,19 +216,19 @@ export async function startIsland() {
 	keys.command((key, e) => {
 		if (e.repeat) return;
 		if (key === 'escape') {
-			building?.close();
+			if (!menu.isOpen && !farm.shopOpen && !forge.dialogOpen) building?.finish();
 			menu.close();
 			farm.closeShop();
 			forge.closeDialog();
 		} else if (key === 'e') {
 			const didAct = interactions.press();
-			if (!building?.active && !didAct) controls.state.waveQueued = true;
-		} else if (key === 'b') building?.toggle();
+			if (!building?.busy && !didAct) controls.state.waveQueued = true;
+		} else if (key === 'b') building?.togglePicker();
 		else if (key === 'q') {
-			if (building?.active) building.remove();
+			if (building?.busy) building.remove();
 			else controls.state.dashQueued = true;
-		} else if (key === 'f' && !building?.active) fishing.press();
-		else if (building?.active && /^[1-6]$/.test(key)) building.select(BUILD_ITEMS[Number(key) - 1]);
+		} else if (key === 'f' && !building?.busy) fishing.press();
+		else if (building?.pickerOpen && /^[1-6]$/.test(key)) building.select(BUILD_ITEMS[Number(key) - 1]);
 		else if (key === 'm') menu.toggle('map');
 		else if (key === 'i') menu.toggle('bag');
 		else if (key === 'h' || key === '?') menu.toggle('help');
@@ -249,7 +249,7 @@ export async function startIsland() {
 	const campfire = campfireRest = createCampfireRest({
 		world: islandWorld, terrain: terrainAt, seats: landmarks.campfireSeats, player,
 		reduced: () => motion.matches,
-		available: () => ready && !engine.paused && !lookoutCamera.active && !building?.active && !fishing.active && !farm.busy && !farm.shopOpen
+		available: () => ready && !engine.paused && !lookoutCamera.active && !building?.busy && !fishing.active && !farm.busy && !farm.shopOpen
 			&& !forge.busy && !forge.dialogOpen && !talk.talking && !menu.isOpen && !house.dressing
 			&& !hands.holding() && !blocks.on && !power.laying && !wall.breaking && !skyIsle.aboard
 			&& Math.hypot(player.vel.x, player.vel.z) < 2.25,
@@ -277,7 +277,7 @@ export async function startIsland() {
 	const lookout = createLookout({
 		site: landmarks.lookout, camera: lookoutCamera, pos,
 		canLook: () => ready && engine.running && player.grounded && !player.swimming && !player.dashing
-			&& !campfire.active && !building?.active && !fishing.active && !farm.busy && !farm.shopOpen && !forge.busy
+			&& !campfire.active && !building?.busy && !fishing.active && !farm.busy && !farm.shopOpen && !forge.busy
 			&& !forge.dialogOpen && !talk.talking && !menu.isOpen && !house.dressing && !wall.breaking
 			&& !hands.holding() && !blocks.on && !power.laying && !skyIsle.aboard
 			&& Math.hypot(player.vel.x, player.vel.z) < 2.25,
@@ -330,7 +330,7 @@ export async function startIsland() {
 		waterAt: (x, z) => (skyIsle.aboard ? skyWaterAt(x, z, pos.y) : groundAt(x, z) < -0.5 ? 0 : null),
 		ripple: water.ripple,
 		pos,
-		canStand: () => ready && !building?.active && player.grounded && !player.swimming && !blocks.on && !farm.busy && !farm.shopOpen && !forge.busy && !forge.dialogOpen && !talk.talking && Math.hypot(player.vel.x, player.vel.z) < 0.6,
+		canStand: () => ready && !building?.busy && player.grounded && !player.swimming && !blocks.on && !farm.busy && !farm.shopOpen && !forge.busy && !forge.dialogOpen && !talk.talking && Math.hypot(player.vel.x, player.vel.z) < 0.6,
 		rod: () => (forge.has('rod') ? { lo: 0.15, hi: 0.9, speed: 1.45 } : { lo: 0.25, hi: 0.85, speed: 1 }),
 		heading: () => player.heading,
 		towardCamera,
@@ -527,17 +527,34 @@ export async function startIsland() {
 	});
 	const buildToggle = $<HTMLButtonElement>('[data-build-toggle]');
 	const buildPanel = $('[data-build-picker]');
+	const buildActive = $('[data-build-active]');
+	const buildSelection = $('[data-build-selection]');
 	const buildRemove = $<HTMLButtonElement>('[data-build-remove]');
+	const buildDone = $<HTMLButtonElement>('[data-build-done]');
 	const buildStatus = $('[data-build-status]');
 	const buildButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-build-item]')];
 	const refreshBuild = () => {
-		const open = !!building?.active;
+		const open = !!building?.pickerOpen;
+		const selected = building?.selected;
+		const showActive = !!selected && !open && !menu.isOpen;
 		if (buildToggle?.getAttribute('aria-expanded') !== String(open)) buildToggle?.setAttribute('aria-expanded', String(open));
 		if (buildPanel) buildPanel.hidden = !open;
-		document.body.classList.toggle('building', open);
+		if (buildActive) buildActive.hidden = !showActive;
+		document.body.classList.toggle('building', !!building?.busy);
+		if (buildRemove) buildRemove.disabled = !showActive || !canBuild();
+		if (showActive && selected && buildSelection) {
+			const button = buildButtons.find((entry) => entry.dataset.buildItem === selected);
+			const name = button?.querySelector('[data-build-ko]')?.textContent ?? inventory.def(selected)?.name ?? selected;
+			const label = `${name} · ${inventory.count(selected)}`;
+			if (buildSelection.textContent !== label) buildSelection.textContent = label;
+		}
+		if (buildStatus) {
+			const line = open ? pick({ en: 'Choose a piece', ko: '설치할 물건을 고르세요' })
+				: showActive ? pick({ en: 'Placement active', ko: '설치 중' })
+					: '';
+			if (buildStatus.textContent !== line) buildStatus.textContent = line;
+		}
 		if (!open) return;
-		const selected = building?.selected;
-		if (buildRemove) buildRemove.disabled = !selected;
 		for (const button of buildButtons) {
 			const id = button.dataset.buildItem as BuildItem;
 			const pressed = String(selected === id);
@@ -546,20 +563,16 @@ export async function startIsland() {
 			const number = String(inventory.count(id));
 			if (count && count.textContent !== number) count.textContent = number;
 		}
-		if (buildStatus) {
-			const line = selected
-				? pick({ en: 'Aim to place · Q to take back', ko: '방향을 맞춰 설치 · Q로 회수' })
-				: pick({ en: 'Choose something to build', ko: '설치할 물건을 고르세요' });
-			if (buildStatus.textContent !== line) buildStatus.textContent = line;
-		}
 	};
-	buildToggle?.addEventListener('click', () => { building?.toggle(); refreshBuild(); });
-	$('[data-build-close]')?.addEventListener('click', () => { building?.close(); refreshBuild(); buildToggle?.focus(); });
+	buildToggle?.addEventListener('click', () => { building?.togglePicker(); refreshBuild(); });
+	$('[data-build-close]')?.addEventListener('click', () => { building?.closePicker(); refreshBuild(); buildToggle?.focus(); });
 	buildRemove?.addEventListener('click', () => building?.remove());
+	buildDone?.addEventListener('click', () => { building?.finish(); refreshBuild(); buildToggle?.focus(); });
 	for (const button of buildButtons) button.addEventListener('click', () => {
 		const id = button.dataset.buildItem as BuildItem;
-		if (BUILD_ITEMS.includes(id)) building?.select(id);
+		if (!BUILD_ITEMS.includes(id) || !building?.select(id)) return;
 		refreshBuild();
+		buildToggle?.focus({ preventScroll: true });
 	});
 
 	interactions.add(power.offer); // Collect ore normally; installing and taking machines is Build-only.
@@ -717,7 +730,7 @@ export async function startIsland() {
 		root: ui.atlas,
 		close: ui.atlasClose,
 		onOpen: () => {
-			building?.close();
+			building?.closePicker();
 			refreshBuild();
 			controls.clearKeys();
 			fishing.release();
@@ -773,7 +786,7 @@ export async function startIsland() {
 			tortoise.update(dt);
 			talk.update(dt);
 			hands.update();
-			if (building?.active && (player.swimming || skyIsle.aboard)) building.close();
+			if (building?.busy && (player.swimming || skyIsle.aboard)) building.finish();
 			blocks.update(time);
 			refreshBuild();
 			interactions.update();
