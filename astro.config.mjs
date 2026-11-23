@@ -6,9 +6,10 @@ export default defineConfig({
 	// through src/lib/base.ts; links to jihoo's site (/, /about/, /blog/, …) are the same origin.
 	site: 'https://jihoo12.github.io',
 	base: '/nixchan',
-	integrations: [sitemap()],
-	// Snow magic was a stage of its own once; it's a game now, walked about in.
-	redirects: { '/skills': '/nixchan/play/snowmagic/' },
+	integrations: [sitemap({
+		// The root and old game bookmarks lead to the island; don't advertise their stubs.
+		filter: (page) => /^\/nixchan\/(?:island|about|ko\/about)\/$/.test(new URL(page).pathname),
+	})],
 	vite: {
 		// Bundle three up front in development. Found one page at a time instead, Vite re-bundles it
 		// partway through a session, and a page still holding the old bundle never loads.

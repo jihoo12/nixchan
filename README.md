@@ -1,13 +1,8 @@
 # Nixchan
 
-Nixchan, a child of snow (*nix* is Latin for snow), and her world: an island to roam, a grey place
-through a rift, a 3D path to walk, a gallery of portals to games, and her snow magic. TypeScript and
-three.js, built with Astro and published on GitHub Pages at
-[jihoo12.github.io/nixchan](https://jihoo12.github.io/nixchan/).
-
-[![Watch the trailer: Nixchan walks the 3D path, roams her island, steps through the rift and into the gallery's portals](public/trailer-poster.jpg)](https://jihoo12.github.io/nixchan/trailer.mp4)
-
-A 41-second trailer, recorded from the site itself ([`public/trailer.mp4`](public/trailer.mp4)).
+Nixchan, a child of snow (*nix* is Latin for snow), and her Island: a small open world with
+gardening, fishing, crafting, exploring and room to stop by the fire. Built with TypeScript, three.js
+and Astro, and published on GitHub Pages at [jihoo12.github.io/nixchan](https://jihoo12.github.io/nixchan/).
 
 She started out as a little NixOS personification on [jihoo's site](https://jihoo12.github.io/)
 ([jihoo12/jihoo12.github.io](https://github.com/jihoo12/jihoo12.github.io)), and grew into a
@@ -15,20 +10,15 @@ character of her own; this repository was split out of that one, history and all
 
 ## Pages
 
-All under `/nixchan/`:
+The [Island](https://jihoo12.github.io/nixchan/island/) is the main game and the site entry point. The bilingual character
+profile is at `/about/` and `/ko/about/` under the site's `/nixchan/` base. The cottage interior
+(`/home/`), the grey place through the rift (`/monochrome/`), and the 3D path beyond the sky gate
+(`/experimental/`) are still part of the Island's journey.
 
-- **Nixchan** (`/nixchan/`, `/nixchan/ko/`) — who she is.
-- **Island** (`/island/`) — Nixchan's island, a small three.js game (see below).
-- **Her house** (`/home/`) — through the front door on the island.
-- **Monochrome** (`/monochrome/`) — the grey place through the rift at the island's standing stones (see below).
-- **3D path** (`/experimental/`) — a walk past jihoo's projects, notes and comics, to the sky gate and the island. The projects, notes and comics come from jihoo's site as the page opens (`/home-scene.json`, the same origin).
-- **Gallery** (`/gallery/`) — a plaza where Nixchan walks into portals to her games.
-- **Games** (`/play/<id>/`) — games made with Nixkit (`src/lib/nixkit/`), one folder each in `src/games/`. Anyone can add one: see [CONTRIBUTING.md](CONTRIBUTING.md).
-
-Every 3D page is drawn with three's WebGPURenderer (WebGPU, or WebGL 2 without it; `?webgl` on the
-URL forces that) in Nixkit's engine, so their shaders are TSL. Nixchan walks the island, her house
-and the grey place as Nixkit's player, told how each place has her move (`moves`, and the world's
-`collide` for its walls); the 3D path moves her itself, as it scrolls.
+The former Gallery and separate games are not shipped in the site build. Their source and credits
+are kept in the repository; old Gallery and game bookmarks lead to the Island instead. Nixkit's
+standalone game runner is not loaded by the Island. The Island and its linked areas still use shared
+Nixkit code for movement, input, rendering, menus and save handling.
 
 Links to pages of this site go through `src/lib/base.ts` (`to('/island/')` is `/nixchan/island/`).
 Saves are in `localStorage`, which this site shares with jihoo's (the same origin).
@@ -45,6 +35,7 @@ npm run check            # types (astro check)
 npm run check:games
 npm test                 # Nixkit's unit tests (tools/test-nixkit-*.mjs)
 npm run build
+node --test tools/test-island-site.mjs  # verify the generated Pages routes
 ```
 
 To look at the 3D pages, use a real browser on a real GPU. Headless Chromium draws them with a

@@ -4,25 +4,26 @@
 // personification, before she grew into a character of her own). Her real name isn't decided yet, so the page keeps it a secret ("???") for now:
 // change REAL_NAME once it is.
 import { Image } from 'astro:assets';
-import BaseHead from '../../components/BaseHead.astro';
-import Header from '../../components/Header.astro';
-import Footer from '../../components/Footer.astro';
-import NixChan from '../../components/NixChan.astro';
-import heroArt from '../../assets/nixchan/nixchan-build-success-03.png';
-import snowArt from '../../assets/nixchan/nixchan-snowy-window-01.png';
-import islandShot from '../../assets/nixchan/nixchan-island-3d-01.png';
-import stretchArt from '../../assets/nixchan/nixchan-morning-stretch-01.png';
-import codingArt from '../../assets/nixchan/nixchan-coding-01.png';
-import ramenArt from '../../assets/nixchan/nixchan-ramen-break-01.png';
-import coffeeArt from '../../assets/nixchan/nixchan-night-coffee-01.png';
-import starsArt from '../../assets/nixchan/nixchan-stargazing-01.png';
-import napArt from '../../assets/nixchan/nixchan-penguin-nap-01.png';
-import { langPaths, ogLocale, pairAlternates, routeLang } from '../../i18n';
-import { JIHOO, to } from '../../lib/base';
+import BaseHead from '../../../components/BaseHead.astro';
+import Header from '../../../components/Header.astro';
+import Footer from '../../../components/Footer.astro';
+import NixChan from '../../../components/NixChan.astro';
+import heroArt from '../../../assets/nixchan/nixchan-build-success-03.png';
+import snowArt from '../../../assets/nixchan/nixchan-snowy-window-01.png';
+import islandShot from '../../../assets/nixchan/nixchan-island-3d-01.png';
+import stretchArt from '../../../assets/nixchan/nixchan-morning-stretch-01.png';
+import codingArt from '../../../assets/nixchan/nixchan-coding-01.png';
+import ramenArt from '../../../assets/nixchan/nixchan-ramen-break-01.png';
+import coffeeArt from '../../../assets/nixchan/nixchan-night-coffee-01.png';
+import starsArt from '../../../assets/nixchan/nixchan-stargazing-01.png';
+import napArt from '../../../assets/nixchan/nixchan-penguin-nap-01.png';
+import { langPaths, ogLocale, pairAlternates, routeLang } from '../../../i18n';
+import { JIHOO, to } from '../../../lib/base';
 
 export const getStaticPaths = langPaths;
 const lang = routeLang(Astro.params.lang);
 const ko = lang === 'ko';
+const island = to(`/island/?lang=${lang}`);
 
 const REAL_NAME = '???';
 
@@ -36,7 +37,6 @@ const t = ko
 			secret: '아직 비밀이래요',
 			intro: '고양이 귀 후드에 눈송이 무늬, X자 머리핀. 이 사이트 어디에나 있는 그 아이예요. 눈을 부르는 마법을 쓰고, 코딩을 좋아하고, 펭귄이랑 단짝이에요. 진짜 이름은… 언젠가 알려 준대요.',
 			toIsland: '섬에 놀러 가기 →',
-			to3d: '3D로 만나기',
 			heroAlt: '노트북 앞에서 엄지를 척 올린 닉스쨩. 뒤 화면에 nix build가 Done으로 끝나 있어요.',
 			heroTag: '빌드 성공!',
 			profile: '프로필',
@@ -61,9 +61,9 @@ const t = ko
 			nixEyebrow: '닉스쨩의 눈 마법',
 			nix: '손끝에서 눈이 내려요',
 			reasons: [
-				['❄', '눈 마법', '눈 덮인 공터를 돌아다니며 눈 마법을 연습해요. 상대는 늘 묵묵히 맞아 주는 눈사람들이에요.', to('/play/snowmagic/')],
-				['👣', '눈송이 발자국', '앞뒤가 맞지 않는 회색 세계에서는 바닥에 눈송이를 남겨서 지나온 길을 기억해요.', to('/monochrome/')],
-				['☃', '눈 오는 날', '눈이 오면 담요를 덮고 창가에 앉아요. 펭귄이랑 따뜻한 코코아도 함께요.', ''],
+				['❄', '눈 마법', '눈 덮인 공터를 돌아다니며 눈 마법을 연습해요. 상대는 늘 묵묵히 맞아 주는 눈사람들이에요.'],
+				['👣', '눈송이 발자국', '앞뒤가 맞지 않는 회색 세계에서는 바닥에 눈송이를 남겨서 지나온 길을 기억해요.'],
+				['☃', '눈 오는 날', '눈이 오면 담요를 덮고 창가에 앉아요. 펭귄이랑 따뜻한 코코아도 함께요.'],
 			],
 			fileNote: '닉스쨩을 코드로 적어 보면',
 			comments: { name: '# 아직 비밀', fav: '# 좋아하는 것' },
@@ -85,7 +85,6 @@ const t = ko
 			three: '섬에서는 직접 걸어 다녀요',
 			threeText: '3D 닉스쨩은 자기만의 섬에서 살아요. 걷고, 뛰고, 글라이더를 타고 하늘섬 구름쉼터까지 올라가요. 낚시도 하고, 텃밭도 가꾸고, 대장간에서 도구도 만들어요.',
 			islandAlt: '바닷가 모래사장에서 손을 흔드는 3D 닉스쨩. 뒤로 나무 부두가 보여요.',
-			toGallery: '갤러리 광장',
 			friendsEyebrow: '섬 친구들',
 			friends: '닉스쨩의 친구들',
 			friendList: [
@@ -108,7 +107,6 @@ const t = ko
 			secret: "she's keeping it a secret, for now",
 			intro: "Cat-eared hood, snowflakes, an X hairpin: she's the girl you see all over this site. She can call down snow, she loves to code, and a penguin is her best friend. Her real name? She says she'll tell you one day.",
 			toIsland: 'Visit her island →',
-			to3d: 'Meet her in 3D',
 			heroAlt: 'Nixchan giving a thumbs up at her laptop, with nix build finished on Done behind her',
 			heroTag: 'BUILD PASSED!',
 			profile: 'Profile',
@@ -133,9 +131,9 @@ const t = ko
 			nixEyebrow: "NIXCHAN'S SNOW MAGIC",
 			nix: 'Snow from her fingertips',
 			reasons: [
-				['❄', 'Snow magic', 'She walks a snowy clearing practising her spells, on snowmen who never complain.', to('/play/snowmagic/')],
-				['👣', 'A trail of snowflakes', "In the grey place, where nothing adds up, she leaves snowflakes on the floor to remember where she's been.", to('/monochrome/')],
-				['☃', 'Snow days', 'When it snows, she sits by the window under a blanket, with her penguin and a hot cocoa.', ''],
+				['❄', 'Snow magic', 'She walks a snowy clearing practising her spells, on snowmen who never complain.'],
+				['👣', 'A trail of snowflakes', "In the grey place, where nothing adds up, she leaves snowflakes on the floor to remember where she's been."],
+				['☃', 'Snow days', 'When it snows, she sits by the window under a blanket, with her penguin and a hot cocoa.'],
 			],
 			fileNote: 'Nixchan, written as code',
 			comments: { name: '# still a secret', fav: '# her favourite things' },
@@ -157,7 +155,6 @@ const t = ko
 			three: 'On the island, she walks about',
 			threeText: 'In 3D, Nixchan has an island of her own. She walks, runs, and glides all the way up to Cloudrest, the islands in the sky. She fishes, looks after her garden, and makes tools at the forge.',
 			islandAlt: 'The 3D Nixchan waving on a sandy beach, with a wooden pier behind her',
-			toGallery: 'The gallery plaza',
 			friendsEyebrow: 'ISLAND FRIENDS',
 			friends: "Nixchan's friends",
 			friendList: [
@@ -183,7 +180,7 @@ const nixFile = [
 	['};', ''],
 ];
 ---
-<!doctype html><html lang={lang}><head><BaseHead title={t.title} description={t.description} locale={ogLocale(lang)} alternates={pairAlternates('/')} /></head><body><Header/>
+<!doctype html><html lang={lang}><head><BaseHead title={t.title} description={t.description} locale={ogLocale(lang)} alternates={pairAlternates('/about/')} /></head><body><Header/>
 <main class="wrap nix-main">
 	<section class="hero">
 		<div>
@@ -192,8 +189,7 @@ const nixFile = [
 			<p class="real-name">{t.realName} <strong>{REAL_NAME}</strong> <span>· {t.secret}</span></p>
 			<p class="lead">{t.intro}</p>
 			<div class="actions">
-				<a class="button primary" href={to('/island/')}>{t.toIsland}</a>
-				<a class="button secondary" href={to('/experimental/')}>{t.to3d}</a>
+				<a class="button primary" href={island}>{t.toIsland}</a>
 			</div>
 		</div>
 		<div class="art"><Image src={heroArt} alt={t.heroAlt} width={600} loading="eager" /><span class="tag">{t.heroTag}</span></div>
@@ -222,7 +218,7 @@ const nixFile = [
 		<span class="eyebrow">{t.nixEyebrow}</span>
 		<h2 class="display">{t.nix}</h2>
 		<div class="reasons">
-			{t.reasons.map(([icon, head, text, href]) => <article class="card"><span class="icon" aria-hidden="true">{icon}</span><h3>{href ? <a class="text-link" href={href}>{head}</a> : head}</h3><p>{text}</p></article>)}
+			{t.reasons.map(([icon, head, text]) => <article class="card"><span class="icon" aria-hidden="true">{icon}</span><h3>{head}</h3><p>{text}</p></article>)}
 		</div>
 		<figure class="nix-file">
 			<figcaption><span aria-hidden="true">❄</span> nixchan.js <small>— {t.fileNote}</small></figcaption>
@@ -254,8 +250,7 @@ const nixFile = [
 			<h2 class="display">{t.three}</h2>
 			<p class="body">{t.threeText}</p>
 			<div class="actions">
-				<a class="button primary" href={to('/island/')}>{t.toIsland}</a>
-				<a class="button secondary" href={to('/gallery/')}>{t.toGallery}</a>
+				<a class="button primary" href={island}>{t.toIsland}</a>
 			</div>
 		</div>
 		<div class="art wide"><Image src={islandShot} alt={t.islandAlt} width={800} /></div>

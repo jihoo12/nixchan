@@ -1,0 +1,36 @@
+---
+import { to } from '../lib/base';
+
+interface Props { korean?: boolean; }
+const { korean = false } = Astro.props;
+const title = korean ? '닉스쨩의 섬' : "Nixchan’s Island";
+const island = to('/island/');
+const fallback = korean ? `${island}?lang=ko` : island;
+---
+<!doctype html>
+<html lang={korean ? 'ko' : 'en'}>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>{title}</title>
+		<meta name="robots" content="noindex" />
+		<link rel="canonical" href={new URL(island, Astro.site)} />
+		<script is:inline define:vars={{ fallback, korean }}>
+			const entry = new URL(fallback, location.origin);
+			const current = new URLSearchParams(location.search);
+			for (const key of ['lang', 'webgl', 'nix-hour']) {
+				const value = current.get(key);
+				if (value !== null && (key !== 'lang' || value === 'en' || value === 'ko')) {
+					entry.searchParams.set(key, value);
+				}
+			}
+			// Match the old Korean entry page's preference without persisting query overrides.
+			if (korean && !current.has('lang')) {
+				try { localStorage.setItem('lang', 'ko'); } catch {}
+			}
+			location.replace(entry);
+		</script>
+		<noscript><meta http-equiv="refresh" content={`0;url=${fallback}`} /></noscript>
+	</head>
+	<body><a href={fallback}>{title}</a></body>
+</html>
