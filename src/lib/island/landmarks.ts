@@ -7,6 +7,7 @@ import { addFeature } from './features';
 import { campfireLogLayout } from './campfire-rest';
 import type { Layout } from './layout';
 import { glowTexture, type Toon } from './look';
+import { buildLighthouseLookout } from './lookout-landmark';
 import { loadJSON } from './save';
 import { ISLET, PIER, PIER_ANGLE, terrainAt } from './terrain';
 import type { Theme } from './theme';
@@ -353,6 +354,7 @@ export function buildLandmarks(scene: THREE.Scene, toon: Toon, theme: Theme, lay
 
 	buoy(kit, layout.BUOY);
 	lighthouse(kit, layout.LIGHT);
+	const lookout = buildLighthouseLookout(scene, toon, layout.LIGHT);
 	summitFlag(kit, layout.SUMMIT);
 	const campfireSeats = campfire(kit, layout.CAMP);
 	standingStones(kit, layout.STONES, layout.prand);
@@ -365,7 +367,7 @@ export function buildLandmarks(scene: THREE.Scene, toon: Toon, theme: Theme, lay
 	});
 
 	return {
-		campfireSeats,
+		campfireSeats, lookout,
 		update(time: number, dt: number) {
 			for (const tick of animated) tick(time, dt);
 		},

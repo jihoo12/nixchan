@@ -2,6 +2,7 @@
 import { to } from '../../lib/base';
 // Nixchan's island: a little open world where the 3D Nixchan roams an island and the sea round it.
 import BaseHead from '../../components/BaseHead.astro';
+import IslandLookout from '../../components/IslandLookout.astro';
 import nixModel from '../../assets/nixchan/nixchan-3d.glb?url';
 import fishModel from '../../assets/island/fish.glb?url';
 import farmModel from '../../assets/island/farm.glb?url';
@@ -345,6 +346,7 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 			</div>
 			<button class="button primary" type="button" data-wardrobe-done>All dressed</button>
 		</aside>
+		<IslandLookout />
 		<p class="loading" data-loading>Nixchan is on her way…</p>
 		<noscript><p class="loading">The island needs JavaScript to run.</p></noscript>
 	</body>

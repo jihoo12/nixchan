@@ -45,6 +45,10 @@ software renderer, which neither looks nor runs like the real thing.
 
 A toon island for Nixchan to roam: places to find, a map that fills in as she explores, a glider, fishing, a garden, Pebble the otter at the market stand, the Old Forge (iron ore to mine, tools to make better, and machines that look after the garden), and Cloudrest, islands floating in the sky that the Windspout's wind carries her glider up to: a ring temple, a lake with fish of its own, a spire, and crystals that grow back after she gathers their sky shards. It is TypeScript and three.js, with no physics engine: the island is a heightfield, so all movement asks is how high the ground is (and, under the sky island, how high she is).
 
+At Lighthouse Point, walk up behind the brass telescope and use the normal interaction button
+(**E** on desktop). Pan with the arrow keys or drag, zoom with **+**/**−** or the wheel, and step back
+to return to the previous camera. The view shows the live island, no separate scene or save.
+
 The page is `src/pages/island/index.astro` (HTML/CSS for the menus and prompts), and the game is in `src/lib/island/`:
 
 | Module | What it does |
