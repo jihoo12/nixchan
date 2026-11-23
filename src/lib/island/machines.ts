@@ -3,7 +3,7 @@
 // A sprinkler goes where four plots meet and keeps those four watered from then on: there's room for
 // four of them, which covers the whole garden. She carries one there in her arms (taken out of the
 // bag, or picked up from where it stood, to move it), a see-through one shows where it would go, the
-// nearest free spot, and E sets it down there. Sprocket keeps to its spot
+// pointed slot (mouse) or nearest free spot in front of her (touch), and E sets it down there. Sprocket keeps to its spot
 // beside the harvest crate; when something's ripe it trots over, picks it into its basket and drops
 // it in the crate, and plants the same again if there are seeds of it in her bag. She collects the
 // crate with E. All of it goes on by the clock, page open or not (farm.ts works the garden forward
@@ -15,6 +15,7 @@ import type { NixFigure } from '../experimental/nix-figure';
 import type { Crop, GardenMachines, createFarm } from './farm';
 import type { Offer } from '../nixkit/interact';
 import type { Inventory } from './inventory';
+import type { PlacementAim } from './build-aim';
 import { loadJSON, saveJSON } from './save';
 import { damp } from '../nixkit/util';
 
@@ -30,13 +31,14 @@ export interface MachinesContext {
 	/** Where she is. */
 	pos: THREE.Vector3;
 	canAct: () => boolean;
+	aim?: () => PlacementAim;
 	toast: (text: string) => void;
 	/** Her, for holding a sprinkler between her hands. */
 	figure: NixFigure;
 	/** Whether she's in the water (where she can't carry anything). */
 	swimming: () => boolean;
-	/** Shuts the bag, when she takes a sprinkler out of it. */
-	closeMenu: () => void;
+	/** Use the same build selector as the B palette. */
+	selectBuild: () => void;
 }
 
 export const SPRINKLER = 'sprinkler';
@@ -59,6 +61,10 @@ const HOME = { lx: 4.4, lz: 1.0 };
 const WALK = 1.4;
 /** How far from where she stands a free spot may be for the one she carries to go there. */
 const REACH = 2.4;
+const TAKE_REACH = 1.25;
+/** Match the ground preview ring, with no snapping between adjacent plot junctions. */
+const MOUSE_SNAP = 0.55;
+const REACH_HEIGHT = 0.65;
 
 interface Saved {
 	sprinklers: { slot: number; at: number }[];
@@ -89,15 +95,12 @@ export function createMachines(ctx: MachinesContext) {
 		id: SPRINKLER,
 		name: 'Sprinkler',
 		kind: 'tool',
-		description: 'Made at the forge. Carry it to the garden and set it down where four plots meet; it keeps all four watered. One already set up can be picked up again with E, to move it.',
+		description: 'Made at the forge. Carry it to the garden and set it down where four plots meet; it keeps all four watered. Select Sprinkler in Build and press Q to take one back.',
 		color: '#c97b4a',
 		actions: [
 			{
 				label: 'Carry it',
-				run: () => {
-					startCarrying();
-					ctx.closeMenu();
-				},
+				run: ctx.selectBuild,
 			},
 		],
 	});
@@ -224,21 +227,44 @@ export function createMachines(ctx: MachinesContext) {
 	}
 	const freeSlots = () => SLOTS.map((_, i) => i).filter((slot) => !state.sprinklers.some((k) => k.slot === slot));
 	function startCarrying() {
-		if (!inventory.has(SPRINKLER)) return;
-		if (!freeSlots().length) {
-			ctx.toast('There are sprinklers everywhere they can go already.');
-			return;
-		}
-		carry.on = true;
+		carry.on = inventory.has(SPRINKLER) && freeSlots().length > 0;
 	}
 	const stopCarrying = () => {
 		carry.on = false;
 		carry.slot = -1;
 	};
-	/** The free spot nearest a little in front of her, if one's in reach. */
-	const aim = new THREE.Vector3();
+	const occupied = (slot: number) => state.sprinklers.some((k) => k.slot === slot);
+	/** Mouse selects a junction before checking if it is eligible. A blocked junction must not
+	 * cause an adjacent free one to grab the cursor. */
+	const mouseSlot = (hit: Extract<PlacementAim, { mode: 'mouse' }>['hit'], taking: boolean) => {
+		if (!hit || (!taking && hit.kind === 'blocked') || !Number.isFinite(hit.x) || !Number.isFinite(hit.y) || !Number.isFinite(hit.z)) return -1;
+		// A physical blocker reports its base center; only the aimed sprinkler's own
+		// post (r=.12) should let Q through when we're not pointing at open ground.
+		const snap = hit.kind === 'blocked' ? 0.15 : MOUSE_SNAP;
+		let best = -1;
+		let dBest = snap;
+		for (let slot = 0; slot < SLOTS.length; ++slot) {
+			const p = slotAt(slot);
+			const d = Math.hypot(hit.x - p.x, hit.z - p.z);
+			if (d <= snap && (best < 0 || d < dBest)) {
+				best = slot;
+				dBest = d;
+			}
+		}
+		if (best < 0 || occupied(best) !== taking) return -1;
+		const p = slotAt(best);
+		if (Math.hypot(p.x - ctx.pos.x, p.z - ctx.pos.z) >= (taking ? TAKE_REACH : REACH)
+			|| Math.abs(p.y - ctx.pos.y) > REACH_HEIGHT) return -1;
+		// Mouse placement hits the ground, while removal may also hit the sprinkler itself.
+		if (hit.y < p.y - 0.35 || hit.y > p.y + (taking ? SPRINKLER_TOP + 0.2 : 0.35)) return -1;
+		return best;
+	};
+	/** Touch (or no aim provider): the free spot nearest a little in front of her. */
+	const direction = new THREE.Vector3();
 	const pickSlot = () => {
-		const turn = ctx.figure.group.getWorldDirection(aim);
+		const aiming = ctx.aim?.();
+		if (aiming?.mode === 'mouse') return mouseSlot(aiming.hit, false);
+		const turn = ctx.figure.group.getWorldDirection(direction);
 		const fx = ctx.pos.x + turn.x * 0.6;
 		const fz = ctx.pos.z + turn.z * 0.6;
 		let best = -1;
@@ -254,6 +280,7 @@ export function createMachines(ctx: MachinesContext) {
 		return best;
 	};
 	const setDown = (slot: number) => {
+		if (!carry.on || !ctx.canAct() || slot !== pickSlot()) return;
 		if (!inventory.remove(SPRINKLER)) return stopCarrying();
 		state.sprinklers.push({ slot, at: Date.now() });
 		save();
@@ -267,7 +294,7 @@ export function createMachines(ctx: MachinesContext) {
 		}
 	};
 	const pickUp = (slot: number) => {
-		if (!inventory.fits(SPRINKLER)) {
+		if (!inventory.add(SPRINKLER)) {
 			ctx.toast('Your bag is too full to take it.');
 			return;
 		}
@@ -276,9 +303,8 @@ export function createMachines(ctx: MachinesContext) {
 		state.sprinklers = state.sprinklers.filter((k) => k.slot !== slot);
 		save();
 		hideSprinkler(slot);
-		inventory.add(SPRINKLER);
-		carry.on = true;
-		ctx.toast('Picked up the sprinkler. Carry it to where it should go.');
+		startCarrying();
+		ctx.toast('Picked up the sprinkler.');
 	};
 
 	let crateView: THREE.Group | null = null;
@@ -439,26 +465,27 @@ export function createMachines(ctx: MachinesContext) {
 
 	const near = (p: THREE.Vector3, r: number) => Math.hypot(p.x - ctx.pos.x, p.z - ctx.pos.z) < r;
 	const crateCount = () => Object.values(state.crate).reduce((a, b) => a + b, 0);
-	const nearGarden = (r: number) => {
-		const c = garden.world(0, 0.6);
-		return Math.hypot(c.x - ctx.pos.x, c.z - ctx.pos.z) < r;
+	const buildOffer = (): Offer | null => {
+		if (!ctx.canAct()) return null;
+		if (!inventory.has(SPRINKLER)) return { label: 'No sprinklers in the bag · Q to remove' };
+		if (!freeSlots().length) return { label: 'All sprinkler spots are full · Q to remove' };
+		const slot = pickSlot();
+		return slot < 0 ? { label: 'Sprinklers go where four garden plots meet' }
+			: { label: 'Set the sprinkler down here', go: () => setDown(slot) };
+	};
+	const take = () => {
+		if (!ctx.canAct()) return;
+		const aiming = ctx.aim?.();
+		if (aiming?.mode === 'mouse') {
+			const slot = mouseSlot(aiming.hit, true);
+			if (slot >= 0) pickUp(slot);
+			return;
+		}
+		const placed = state.sprinklers.find(({ slot }) => near(slotAt(slot), TAKE_REACH));
+		if (placed) pickUp(placed.slot);
 	};
 	const offer = (): Offer | null => {
 		if (!ctx.canAct()) return null;
-		if (carry.on) {
-			if (carry.slot >= 0) {
-				const slot = carry.slot;
-				return { label: 'Set the sprinkler down here', go: () => setDown(slot) };
-			}
-			// Hands full in the garden: nothing else to do there till it's set down (or put away).
-			if (nearGarden(7)) return { label: 'Put the sprinkler back in the bag', go: stopCarrying };
-		} else {
-			for (const k of state.sprinklers)
-				if (near(slotAt(k.slot), 0.9)) {
-					const slot = k.slot;
-					return { label: 'Pick up the sprinkler', go: () => pickUp(slot) };
-				}
-		}
 		if (near(crateAt, 1.4)) {
 			const n = crateCount();
 			if (!n) return state.helper !== null ? { label: 'The harvest crate is empty' } : null;
@@ -491,11 +518,6 @@ export function createMachines(ctx: MachinesContext) {
 		}
 		return null;
 	};
-	/** Asked after the garden's own offers: in the garden with a sprinkler in her bag, take it out. */
-	const hint = (): Offer | null => {
-		if (carry.on || !ctx.canAct() || !inventory.has(SPRINKLER) || !freeSlots().length) return null;
-		return nearGarden(7) ? { label: 'Take out a sprinkler to set up', go: startCarrying } : null;
-	};
 
 	// ---------- every frame ----------
 
@@ -507,7 +529,7 @@ export function createMachines(ctx: MachinesContext) {
 	const update = (dt: number, time: number) => {
 		// What she's carrying: in her arms, and where it would go, shown there.
 		if (carry.on && (!inventory.has(SPRINKLER) || ctx.swimming())) stopCarrying();
-		carry.slot = carry.on ? pickSlot() : -1;
+		carry.slot = carry.on && ctx.canAct() ? pickSlot() : -1;
 		if (carry.held) {
 			carry.held.visible = carry.on;
 			const l = ctx.figure.node('HandL');
@@ -611,7 +633,9 @@ export function createMachines(ctx: MachinesContext) {
 	return {
 		machines,
 		offer,
-		hint,
+		buildOffer,
+		start: startCarrying,
+		take,
 		update,
 		/** Sprocket's just been made at the forge: here it comes. */
 		helperArrived() {

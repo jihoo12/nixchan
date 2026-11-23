@@ -3,6 +3,7 @@
 // one bit of ground that isn't part of the heightfield.
 import * as THREE from 'three';
 import { fbm, noise, smoothstep } from '../nixkit/util';
+import { settlementHeight } from './settlements';
 
 export const R = 120; // the island's radius, give or take its ragged coast
 export const SIZE = 420; // the terrain mesh covers SIZE × SIZE, centred on the origin
@@ -49,11 +50,17 @@ export function islandHeight(x: number, z: number) {
 
 /** The heightfield's vertices, row by row: (N + 1) × (N + 1) of them. */
 export const heights = new Float32Array((N + 1) * (N + 1));
-for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) heights[j * (N + 1) + i] = islandHeight(-HALF + i * STEP, -HALF + j * STEP);
+const naturalHeights = new Float32Array(heights.length);
+for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
+	const x = -HALF + i * STEP, z = -HALF + j * STEP, n = j * (N + 1) + i;
+	const natural = islandHeight(x, z);
+	naturalHeights[n] = natural;
+	heights[n] = settlementHeight(x, z, natural);
+}
 export const H = (i: number, j: number) => heights[j * (N + 1) + i];
 
 /** The terrain's height at (x, z), read off the same triangles the mesh is drawn with. */
-export function terrainAt(x: number, z: number) {
+function sampleTerrain(values: Float32Array, x: number, z: number) {
 	const fx = (x + HALF) / STEP;
 	const fz = (z + HALF) / STEP;
 	if (fx < 0 || fz < 0 || fx >= N || fz >= N) return SEA_FLOOR;
@@ -61,17 +68,27 @@ export function terrainAt(x: number, z: number) {
 	const j = Math.floor(fz);
 	const u = fx - i;
 	const v = fz - j;
-	const a = H(i, j);
-	const b = H(i, j + 1);
-	const c = H(i + 1, j + 1);
-	const d = H(i + 1, j);
+	const at = j * (N + 1) + i;
+	const a = values[at];
+	const b = values[at + N + 1];
+	const c = values[at + N + 2];
+	const d = values[at + 1];
 	return u + v <= 1 ? a + (d - a) * u + (b - a) * v : c + (b - c) * (1 - u) + (d - c) * (1 - v);
 }
 
+export const terrainAt = (x: number, z: number) => sampleTerrain(heights, x, z);
+/** Preserve the seeded landmarks' original suitability checks even after the settlement grading. */
+export const naturalTerrainAt = (x: number, z: number) => sampleTerrain(naturalHeights, x, z);
+
 /** How upright the ground is at (x, z): 1 on the flat, less on a slope. */
 export function slopeUp(x: number, z: number) {
-	const dx = terrainAt(x + 0.5, z) - terrainAt(x - 0.5, z);
-	const dz = terrainAt(x, z + 0.5) - terrainAt(x, z - 0.5);
+	return upFrom(terrainAt, x, z);
+}
+
+export const naturalSlopeUp = (x: number, z: number) => upFrom(naturalTerrainAt, x, z);
+function upFrom(sample: (x: number, z: number) => number, x: number, z: number) {
+	const dx = sample(x + 0.5, z) - sample(x - 0.5, z);
+	const dz = sample(x, z + 0.5) - sample(x, z - 0.5);
 	return 1 / Math.sqrt(1 + dx * dx + dz * dz);
 }
 

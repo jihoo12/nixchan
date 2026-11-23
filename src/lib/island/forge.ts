@@ -1,10 +1,10 @@
-// The Old Forge: an open smithy on flat ground a little way from the garden, its furnace glowing
+// The Old Forge: an open smithy alongside Nixchan's house, its furnace glowing
 // and smoking all day and night. Iron ore crops out of rocks in the hills (mined with her hammer, it
 // grows back after a while); at the anvil she smelts it into ingots, and with ingots and the sky
 // shards from Cloudrest makes her tools better: a sturdier watering can, a sky rod that's kinder on
 // the line, and a sky glider that flies further. It makes the garden's machines too (machines.ts):
 // sprinklers, and Sprocket, the clockwork helper; stone blocks to build with (blocks.ts); and windmills,
-// drills that mine the veins by themselves, and belts to bring their ore here (power.ts). And from the ashen ore she brings back from the
+// drills that mine the veins by themselves, and belts to bring their ore to the hopper (power.ts). And from the ashen ore she brings back from the
 // grey place through the rift (/monochrome), it makes a compass that knows the way there, a lantern
 // that lights her way at night, and (once she's found all three colour shards) a prism glider.
 //
@@ -22,11 +22,13 @@ import type { Place } from './layout';
 import { glowTexture, type Toon } from './look';
 import { SHARDS } from '../monochrome/world';
 import { loadJSON, saveJSON } from './save';
-import { slopeUp, terrainAt } from './terrain';
+import { terrainAt } from './terrain';
+import { ORE_VEINS } from './orefield';
+import { ORE_HOPPER } from './power';
 import type { Theme } from './theme';
 import { createPictures } from '../nixkit/thumbnail';
 import type { WebGPURenderer } from 'three/webgpu';
-import { TAU, closeOnBackdrop, damp, rng } from '../nixkit/util';
+import { TAU, closeOnBackdrop, damp } from '../nixkit/util';
 
 export interface ForgeContext {
 	renderer: WebGPURenderer;
@@ -36,11 +38,9 @@ export interface ForgeContext {
 	figure: NixFigure;
 	inventory: Inventory;
 	modelUrl: string;
-	/** The garden, which the forge is put near, facing it. */
-	near: { x: number; z: number };
+	/** The smithy stays in the homestead's side yard, clear of the main walking route. */
+	site: { x: number; z: number; yaw: number };
 	places: Place[];
-	clearOfPlaces: (x: number, z: number, gap: number) => boolean;
-	roomy: (x: number, z: number, gap: number) => boolean;
 	addFeature: (f: Feature) => void;
 	/** Where she is. */
 	pos: THREE.Vector3;
@@ -94,7 +94,8 @@ const RECIPES: Recipe[] = [
 	{ id: 'sprinkler', kind: 'item', item: 'sprinkler', name: 'Sprinkler', about: 'Set where four plots meet, it keeps them watered. There is room in the garden for four.', needs: [[INGOT, 2]], color: '#c97b4a' },
 	{ id: 'blocks', kind: 'item', item: 'stone-block', name: 'Stone Blocks', about: 'Six blocks of dressed stone from one ore (eight if it goes perfectly), to build with out on the island.', needs: [[ORE, 1]], color: '#d8c9a8', makes: 6 },
 	{ id: 'windmill', kind: 'item', item: 'windmill', name: 'Windmill', about: 'Set up on high ground, where the wind blows, it powers the machines round it.', needs: [[INGOT, 3]], color: '#b07a4f' },
-	{ id: 'belts', kind: 'item', item: 'belt', name: 'Belts', about: 'Eight lengths of belt from one ingot (ten if it goes perfectly). Laid from a drill to the hopper beside the forge, they carry its ore, and power, along them.', needs: [[INGOT, 1]], color: '#3a3550', makes: 8 },
+	{ id: 'belts', kind: 'item', item: 'belt', name: 'Belts', about: 'Eight lengths of belt from one ingot (ten if it goes perfectly). Laid from a drill to a hopper, they carry its ore, and power, along them.', needs: [[INGOT, 1]], color: '#3a3550', makes: 8 },
+	{ id: 'ore-hopper', kind: 'item', item: ORE_HOPPER, name: 'Ore Hopper', about: 'Place it where a powered conveyor ends. The ore is shared with the forge hopper, so either can collect it.', needs: [[INGOT, 2]], color: '#a88d61' },
 	{ id: 'drill', kind: 'item', item: 'drill', name: 'Drill', about: 'Set over an ore vein near a windmill, it mines the ore each time it grows back, and keeps it for you.', needs: [[INGOT, 4], [SHARD, 2]], color: '#4f5675' },
 	{ id: 'gearbloom', kind: 'item', item: 'seed-gearbloom', name: 'Gearbloom Seeds', about: 'Three brass seeds (five if it goes perfectly), to plant in the garden. They only grow where a windmill powers the plot.', needs: [[INGOT, 1], [SHARD, 1]], color: '#e8b84a', makes: 3 },
 	{ id: 'helper', kind: 'upgrade', name: 'Sprocket, a clockwork helper', about: 'Picks ripe crops into a crate by the garden, and plants the same again from your seeds.', needs: [[INGOT, 4], [SHARD, 4]], color: '#e8b84a' },
@@ -143,28 +144,7 @@ export function createForge(ctx: ForgeContext) {
 
 	// ---------- where it goes ----------
 
-	// Flat, open ground a short walk from the garden, the same every visit, its front to the garden.
-	const site = (() => {
-		const rand = rng(91);
-		const flat = (x: number, z: number) => {
-			const g = terrainAt(x, z);
-			for (let k = 0; k < 12; k++) {
-				const a = (k * TAU) / 12;
-				for (const r of [2.5, 4.5]) if (Math.abs(terrainAt(x + Math.cos(a) * r, z + Math.sin(a) * r) - g) > 0.6) return false;
-			}
-			return true;
-		};
-		for (let tries = 0; tries < 6000; tries++) {
-			const a = rand() * TAU;
-			const r = 18 + rand() * 30;
-			const x = ctx.near.x + Math.cos(a) * r;
-			const z = ctx.near.z + Math.sin(a) * r;
-			const g = terrainAt(x, z);
-			if (g < 1.6 || g > 9 || slopeUp(x, z) < 0.93 || !flat(x, z) || !ctx.roomy(x, z, 6.5) || !ctx.clearOfPlaces(x, z, 7)) continue;
-			return { x, z, yaw: Math.atan2(ctx.near.x - x, ctx.near.z - z) };
-		}
-		return { x: ctx.near.x + 20, z: ctx.near.z, yaw: -Math.PI / 2 };
-	})();
+	const { site } = ctx;
 	/** A point in the smithy's own frame, out in the world. */
 	const world = (lx: number, lz: number) => ({
 		x: site.x + Math.cos(site.yaw) * lx + Math.sin(site.yaw) * lz,
@@ -384,24 +364,15 @@ export function createForge(ctx: ForgeContext) {
 	}
 	const veins: Vein[] = [];
 	const glintTex = glowTexture();
-	{
-		const rand = rng(93);
-		for (let tries = 0; tries < 8000 && veins.length < 6; tries++) {
-			const a = rand() * TAU;
-			const r = Math.sqrt(rand()) * 80;
-			const x = Math.cos(a) * r;
-			const z = Math.sin(a) * r;
-			const g = terrainAt(x, z);
-			if (g < 3.5 || g > 13 || slopeUp(x, z) < 0.75 || !ctx.roomy(x, z, 2.4) || !ctx.clearOfPlaces(x, z, 3)) continue;
-			if (veins.some((v) => Math.hypot(v.x - x, v.z - z) < 20)) continue;
-			const glint = new THREE.Sprite(new THREE.SpriteMaterial({ map: glintTex, color: '#ffb36b', transparent: true, depthWrite: false, opacity: 0, blending: THREE.AdditiveBlending }));
-			glint.scale.setScalar(1.6);
-			glint.position.set(x, g + 0.9, z);
-			scene.add(glint);
-			veins.push({ id: `vein-${veins.length}`, x, y: g - 0.15, z, yaw: rand() * TAU, ore: null, glint });
-			ctx.addFeature({ x, z, r: 0.95 * VEIN_SCALE, dome: { base: g - 0.15, top: 0.75 * VEIN_SCALE } });
-		}
-	}
+
+	ORE_VEINS.forEach(([x, y, z, yaw], i) => {
+		const glint = new THREE.Sprite(new THREE.SpriteMaterial({ map: glintTex, color: '#ffb36b', transparent: true, depthWrite: false, opacity: 0, blending: THREE.AdditiveBlending }));
+		glint.scale.setScalar(1.6);
+		glint.position.set(x, y + 1.05, z);
+		scene.add(glint);
+		veins.push({ id: `vein-${i}`, x, y, z, yaw, ore: null, glint });
+		ctx.addFeature({ x, z, r: 0.95 * VEIN_SCALE, dome: { base: y, top: 0.75 * VEIN_SCALE } });
+	});
 	const mined: Record<string, number> = {};
 	{
 		const saved = loadJSON('ore');

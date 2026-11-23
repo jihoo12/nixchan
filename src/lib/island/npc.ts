@@ -1,4 +1,4 @@
-// Pebble, the sea otter who keeps the market stand in Nixchan's garden. She stands behind the
+// Pebble, the sea otter who keeps the market stand in the village. She stands behind the
 // counter, turns her head to follow Nixchan about, and waves hello when she comes by. Talking to
 // her (E at the stand) gets a word about the time of day and how Nixchan's getting on, a tip for
 // something she hasn't done yet, and the market. The model and her clips (Idle, Wave, Talk, Happy)
@@ -60,8 +60,8 @@ const TIPS: { id: string; when: (f: Facts) => boolean; say: Record<Lang, Line> }
 		en: (f) => `Your ${crop(f.garden.ripe!)} looks ripe to me! Pick it before it gets ideas.`,
 		ko: (f) => `${josa(crop(f.garden.ripe!), '이', '가')} 다 익은 것 같아요! 엉뚱한 생각 하기 전에 얼른 따요.` } },
 	{ id: 'thirsty', when: (f) => !!f.garden.thirsty, say: {
-		en: (f) => `That ${crop(f.garden.thirsty!)} of yours looks thirsty. The barrel's just over there.`,
-		ko: (f) => `닉스쨩네 ${josa(crop(f.garden.thirsty!), '이', '가')} 목말라 보여요. 물통은 바로 저기 있어요.` } },
+		en: (f) => `That ${crop(f.garden.thirsty!)} of yours looks thirsty. The rainwater barrel is by your garden.`,
+		ko: (f) => `닉스쨩네 ${josa(crop(f.garden.thirsty!), '이', '가')} 목말라 보여요. 물통은 집 앞 텃밭에 있어요.` } },
 	{ id: 'sell', when: (f) => f.sellable.value >= 40, say: {
 		en: (f) => `I'd give you ${f.sellable.value} coins for what's in your bag. Just saying!`,
 		ko: (f) => `가방에 든 거, 저라면 ${f.sellable.value}코인 쳐 드릴 텐데. 그냥 그렇다고요!` } },
@@ -81,8 +81,8 @@ const TIPS: { id: string; when: (f: Facts) => boolean; say: Record<Lang, Line> }
 		en: () => 'Sunny Snappers love deep water while the sun is up. Try the end of the pier.',
 		ko: () => '햇살도미는 해가 떠 있을 때 깊은 물을 좋아해요. 부두 끝에서 해 봐요.' } },
 	{ id: 'forge', when: (f) => !f.found('forge'), say: {
-		en: () => "There's an old forge past the garden that nobody's used in years. Iron ore crops out of the rocks up in the hills, if you fancy having a go!",
-		ko: () => '정원 너머에 몇 년째 아무도 안 쓴 낡은 대장간이 있어요. 언덕 위 바위에 철광석이 드러나 있으니까, 한번 해 볼 생각 있으면 가 봐요!' } },
+		en: () => "There's an old forge beside your place that nobody's used in years. Iron ore crops out of the rocks up in the hills, if you fancy having a go!",
+		ko: () => '집 옆에 몇 년째 아무도 안 쓴 낡은 대장간이 있어요. 언덕 위 바위에 철광석이 드러나 있으니까, 한번 해 볼 생각 있으면 가 봐요!' } },
 	{ id: 'sprinkler', when: (f) => f.found('forge') && f.garden.planted > 0 && f.sprinklers === 0, say: {
 		en: () => "Tired of all that watering? The forge can make sprinklers, two iron ingots apiece. Set one where four plots meet and it waters the lot!",
 		ko: () => '물 주기 지겹죠? 대장간에서 스프링클러를 만들 수 있어요. 하나에 철 주괴 두 개요. 밭 네 칸이 만나는 곳에 두면 한꺼번에 다 물을 줘요!' } },
@@ -105,8 +105,8 @@ const TIPS: { id: string; when: (f: Facts) => boolean; say: Record<Lang, Line> }
 		en: () => "Funny thing: of an evening I've seen two big round eyes under Cloudrest, right down where the rock hangs. Not a bird I know. Something lives down there!",
 		ko: () => '이상한 일이 있어요. 저녁이 되면 구름쉼터 밑, 바위가 매달린 저 아래에서 크고 동그란 눈 두 개가 보여요. 제가 아는 새는 아니에요. 저 밑에 뭔가 살아요!' } },
 	{ id: 'house', when: (f) => !f.found('house'), say: {
-		en: () => "Have you been home yet? Your house is just past the garden. There's a wardrobe on the porch, if you fancy a change!",
-		ko: () => '집에는 가 봤어요? 닉스쨩 집은 정원 바로 너머예요. 현관에 옷장이 있으니까, 옷 갈아입고 싶으면 가 봐요!' } },
+		en: () => "Have you been home yet? Follow the path back to your garden; the house faces it. There's a wardrobe on the porch, if you fancy a change!",
+		ko: () => '집에는 가 봤어요? 길을 따라 텃밭으로 돌아가면 바로 앞에 집이 보여요. 현관에 옷장이 있으니까, 옷 갈아입고 싶으면 가 봐요!' } },
 	{ id: 'islet', when: (f) => !f.found('islet'), say: {
 		en: () => "See that little islet out at sea? You can swim there, or glide from up high. There's a fish there you won't find anywhere else, and an old tortoise who asks the strangest questions.",
 		ko: () => '바다에 저 조그만 섬 보여요? 헤엄쳐 가도 되고, 높은 데서 글라이더로 날아가도 돼요. 거기서만 잡히는 물고기가 있고, 이상한 질문만 하는 늙은 거북이도 있어요.' } },

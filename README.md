@@ -45,6 +45,16 @@ software renderer, which neither looks nor runs like the real thing.
 
 A toon island for Nixchan to roam: places to find, a map that fills in as she explores, a glider, fishing, a garden, Pebble the otter at the market stand, the Old Forge (iron ore to mine, tools to make better, and machines that look after the garden), and Cloudrest, islands floating in the sky that the Windspout's wind carries her glider up to: a ring temple, a lake with fish of its own, a spire, and crystals that grow back after she gathers their sky shards. It is TypeScript and three.js, with no physics engine: the island is a heightfield, so all movement asks is how high the ground is (and, under the sky island, how high she is).
 
+On the homestead, the cottage porch faces the garden across a flat yard, with the Old Forge
+in a side yard. Follow the footpath past the garden to visit Pebble's market on the village green.
+The garden uses the original crop, sprinkler and inventory saves. Press **B** or tap **Build** to
+choose any construction piece. The chooser folds away, leaving that piece selected. Use **E** or
+the action button to place it repeatedly, and **Q** or **Take back** to recover it. **B** only opens
+or hides the chooser; **Esc** or **Done** ends placement. Aim every piece with the mouse; on touch,
+face the target instead. Sprinklers and drills snap to a nearby pointed garden slot or ore vein. The forge can make portable ore hoppers for two iron ingots each; all
+hoppers share the forge's ore stock. The old freestanding receiver is gone. Already mined ore is
+safe in the shared stock; place a new hopper at the end of an older conveyor to reconnect it.
+
 At Lighthouse Point, walk up behind the brass telescope and use the normal interaction button
 (**E** on desktop). Pan with the arrow keys or drag, zoom with **+**/**−** or the wheel, and step back
 to return to the previous camera. The view shows the live island, no separate scene or save.

@@ -1,4 +1,4 @@
-// Nixchan's garden: twelve plots of soil by the beach, a water barrel and a market stand. Seeds
+// Nixchan's garden: twelve plots by her house and a water barrel; her seeds come from the village market. Seeds
 // bought at the stand go in the bag; standing on a plot, E plants one, waters it, and when it's ripe
 // harvests it. A crop grows a stage at a time (seed, sprout, leaves, ripe), each stage only while
 // the soil is wet, so it wants watering again after each one. It grows by the clock, so the garden
@@ -164,6 +164,8 @@ export interface FarmContext {
 	/** The middle of the garden, and the way its front (where the plots face the beach) points. */
 	centre: { x: number; z: number };
 	angle: number;
+	/** Pebble's counter in the village. Shop data still shares the original garden save. */
+	market: { x: number; z: number; yaw: number };
 	groundAt: (x: number, z: number) => number;
 	addFeature: (f: { x: number; z: number; r: number }) => void;
 	/** How many waterings the can holds now (more once it's upgraded at the forge). */
@@ -236,11 +238,15 @@ export function createFarm(ctx: FarmContext) {
 	const world = (lx: number, lz: number) => ({ x: ctx.centre.x + lx * cos + lz * sin, z: ctx.centre.z - lx * sin + lz * cos });
 	const plotAt = (i: number) => world((-(COLS - 1) / 2 + (i % COLS)) * GAP, (-(ROWS - 1) / 2 + Math.floor(i / COLS)) * GAP + 0.6);
 	const BARREL = world(-5.2, 2.6);
-	const STALL = world(0, -4.4);
-	const STALL_FRONT = world(0, -3.2);
+	const STALL = ctx.market;
+	const marketPoint = (x: number, z: number) => ({
+		x: STALL.x + x * Math.cos(STALL.yaw) + z * Math.sin(STALL.yaw),
+		z: STALL.z - x * Math.sin(STALL.yaw) + z * Math.cos(STALL.yaw),
+	});
+	const STALL_FRONT = marketPoint(0, 1.2);
 	ctx.addFeature({ x: BARREL.x, z: BARREL.z, r: 0.5 });
 	for (const lx of [-0.9, 0, 0.9]) {
-		const p = world(lx, -4.4);
+		const p = marketPoint(lx, 0);
 		ctx.addFeature({ x: p.x, z: p.z, r: 0.6 });
 	}
 
@@ -503,7 +509,7 @@ export function createFarm(ctx: FarmContext) {
 		if (stall) {
 			stall.position.set(STALL.x, ctx.groundAt(STALL.x, STALL.z) - 0.05, STALL.z);
 			// Its counter faces the plots.
-			stall.rotation.y = ctx.angle;
+			stall.rotation.y = STALL.yaw;
 			fixtures.add(stall);
 		}
 		const barrel = make('Barrel');
@@ -813,7 +819,8 @@ export function createFarm(ctx: FarmContext) {
 					}),
 			};
 		}
-		if (Math.hypot(STALL_FRONT.x - ctx.pos.x, STALL_FRONT.z - ctx.pos.z) < 1.8)
+		if (Math.hypot(STALL_FRONT.x - ctx.pos.x, STALL_FRONT.z - ctx.pos.z) < 1.8
+			&& Math.abs(ctx.pos.y - ctx.groundAt(STALL_FRONT.x, STALL_FRONT.z)) < 1.0)
 			return ctx.keeper ? { label: `Talk to ${ctx.keeper.name}`, go: ctx.keeper.talk } : { label: 'Open the market stand', go: () => openShop() };
 		const i = nearestPlot();
 		if (i < 0) return null;
@@ -823,7 +830,7 @@ export function createFarm(ctx: FarmContext) {
 		if (pending.has(i)) return { label: 'Sprocket is on its way to this one' };
 		if (!c) {
 			const seed = heldSeed();
-			if (!seed) return { label: 'No seeds: buy some at the stand' };
+			if (!seed) return { label: 'No seeds: buy some at the village market' };
 			return { label: `Plant ${seed.name.toLowerCase()} seeds (${inv.count(`seed-${seed.id}`)})`, go: () => atPlot(i, plantJob(i, seed)) };
 		}
 		if (p.stage === 3) {
@@ -1091,8 +1098,8 @@ export function createFarm(ctx: FarmContext) {
 		update,
 		openShop,
 		closeShop,
-		/** Behind the stand's counter, where its keeper stands, facing the plots. */
-		keeperSpot: { ...world(0, -5.2), angle: ctx.angle },
+		/** Behind the stand's counter, where its keeper stands, facing the village green. */
+		keeperSpot: { ...marketPoint(0, -0.8), angle: STALL.yaw },
 		/** How the garden's doing, for the keeper to talk about. */
 		summary() {
 			const growing = state.plots.filter((p) => p.crop);
