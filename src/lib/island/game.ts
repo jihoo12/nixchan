@@ -68,6 +68,7 @@ import { createTalk } from './talk';
 import { ISLET, PIER_DIR, deckAt, terrainAt, terrainMesh } from './terrain';
 import { createTheme, isNight } from './theme';
 import { createWater } from './water';
+import { islandQuality } from './quality';
 import { to as inSite } from '../base';
 
 export async function startIsland() {
@@ -91,9 +92,16 @@ export async function startIsland() {
 	// 2 where it doesn't (or with ?webgl on the URL, to see what that looks like). So the island's own
 	// shaders are TSL (sky.ts, water.ts, skyisle.ts, monochrome/rift.ts). The frame is Nixkit's
 	// engine's (nixkit/engine.ts): each part of the island below is a system in it.
+	const params = new URLSearchParams(location.search);
+	const quality = islandQuality(
+		matchMedia('(pointer: coarse)').matches,
+		matchMedia('(max-width: 900px), (max-height: 550px)').matches,
+		params.get('quality'),
+	);
 	const engine = createEngine({
 		canvas,
-		renderer: (c) => new WebGPURenderer({ canvas: c, antialias: true, forceWebGL: new URLSearchParams(location.search).has('webgl') }),
+		maxPixelRatio: quality.maxPixelRatio,
+		renderer: (c) => new WebGPURenderer({ canvas: c, antialias: quality.antialias, forceWebGL: params.has('webgl') }),
 		// The near plane sits a little way out: the camera never comes closer than that, and it buys the
 		// depth buffer enough precision that the gently shelving beaches don't flicker against the sea.
 		camera: { fov: 45, near: 0.5, far: 2000 },
@@ -123,12 +131,13 @@ export async function startIsland() {
 	// She starts with her back to the sea, looking inland, with the pier off to one side; or, back
 	// from the grey place, stepping out of the rift at the standing stones.
 	let heading = Math.atan2(-PIER_DIR.x, -PIER_DIR.z) + 0.55;
-	const fromRift = new URLSearchParams(location.search).get('from') === 'rift';
+	const fromRift = params.get('from') === 'rift';
 	if (fromRift) {
 		const out = riftArrival(layout.STONES);
 		layout.START.copy(out.pos);
 		heading = out.heading;
-		history.replaceState(null, '', location.pathname);
+		params.delete('from');
+		history.replaceState(null, '', location.pathname + (params.size ? '?' + params.toString() : '') + location.hash);
 	}
 	// Her arms hold one thing at a time: whatever she's just taken up, the rest are put away.
 	const hands = createHands([
@@ -434,7 +443,8 @@ export async function startIsland() {
 		pos.set(house.doorStep.x, house.doorStep.y, house.doorStep.z);
 		player.face(house.outward);
 		orbit.yaw = house.outward + 0.6;
-		history.replaceState(null, '', location.pathname);
+		params.delete('from');
+		history.replaceState(null, '', location.pathname + (params.size ? '?' + params.toString() : '') + location.hash);
 	}
 
 	// The garden's machines: sprinklers where four plots meet, and Sprocket by the harvest crate.
@@ -748,7 +758,7 @@ export async function startIsland() {
 			explore.drawAtlas(pos, player.turn);
 		},
 	});
-	$('[data-map]')?.addEventListener('click', () => menu.open('map'));
+	$('[data-map-open]')?.addEventListener('click', () => menu.open('map'));
 
 	theme.start();
 	// For trying things out in development: where she is, and Hollis's ledge.

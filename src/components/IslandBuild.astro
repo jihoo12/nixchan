@@ -55,10 +55,10 @@ const pieces = [
 		font-family: var(--sans);
 	}
 	.build-picker {
-		top: max(64px, calc(env(safe-area-inset-top) + 48px));
-		right: max(clamp(12px, 4vw, 40px), env(safe-area-inset-right));
-		width: min(356px, calc(100% - 24px));
-		max-height: calc(100dvh - 76px);
+		top: calc(var(--hud-top) + 56px);
+		right: max(clamp(12px, 4vw, 40px), var(--hud-right));
+		width: min(356px, calc(100% - var(--hud-left) - var(--hud-right)));
+		max-height: calc(100dvh - var(--hud-top) - var(--hud-bottom) - 56px);
 		overflow: auto;
 		overscroll-behavior: contain;
 		padding: 9px 11px 10px;
@@ -148,9 +148,9 @@ const pieces = [
 	.piece[aria-pressed="true"] .count { color: var(--ink); }
 	.build-picker button:disabled, .build-active button:disabled { cursor: default; opacity: .5; }
 	.build-active {
-		top: max(68px, calc(env(safe-area-inset-top) + 54px));
-		left: max(clamp(12px, 4vw, 40px), env(safe-area-inset-left));
-		max-width: min(355px, calc(100% - 24px));
+		top: calc(var(--hud-top) + 56px);
+		left: max(clamp(12px, 4vw, 40px), var(--hud-left));
+		max-width: min(355px, calc(100% - var(--hud-left) - var(--hud-right)));
 		display: flex;
 		align-items: center;
 		gap: 4px;
@@ -194,8 +194,8 @@ const pieces = [
 		position: absolute; width: 1px; height: 1px; margin: -1px;
 		overflow: hidden; clip-path: inset(50%); white-space: nowrap;
 	}
-	@media (max-width: 760px) and (min-height: 550px) {
-		.build-active { top: max(134px, calc(env(safe-area-inset-top) + 54px)); }
+	@media (max-width: 640px) and (min-height: 551px) {
+		.build-active { top: calc(var(--hud-top) + 156px); }
 	}
 	@media (pointer: coarse) {
 		.build-active kbd { display: none; }

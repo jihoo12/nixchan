@@ -38,7 +38,8 @@ test('the main and Korean entry URLs lead to the canonical Island and preserve k
 	assert.deepEqual(entry('ko/', '', { blockedStorage: true }), { destination: `${island}?lang=ko`, lang: undefined });
 	assert.deepEqual(entry('ko/', '?lang=en'), { destination: `${island}?lang=en`, lang: undefined });
 	assert.equal(entry('', '?from=gallery&lang=ko&webgl&nix-hour=20').destination, `${island}?lang=ko&webgl=&nix-hour=20`);
-	assert.equal(entry('', '?lang=not-a-locale&next=https://example.org').destination, island);
+	assert.equal(entry('', '?lang=not-a-locale&quality=invalid&next=https://example.org').destination, island);
+	assert.equal(entry('', '?quality=low').destination, island + '?quality=low');
 });
 
 test('legacy standalone routes and the Gallery have redirects only', () => {
@@ -74,4 +75,10 @@ test('the built island has one keyboard and touch building palette for every con
 	assert.doesNotMatch(islandHtml, /data-belts(?:-take|-done)?[ =>]|data-build-take/);
 	for (const id of ['stone-block', 'belt', 'windmill', 'drill', 'sprinkler', 'ore-hopper'])
 		assert.ok(islandHtml.includes(`data-build-item="${id}"`), id);
+});
+
+test('the built Island uses an accessible minimap and opts into the safe-area viewport locally', () => {
+	assert.match(html('island/'), /content="width=device-width, initial-scale=1, viewport-fit=cover"/);
+	assert.match(html('island/'), /<button[^>]+data-map-open[^>]*>\s*<canvas[^>]+data-map[^>]+aria-hidden="true"/);
+	assert.doesNotMatch(html('about/'), /viewport-fit=cover/);
 });

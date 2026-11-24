@@ -42,7 +42,7 @@ Object.assign(globalThis,{
 		if (!events.has(key)) events.set(key, []);
 		events.get(key).push(fn);
 	},
-	document:{body:new Element('body'),head:new Element('head'),documentElement:new Element('html'),createElement:t=>new Element(t),querySelector:()=>null},
+	document:{body:new Element('body'),head:new Element('head'),documentElement:new Element('html'),addEventListener(){},createElement:t=>new Element(t),querySelector:()=>null},
 	matchMedia:()=>({ get matches(){ return reduced; } }),
 	location:{search:''}, innerWidth:800, innerHeight:600, devicePixelRatio:1,
 	Renderer:class { shadowMap={}; backend={}; init(){return Promise.resolve();} setPixelRatio(){} setSize(){} setAnimationLoop(fn){frame=fn;} render(){} },
