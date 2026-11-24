@@ -118,22 +118,49 @@ export function createControls(
 		keys.delete(key);
 		route.release(key);
 	});
-	addEventListener('blur', () => {
-		keys.clear();
-		route.blur();
-	});
-
-	// A finger on the left of the screen is a joystick; anywhere else, or a mouse, swings the camera.
+	// Keep one thumb per control. A third finger must not steal movement/camera
+	// or stop the other thumb when lifted.
 	const pointers = new Map<number, { kind: 'stick' | 'look'; x: number; y: number; ox: number; oy: number }>();
+	let stickOwner: number | undefined;
+	let lookOwner: number | undefined;
+	const resetStick = () => {
+		stickOwner = undefined;
+		stick.set(0, 0);
+		if (ui.stick) ui.stick.hidden = true;
+		if (ui.knob) ui.knob.style.transform = '';
+	};
+	const resetInputs = () => {
+		keys.clear();
+		state.jumpQueued = state.dashQueued = state.waveQueued = false;
+		for (const id of pointers.keys()) {
+			if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+		}
+		pointers.clear();
+		lookOwner = undefined;
+		resetStick();
+	};
+	const blur = () => {
+		resetInputs();
+		route.blur();
+	};
+	addEventListener('blur', blur);
+	document.addEventListener('visibilitychange', () => {
+		if (document.hidden) blur();
+	});
 	canvas.addEventListener('pointerdown', (e) => {
 		if (e.pointerType === 'mouse' && e.button !== 0) return;
+		const rect = canvas.getBoundingClientRect();
+		const kind = e.pointerType !== 'mouse' && e.clientX - rect.left < rect.width * 0.45 ? 'stick' : 'look';
+		if ((kind === 'stick' ? stickOwner : lookOwner) !== undefined) return;
 		canvas.setPointerCapture(e.pointerId);
-		const kind = e.pointerType !== 'mouse' && e.clientX < innerWidth * 0.45 ? 'stick' : 'look';
 		pointers.set(e.pointerId, { kind, x: e.clientX, y: e.clientY, ox: e.clientX, oy: e.clientY });
-		if (kind === 'stick' && ui.stick) {
-			ui.stick.hidden = false;
-			ui.stick.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
-		}
+		if (kind === 'stick') {
+			stickOwner = e.pointerId;
+			if (ui.stick) {
+				ui.stick.hidden = false;
+				ui.stick.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+			}
+		} else lookOwner = e.pointerId;
 	});
 	canvas.addEventListener('pointermove', (e) => {
 		const p = pointers.get(e.pointerId);
@@ -157,14 +184,11 @@ export function createControls(
 	const release = (e: PointerEvent) => {
 		const p = pointers.get(e.pointerId);
 		pointers.delete(e.pointerId);
-		if (p?.kind === 'stick') {
-			stick.set(0, 0);
-			if (ui.stick) ui.stick.hidden = true;
-			if (ui.knob) ui.knob.style.transform = '';
-		}
+		if (p?.kind === 'stick') resetStick();
+		if (p?.kind === 'look') lookOwner = undefined;
 	};
-	canvas.addEventListener('pointerup', release);
-	canvas.addEventListener('pointercancel', release);
+	for (const event of ['pointerup', 'pointercancel', 'lostpointercapture'] as const)
+		canvas.addEventListener(event, release);
 	canvas.addEventListener(
 		'wheel',
 		(e) => {
@@ -186,8 +210,8 @@ export function createControls(
 	return {
 		/** Jump, wave and dash are queued by a press and taken (cleared) by whoever acts on them. */
 		state,
-		/** Lets go of every held key, as when a menu opens over the game. */
-		clearKeys: () => keys.clear(),
+		/** Lets go of held movement/queued actions when a menu opens over the game. */
+		clearKeys: resetInputs,
 		/** Which way she's asked to go, relative to the camera, and whether to run. */
 		move() {
 			const held = (...names: string[]) => (names.some((n) => keys.has(n)) ? 1 : 0);

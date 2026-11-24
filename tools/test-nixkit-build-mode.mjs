@@ -48,6 +48,9 @@ test('B opens one palette; choice never installs and every category uses the sam
 test('fresh E and touch never fall through to a cached normal action or an old build item', (t) => {
 	const prev = globalThis.document;
 	const touch = new EventTarget();
+	const attributes = new Map();
+	touch.getAttribute = (name) => attributes.get(name) ?? null;
+	touch.setAttribute = (name, value) => attributes.set(name, value);
 	globalThis.document = { querySelector: (sel) => sel === '[data-act]' ? touch : null };
 	// For refresh/update: the same button the live page binds pointerdown to.
 	t.after(() => { globalThis.document = prev; });

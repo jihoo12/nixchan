@@ -358,7 +358,7 @@ export function createFishing(ctx: FishingContext) {
 			ui.button?.setPointerCapture(e.pointerId);
 			press();
 		});
-		for (const kind of ['pointerup', 'pointercancel'] as const) ui.button.addEventListener(kind, release);
+		for (const kind of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) ui.button.addEventListener(kind, release);
 	}
 
 	// ---------- every frame ----------
@@ -371,7 +371,12 @@ export function createFishing(ctx: FishingContext) {
 		canCast = state === 'off' && ctx.canStand() && findWater(target);
 		ui.prompt?.toggleAttribute('hidden', !canCast);
 		ui.button?.classList.toggle('ready', canCast || (state !== 'off' && state !== 'show'));
-		if (ui.button) ui.button.textContent = state === 'reel' ? 'Reel' : state === 'bite' ? '!' : state === 'off' || state === 'show' ? 'Fish' : 'Stop';
+		if (ui.button) {
+			const label = state === 'reel' ? 'Reel' : state === 'bite' ? '!' : state === 'off' || state === 'show' ? 'Fish' : 'Stop';
+			if (ui.button.textContent !== label) ui.button.textContent = label;
+			const accessible = state === 'bite' ? 'Hook the fish' : label;
+			if (ui.button.getAttribute('aria-label') !== accessible) ui.button.setAttribute('aria-label', accessible);
+		}
 
 		const tipNode = ctx.figure.node('RodTip');
 		if (tipNode) {

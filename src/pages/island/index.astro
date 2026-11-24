@@ -20,7 +20,7 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 <!doctype html>
 <html lang="en">
 	<head>
-		<BaseHead title={title} description={description} />
+		<BaseHead title={title} description={description} viewportFitCover />
 	</head>
 	<body class="isle">
 		<canvas class="stage" data-stage data-model={nixModel} data-fish-model={fishModel} data-farm-model={farmModel} data-otter-model={otterModel} data-sky-model={skyModel} data-forge-model={forgeModel} data-power-model={powerModel} data-tortoise-model={tortoiseModel} data-house-model={houseModel} aria-label="Nixchan on her island"></canvas>
@@ -43,7 +43,9 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 			<p class="banner-name" data-banner-name></p>
 			<p class="banner-note" data-banner-note hidden></p>
 		</div>
-		<canvas class="map" data-map width="150" height="150" role="button" aria-label="Open the map"></canvas>
+		<button class="map" type="button" data-map-open aria-label="Open the map">
+			<canvas data-map width="150" height="150" aria-hidden="true"></canvas>
+		</button>
 
 		<p class="fish-prompt" data-fish-prompt hidden><kbd>F</kbd> Cast a line</p>
 		<p class="fish-prompt act-prompt" data-act-prompt hidden><kbd>E</kbd><span data-act-text></span></p>
@@ -384,7 +386,17 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 <style>
 	:global(html:has(body.isle)), :global(body.isle) { overflow: hidden; height: 100%; }
 	:global(body.isle::before), :global(body.isle::after) { display: none; }
-	:global(body.isle) { background: var(--bg); }
+	:global(body.isle) {
+		background: var(--bg); overscroll-behavior: none;
+		--safe-top: env(safe-area-inset-top, 0px);
+		--safe-right: env(safe-area-inset-right, 0px);
+		--safe-bottom: env(safe-area-inset-bottom, 0px);
+		--safe-left: env(safe-area-inset-left, 0px);
+		--hud-top: calc(12px + var(--safe-top));
+		--hud-right: calc(12px + var(--safe-right));
+		--hud-bottom: calc(12px + var(--safe-bottom));
+		--hud-left: calc(12px + var(--safe-left));
+	}
 	/* It's a game, not a page to read: holding a finger on a button (or anywhere) mustn't start a
 	   text selection or pop up the long-press menu. */
 	:global(body.isle) { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -395,7 +407,9 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 
 	.bar {
 		position: fixed; z-index: 20; top: 0; left: 0; right: 0;
-		display: flex; align-items: center; gap: 12px; padding: 16px clamp(16px, 4vw, 40px);
+		display: flex; align-items: center; gap: 12px;
+		padding: max(16px, var(--hud-top)) max(clamp(16px, 4vw, 40px), var(--hud-right)) 8px
+			max(clamp(16px, 4vw, 40px), var(--hud-left));
 		pointer-events: none;
 	}
 	.bar > * { pointer-events: auto; }
@@ -435,24 +449,33 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 	.banner-note[hidden] { display: none; }
 	.map {
 		position: fixed; z-index: 20; right: clamp(16px, 4vw, 40px); bottom: 18px;
-		width: 150px; height: 150px; border-radius: 50%; cursor: pointer;
-		background: #d6dbe9;
+		width: 150px; height: 150px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+		background: #d6dbe9; touch-action: manipulation;
 		box-shadow: 0 0 0 4px var(--surface), 0 8px 18px -8px var(--shadow);
 	}
 
+	.map canvas { display: block; width: 100%; height: 100%; border-radius: inherit; }
+	.map:focus-visible { outline: 3px solid var(--accent); outline-offset: 5px; }
 	.atlas {
-		position: fixed; z-index: 30; inset: 0; display: grid; place-items: center; padding: 16px;
+		position: fixed; z-index: 30; inset: 0; display: grid; place-items: center;
+		grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+		padding: max(16px, var(--hud-top)) max(16px, var(--hud-right))
+			max(16px, var(--hud-bottom)) max(16px, var(--hud-left));
 		background: color-mix(in srgb, #1c1a3e 35%, transparent);
 	}
 	.atlas[hidden] { display: none; }
 	.atlas-card {
-		width: min(560px, 100%, calc(100dvh - 180px)); min-width: min(280px, 100%); padding: 18px; border-radius: 18px; text-align: center;
+		width: min(560px, 100%); max-height: 100%; overflow: auto; overscroll-behavior: contain;
+		padding: 18px; border-radius: 18px; text-align: center;
 		background: color-mix(in srgb, var(--surface) 94%, transparent);
 		-webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
 		box-shadow: 0 14px 30px -18px var(--shadow);
 	}
 	.atlas-card h2 { margin: 0 0 12px; font-family: var(--display); font-size: 28px; color: var(--ink); }
-	.atlas-map { display: block; width: 100%; aspect-ratio: 1; border-radius: 12px; box-shadow: 0 4px 0 var(--edge); }
+	.atlas-map {
+		display: block; width: min(100%, max(100px, calc(100dvh - 190px - var(--safe-top) - var(--safe-bottom))));
+		height: auto; aspect-ratio: 1; margin-inline: auto; border-radius: 12px; box-shadow: 0 4px 0 var(--edge);
+	}
 	.atlas-count { margin: 14px 0; color: var(--muted); font-size: 15px; font-weight: 800; }
 
 	/* The wardrobe: beside her rather than over her, so she can be seen changing (in the mirror). */
@@ -487,7 +510,10 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 	.hats :global(.hat[aria-pressed='true']) { background: var(--btn-bg); color: var(--btn-ink); box-shadow: 0 3px 0 var(--btn-edge); }
 	.wardrobe .button { margin-top: 16px; width: 100%; }
 	@media (max-width: 700px) {
-		.wardrobe { top: auto; bottom: 12px; right: 16px; left: 16px; width: auto; max-height: 55dvh; transform: none; }
+		.wardrobe {
+			top: auto; bottom: var(--hud-bottom); right: var(--hud-right); left: var(--hud-left);
+			width: auto; max-height: 55dvh; transform: none; overscroll-behavior: contain;
+		}
 	}
 
 	.jump { display: none; }
@@ -519,10 +545,6 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 	}
 	.dash:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--edge); }
 
-	@media (pointer: coarse) {
-		.jump { display: block; }
-		.dash:not([hidden]) { display: block; }
-	}
 
 	.fish-prompt {
 		position: fixed; z-index: 20; left: 50%; bottom: 28px; transform: translateX(-50%); margin: 0;
@@ -767,9 +789,22 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 		.help dl.touch { display: grid; }
 		.help p.touch { display: block; }
 		.help span.touch { display: inline; }
-		.fish { display: block; }
-		.act { display: block; }
-		.act-prompt:not([hidden]) { display: block !important; bottom: 18px; }
+		.bar .pill, .tabs button, .atlas .button, .talk-choices :global(button) { min-height: 44px; touch-action: manipulation; }
+		.bar .pill { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; }
+		.jump, .dash:not([hidden]), .fish, .act { display: block; }
+		.jump, .dash, .fish { width: 56px; height: 56px; }
+		.jump, .fish { bottom: var(--hud-bottom); }
+		.jump, .dash { right: var(--hud-right); }
+		.dash, .act { bottom: calc(var(--hud-bottom) + 66px); }
+		.fish, .act { right: calc(var(--hud-right) + 66px); }
+		.act { min-width: 56px; height: 56px; max-width: min(120px, 35vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+		.act-prompt:not([hidden]) { display: block !important; bottom: calc(var(--hud-bottom) + 136px); }
+		.reel { bottom: calc(var(--hud-bottom) + 134px); }
+		.talk {
+			bottom: var(--hud-bottom); max-height: calc(100dvh - 92px - var(--safe-top) - var(--safe-bottom));
+			padding-top: 14px; overflow-y: auto; overscroll-behavior: contain;
+		}
+		.talk-name { position: static; display: inline-block; margin: 0 0 8px; }
 		.act-prompt kbd { display: none; }
 		.fish-prompt { display: none !important; }
 		.reel-hint .keys { display: none; }
@@ -784,8 +819,8 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 
 	@media (max-width: 640px) {
 		.badge { display: none; }
-		.banner { top: 190px; }
-		.map { width: 110px; height: 110px; bottom: auto; top: 68px; }
+		.banner { top: calc(var(--hud-top) + 158px); }
+		.map { width: 92px; height: 92px; bottom: auto; top: calc(var(--hud-top) + 54px); right: var(--hud-right); }
 		.bag { gap: 6px; }
 		.bag-detail { margin-top: 10px; min-height: 0; }
 		.bag-detail :global(.bag-picture) { width: 60px; height: 60px; }
@@ -794,8 +829,21 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 		.pill { padding: 8px 11px; }
 	}
 	@media (max-width: 400px) {
-		.bar { gap: 6px; padding-inline: 10px; }
-		.brand { font-size: 24px; }
+		.bar { gap: 6px; padding-inline: var(--hud-left) var(--hud-right); }
+		.brand { font-size: clamp(19px, 6vw, 24px); }
 		.pill { padding-inline: 8px; font-size: 14px; }
+	}
+	@media (pointer: coarse) and (max-height: 550px) {
+		.badge { display: none; }
+		.banner { top: calc(var(--hud-top) + 54px); }
+		.smith { top: calc(var(--hud-top) + 58px); }
+		.map { width: 64px; height: 64px; top: calc(var(--hud-top) + 54px); bottom: auto; right: var(--hud-right); }
+		.atlas-card { padding: 12px; }
+		.tabs { flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+		.talk { padding-top: 20px; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.banner, .catch, .fish-toast { transition: none; }
+		.bite, .tension.danger { animation: none; }
 	}
 </style>

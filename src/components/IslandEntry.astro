@@ -18,9 +18,10 @@ const fallback = korean ? `${island}?lang=ko` : island;
 		<script is:inline define:vars={{ fallback, korean }}>
 			const entry = new URL(fallback, location.origin);
 			const current = new URLSearchParams(location.search);
-			for (const key of ['lang', 'webgl', 'nix-hour']) {
+			for (const key of ['lang', 'webgl', 'nix-hour', 'quality']) {
 				const value = current.get(key);
-				if (value !== null && (key !== 'lang' || value === 'en' || value === 'ko')) {
+				if (value !== null && (key !== 'lang' || value === 'en' || value === 'ko') &&
+					(key !== 'quality' || value === 'high' || value === 'low')) {
 					entry.searchParams.set(key, value);
 				}
 			}

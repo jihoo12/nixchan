@@ -56,10 +56,15 @@ export function createInteractions({ override }: { override?: () => Offer | null
 			const label = current?.label ?? '';
 			ui.prompt?.toggleAttribute('hidden', !current);
 			ui.prompt?.classList.toggle('inactive', !current?.go);
-			if (ui.text) ui.text.textContent = label;
+			if (ui.text && ui.text.textContent !== label) ui.text.textContent = label;
 			if (ui.button) {
-				ui.button.hidden = !current?.go;
-				ui.button.textContent = label.split(' ')[0] || 'Do';
+				const hidden = !current?.go;
+				if (ui.button.hidden !== hidden) ui.button.hidden = hidden;
+				if (!hidden) {
+					const shortLabel = label.split(' ')[0] || 'Do';
+					if (ui.button.textContent !== shortLabel) ui.button.textContent = shortLabel;
+					if (ui.button.getAttribute('aria-label') !== label) ui.button.setAttribute('aria-label', label);
+				}
 			}
 		},
 	};

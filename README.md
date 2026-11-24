@@ -98,6 +98,12 @@ the ink lines round Pebble, Hollis, Parmen, the fish and the garden. And its fra
 engine's: `game.ts` makes an engine, puts Nixchan in it with `createNixchan` on the island's terrain,
 and adds each part of the island to it as a system, in the engine's order.
 
+On smaller touch screens the Island keeps the same world and controls, but draws its 3D
+canvas at at most 1.25× device scale without multisample antialiasing. Its HTML controls
+stay at full device resolution. Use `?quality=high` for the desktop draw settings, or
+`?quality=low` to use the lighter settings on any device. These options can be combined
+with `?webgl` via `&`.
+
 To add something she can do, register it with `interactions.add(() => ({ label, go }))`. To add a landmark, add a function to `landmarks.ts`.
 
 The fish, garden, otter, sky ruin, forge and power models (and the grey place's walls and pieces, `tools/monochrome/`) are made in Blender by the scripts in `tools/` (`nix develop .#blender -c blender -b -P tools/<name>/build.py -- <out.glb>`).
