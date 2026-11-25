@@ -1,5 +1,4 @@
 ---
-import { to } from '../../lib/base';
 // Nixchan's island: a little open world where the 3D Nixchan roams an island and the sea round it.
 import BaseHead from '../../components/BaseHead.astro';
 import IslandLookout from '../../components/IslandLookout.astro';
@@ -29,7 +28,7 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 			<span class="brand">nixchan<span class="period">.</span></span>
 			<span class="badge">island</span>
 			<span class="spacer"></span>
-			<a class="pill" data-island-about href={to('/about/')}>About</a>
+			<button class="pill coop" type="button" data-coop aria-pressed="false" disabled>Co-op</button>
 			<button class="pill build-toggle" type="button" data-build-toggle
 				aria-label="Build (B)" aria-keyshortcuts="B" data-build-ko-label="짓기 (B)"
 				aria-expanded="false" aria-controls="island-build-picker">
@@ -38,6 +37,7 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 			<button class="pill" type="button" data-open="bag" aria-label="Bag (I)">Bag</button>
 			<button class="pill help" type="button" data-open="help" aria-label="Help (H)">?</button>
 		</header>
+		<p class="coop-status" role="status" data-coop-status></p>
 
 		<div class="banner" data-banner aria-live="polite">
 			<p class="banner-name" data-banner-name></p>
@@ -106,6 +106,7 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 				</div>
 				<div class="help" data-panel="help" hidden>
 					<div data-help-lang="en">
+						<p><b>Co-op:</b> Turn it on in both windows to walk together outside. Each account keeps its own bag, farm and builds on the server. These edits are not shared live.</p>
 						<section>
 							<h3>Getting about</h3>
 							<dl class="keys">
@@ -204,6 +205,7 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 					</div>
 					<!-- The same in Korean, shown instead when the site's read in Korean (island/lang.ts, menu.ts). -->
 					<div data-help-lang="ko" lang="ko" hidden>
+						<p><b>멀티:</b> 두 창에서 각각 멀티를 켜면 바깥 섬을 함께 걸을 수 있어요. 가방·밭·건축은 계정별로 서버에 저장되며 실시간으로 공유되지 않아요.</p>
 						<section>
 							<h3>돌아다니기</h3>
 							<dl class="keys">
@@ -358,16 +360,9 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 </html>
 
 <script>
+	import { loadServerSave } from '../../lib/island/save';
 	import { startIsland } from '../../lib/island/game';
 	import { lang } from '../../lib/island/lang';
-	import { to } from '../../lib/base';
-
-	const about = document.querySelector<HTMLAnchorElement>('[data-island-about]');
-	if (about && lang === 'ko') {
-		about.textContent = '소개';
-		about.href = to('/ko/about/');
-	}
-
 	if (lang === 'ko') {
 		for (const node of document.querySelectorAll<HTMLElement>('[data-build-picker], [data-build-active], [data-build-status]'))
 			node.lang = 'ko';
@@ -380,7 +375,7 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 	}
 
 	// No day-and-night button here: to pass the time, she sleeps in her bed at home (home/room.ts).
-	startIsland();
+	void loadServerSave().then(ok => { if (ok) return startIsland(); });
 </script>
 
 <style>
@@ -420,6 +415,11 @@ const description = "Roam a little toon island with Nixchan: climb, swim, glide,
 		border: 0; border-radius: 9px; padding: 8px 15px; background: var(--surface); color: var(--ink);
 		font: 800 15px var(--sans); box-shadow: 0 4px 0 var(--edge); cursor: pointer; text-decoration: none;
 	}
+	.coop[aria-pressed="true"] { background:#266665; color:white; }
+	.coop-status { position:fixed; top:calc(var(--hud-top) + 58px); left:var(--hud-left); z-index:19; margin:0;
+		padding:5px 9px; max-width:calc(100% - var(--hud-left) - var(--hud-right) - 105px); border-radius:8px;
+		background:#272344; color:white; font-size:14px; pointer-events:none; }
+	.coop-status:empty { display:none; }
 	.pill:hover { transform: translateY(-2px); }
 	.build-toggle { display: inline-flex; align-items: center; gap: 5px; }
 	.build-toggle[aria-expanded="true"] { background: var(--star); color: #1c1a3e; }

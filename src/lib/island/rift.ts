@@ -7,7 +7,7 @@ import { createRift } from '../monochrome/rift';
 import { SHARDS } from '../monochrome/world';
 import { groundAt } from './features';
 import type { Offer } from '../nixkit/interact';
-import { loadJSON } from './save';
+import { loadJSON, saveAndGo } from './save';
 import type { Theme } from './theme';
 import { damp } from '../nixkit/util';
 import { to as inSite } from '../base';
@@ -75,7 +75,7 @@ export function createIslandRift(ctx: { scene: THREE.Scene; theme: Theme; stones
 		document.body.append(fade);
 		requestAnimationFrame(() => (fade.style.opacity = '1'));
 		const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-		setTimeout(() => location.assign(THROUGH), reduce ? 0 : 650);
+		setTimeout(() => { void saveAndGo(THROUGH).then(ok => { if (!ok) { leaving = false; fade.remove(); } }); }, reduce ? 0 : 650);
 	};
 
 	const near = (r: number) => Math.hypot(ctx.pos.x - spot.x, ctx.pos.z - spot.z) < r && Math.abs(ctx.pos.y - ground) < 2.5;

@@ -87,6 +87,7 @@ const description = "Through the rift at the standing stones: a grey place that 
 </html>
 
 <script>
+	import { loadServerSave } from '../../lib/island/save';
 	import { startMonochrome } from '../../lib/monochrome/game';
 
 	const button = document.querySelector<HTMLButtonElement>('[data-clock]');
@@ -102,7 +103,7 @@ const description = "Through the rift at the standing stones: a grey place that 
 		button.blur();
 	});
 
-	startMonochrome();
+	void loadServerSave().then(ok => { if (ok) return startMonochrome(); });
 </script>
 
 <style>

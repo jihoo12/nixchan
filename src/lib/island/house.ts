@@ -18,7 +18,7 @@ import type { Feature } from './features';
 import type { Offer } from '../nixkit/interact';
 import type { Place } from './layout';
 import type { Toon } from './look';
-import { loadText, saveText } from './save';
+import { loadText, saveText, saveAndGo } from './save';
 import { terrainAt } from './terrain';
 import { damp } from '../nixkit/util';
 import { to as inSite } from '../base';
@@ -261,7 +261,7 @@ export function createHouse(ctx: HouseContext) {
 		fade.style.cssText = 'position:fixed;inset:0;z-index:60;background:#2a1f2e;opacity:0;transition:opacity .5s;pointer-events:none';
 		document.body.append(fade);
 		requestAnimationFrame(() => (fade.style.opacity = '1'));
-		setTimeout(() => location.assign(inSite('/home/')), matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 550);
+		setTimeout(() => { void saveAndGo(inSite('/home/')).then(ok => { if (!ok) { entering = false; fade.remove(); } }); }, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 550);
 	};
 	// Back here with the browser's back button, the page comes back faded out: clear it.
 	addEventListener('pageshow', (e) => {

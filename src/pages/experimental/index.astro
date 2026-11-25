@@ -146,6 +146,7 @@ const scene = { projects: [], posts: [], comics: [], art };
 </html>
 
 <script>
+	import { loadServerSave } from '../../lib/island/save';
 	import { start } from '../../lib/experimental/scene';
 
 	const button = document.querySelector<HTMLButtonElement>('[data-clock]');
@@ -190,7 +191,7 @@ const scene = { projects: [], posts: [], comics: [], art };
 	list('comics', (x) => [link(x)]);
 	if (node) node.textContent = JSON.stringify(scene);
 
-	start();
+	void loadServerSave().then(ok => { if (ok) return start(); });
 </script>
 
 <style>

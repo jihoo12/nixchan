@@ -69,6 +69,7 @@ import { ISLET, PIER_DIR, deckAt, terrainAt, terrainMesh } from './terrain';
 import { createTheme, isNight } from './theme';
 import { createWater } from './water';
 import { islandQuality } from './quality';
+import { connectIsland } from './together';
 import { to as inSite } from '../base';
 
 export async function startIsland() {
@@ -841,5 +842,15 @@ export async function startIsland() {
 		},
 	});
 
+	const coOp = $<HTMLButtonElement>('[data-coop]');
+	const coOpStatus = $('[data-coop-status]');
+	if (coOp && coOpStatus) engine.add({ always:true, order:ORDER.effects,
+		update:connectIsland(scene,canvas.dataset.model ?? '', () => {
+			if (!ready) return null;
+			const speed=Math.hypot(player.vel.x,player.vel.z);
+			return { x:pos.x, y:pos.y, z:pos.z, yaw:Math.atan2(Math.sin(player.turn),Math.cos(player.turn)),
+				pose:player.swimming ? (speed>.3?'Swim':'Tread') : speed>3?'Run':speed>.25?'Walk':'Idle' };
+		},coOp,coOpStatus),
+	});
 	await engine.start();
 }

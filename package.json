@@ -12,7 +12,8 @@
     "astro": "astro",
     "check": "astro check",
     "check:games": "node tools/check-games.mjs",
-    "test": "node --test tools/test-nixkit-*.mjs"
+    "test": "node --test tools/test-nixkit-*.mjs",
+    "build:sites": "node scripts/build-together.mjs"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.3",

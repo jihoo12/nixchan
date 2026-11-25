@@ -1,3 +1,4 @@
+import { saveAndGo } from '../island/save';
 // Inside Nixchan's house (/home): one room, seen from its open front like a dollhouse. She walks
 // about it (WASD or the arrow keys, Shift to run, or a click or tap on the floor to walk there), and
 // E does what there is to do where she is: lie down in bed, or go back out of the door to the island
@@ -330,7 +331,7 @@ export function startRoom() {
 		leaving = true;
 		target = null;
 		ui.dim?.classList.add('out');
-		setTimeout(() => location.assign(inSite('/island/?from=home')), reduceMotion ? 0 : 550);
+		setTimeout(() => { void saveAndGo(inSite('/island/?from=home')).then(ok => { if (!ok) { leaving = false; ui.dim?.classList.remove('out'); } }); }, reduceMotion ? 0 : 550);
 	};
 	addEventListener('pageshow', (e) => {
 		if (!e.persisted) return;

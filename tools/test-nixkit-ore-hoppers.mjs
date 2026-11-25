@@ -8,6 +8,9 @@ import * as THREE from 'three';
 const hooks = registerHooks({resolve(specifier, ctx, next) {
 	if (specifier === 'three/examples/jsm/loaders/GLTFLoader.js')
 		return { url: 'data:text/javascript,export class GLTFLoader {loadAsync(){return new Promise(()=>{});}}', shortCircuit: true };
+	// Keep the game-rule fixture synchronous; the real network store has separate tests.
+	if (/\/src\/lib\/island\//.test(ctx.parentURL ?? '') && specifier === './save')
+		return { url: new URL('./fixtures/island-save.mjs', import.meta.url).href, shortCircuit: true };
 	if (specifier.startsWith('.') && !/\.[a-z]+$/.test(specifier)) return next(specifier + '.ts', ctx);
 	return next(specifier, ctx);
 }});

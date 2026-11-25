@@ -40,6 +40,7 @@ const description = "Inside Nixchan's house on her island: her room, her bed, an
 </html>
 
 <script>
+	import { loadServerSave } from '../../lib/island/save';
 	import { startRoom } from '../../lib/home/room';
 
 	const button = document.querySelector<HTMLButtonElement>('[data-clock]');
@@ -55,7 +56,7 @@ const description = "Inside Nixchan's house on her island: her room, her bed, an
 		button.blur();
 	});
 
-	startRoom();
+	void loadServerSave().then(ok => { if (ok) return startRoom(); });
 </script>
 
 <style>

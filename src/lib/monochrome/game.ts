@@ -17,7 +17,7 @@ import { nodeLook } from '../nixkit/figure-nodes';
 import { createNixchan } from '../nixkit/nixchan';
 import { createInteractions } from '../nixkit/interact';
 import { makeToon } from '../nixkit/look';
-import { loadJSON, loadText, saveJSON, saveText } from '../island/save';
+import { loadJSON, loadText, saveJSON, saveText, saveAndGo } from '../island/save';
 import { clamp, damp, noise } from '../nixkit/util';
 import { loadBlocks, type CellModel, type Solid, type Spot } from './blocks';
 import { greyCollide, greyMoves } from './moves';
@@ -531,7 +531,7 @@ export async function startMonochrome() {
 		if (leaving) return;
 		leaving = true;
 		ui.fade?.classList.add('show');
-		setTimeout(() => location.assign(HOME), matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 700);
+		setTimeout(() => { void saveAndGo(HOME).then(ok => { if (!ok) { leaving = false; ui.fade?.classList.remove('show'); } }); }, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 700);
 	};
 	interactions.add(() => {
 		if (!player.grounded || casting > 0) return null;

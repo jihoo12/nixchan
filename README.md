@@ -141,3 +141,24 @@ All the artwork is Nixchan and her world, drawn and modelled by jihoo:
 
 - **Code** (including the Blender scripts in `tools/`) — [Apache License 2.0](LICENSE).
 - **Artwork** (`src/assets/nixchan/`, `src/assets/island/`, `src/assets/home/`, `src/assets/experimental/`, `src/assets/monochrome/`) — [CC BY 4.0](LICENSE-ARTWORK). Use and adapt it freely, with credit: "Nixchan by jihoo, CC BY 4.0".
+
+## Together Island: ChatGPT Sites snapshot
+
+This is the separate Sites edition, not the GitHub Pages release. The shared
+base is `8137b4e`; the corresponding deployed Sites source is
+`296c59e64ab66d14042cd37cc2b0d08b41f9c6a9` (version 2). Do not deploy this
+branch to Pages or merge it as-is: its base path and save transport differ.
+
+Opt-in co-op shares outdoor movement for up to six sessions. Progress is
+stored separately for each signed-in account. No player saves are migrated or
+synchronized with GitHub Pages.
+
+For a separate Sites deployment, copy `.openai/hosting.example.json` to
+`.openai/hosting.json` and substitute the target project's own ID. Use the
+Sites D1 binding for storage, run `npm run build:sites`, then test with
+`node --test tools/test-island-together.mjs`.
+
+For future source sync, port gameplay changes separately from hosting,
+authentication and storage. Preserve the Pages base path and browser saves when
+updating Pages. Do not copy credentials or runtime data into Git. This snapshot
+does not set up automatic sync.
